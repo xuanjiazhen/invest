@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ArkTS &amp; Cangjie Lint 调研</title>
+<style>
+  :root {
+    --bg: #f8f5ee;
+    --ink: #1a1a1a;
+    --muted: #645e55;
+    --red: #c5162e;
+    --red-dark: #841324;
+    --line: #ddd0bc;
+    --font-display: 'Noto Serif SC', 'SimSun', serif;
+    --font-body: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+  .top-bar {
+    background: linear-gradient(90deg, var(--red), var(--red-dark));
+    height: 4px;
+  }
+  .container { max-width: 800px; margin: 0 auto; padding: 56px 24px 64px; }
+
+  header {
+    margin-bottom: 48px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 {
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+  }
+  header p {
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+
+  .section-label {
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--red-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 36px 0 14px;
+  }
+  .section-label:first-of-type { margin-top: 0; }
+
+  .card {
+    display: block;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 22px 28px;
+    margin-bottom: 14px;
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow 0.2s, transform 0.15s;
+  }
+  .card:hover {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    transform: translateY(-1px);
+  }
+  .card h3 {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--ink);
+  }
+  .card:hover h3 { color: var(--red); }
+  .card .desc {
+    font-size: 0.88rem;
+    color: var(--muted);
+  }
+  .card .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    margin-top: 8px;
+    background: #fef0f0;
+    color: var(--red-dark);
+  }
+  .placeholder {
+    opacity: 0.45;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-align: center;
+  }
+  footer a { color: var(--red-dark); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 640px) {
+    .container { padding: 32px 16px 48px; }
+    header h1 { font-size: 1.35rem; }
+    .card { padding: 18px 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="top-bar"></div>
+<div class="container">
+
+<header>
+  <h1>ArkTS &amp; Cangjie Lint 调研</h1>
+  <p>鸿蒙 ArkTS 与仓颉检查能力对比 · 调研报告与演示</p>
+</header>
+
+<!-- ====== 演示 ====== -->
+<div class="section-label">演示</div>
+
+<a class="card" href="static_analy/鸿蒙ArkTS检查能力-调研补充-slides.html">
+  <h3>GAP 能力逐项对比 · 幻灯片</h3>
+  <p class="desc">交互式演示文稿，逐项对比 @security / @performance / @previewer / @cross-device-app-dev / @correctness 五大能力域的规则覆盖情况。</p>
+  <span class="badge">11 页 · 交互演示</span>
+</a>
+
+<!-- ====== 调研报告 ====== -->
+<div class="section-label">调研报告</div>
+
+<a class="card" href="https://gitcode.com/xuanjz/invest/blob/main/static_analy/鸿蒙ArkTS与仓颉检查能力对比调研报告.md" target="_blank" rel="noopener">
+  <h3>鸿蒙 ArkTS 与仓颉检查能力对比调研报告</h3>
+  <p class="desc">完整调研报告：按"语言本身"和"应用框架相关"两大类对比，涵盖工具承载关系、总览矩阵、差异项详解。</p>
+  <span class="badge">Markdown · gitcode.com</span>
+</a>
+
+<a class="card" href="https://gitcode.com/xuanjz/invest/blob/main/static_analy/鸿蒙ArkTS检查能力-调研补充.md" target="_blank" rel="noopener">
+  <h3>鸿蒙 ArkTS 检查能力 · 调研补充</h3>
+  <p class="desc">安全规则、性能规则、预览器规则、一多适配规则、正确性规则和兼容性规则的详细 GAP 分析。</p>
+  <span class="badge">Markdown · gitcode.com</span>
+</a>
+
+<a class="card" href="https://gitcode.com/xuanjz/invest/blob/main/static_analy/鸿蒙ArkTS检查能力.md" target="_blank" rel="noopener">
+  <h3>鸿蒙 ArkTS 检查能力</h3>
+  <p class="desc">原始调研大纲：鸿蒙性能调优工具简介、能力 GAP 总览、各能力域逐项展开。</p>
+  <span class="badge">Markdown · gitcode.com</span>
+</a>
+
+<a class="card" href="https://gitcode.com/xuanjz/invest/blob/main/static_analy/鸿蒙ArkTS与仓颉检查能力对比调研报告-审查记录.md" target="_blank" rel="noopener">
+  <h3>调研报告 · 审查记录</h3>
+  <p class="desc">报告审查结论、审查项与结果、发现的问题与修正动作、PPT 转化检查清单、剩余限制。</p>
+  <span class="badge">Markdown · gitcode.com</span>
+</a>
+
+<!-- ====== 预留：未来模块 ====== -->
+<div class="section-label">更多模块 <span style="font-weight:400;color:var(--muted);">— 即将上线</span></div>
+
+<div class="card placeholder">
+  <h3>待扩展…</h3>
+  <p class="desc">后续可在此处新增更多调研模块、工具对比、数据分析等内容。</p>
+</div>
+
+<footer>
+  <p>部署于 <a href="https://pages.github.com" target="_blank" rel="noopener">GitHub Pages</a> · 源码托管于 <a href="https://gitcode.com/xuanjz/invest" target="_blank" rel="noopener">gitcode.com/xuanjz/invest</a></p>
+</footer>
+
+</div>
+</body>
+</html>
