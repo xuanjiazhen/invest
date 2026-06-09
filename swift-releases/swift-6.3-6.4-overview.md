@@ -17,6 +17,8 @@
 
 ### 1. `@c` 属性 — Swift → C 双向互操作
 
+> 提案: [SE-0495](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0495-cdecl.md) · 动机：Linux 移植与系统框架向 Swift 迁移需要双向 C 互操作。此前 `@_cdecl` 仅为内部属性，6.3 将其正式化。
+
 `@c` 让 Swift 函数和枚举能被同项目中的 C 代码调用。编译器自动在生成的 C 头文件中加入对应声明。
 
 ```swift
@@ -37,6 +39,8 @@ func callFromC() { print("Swift implementation") }
 
 ### 2. 性能控制属性
 
+> 提案: [SE-0460](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0460-specialized.md) · [SE-0496](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0496-inline-always.md) · [SE-0497](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0497-definition-visibility.md) · 动机：此前 `@_specialize`、`@_inline` 等为下划线属性，库作者无法在稳定的公共 API 中使用。6.3 将其正式化并提供 ABI 稳定性保证。
+
 | 属性 | 作用 |
 |------|------|
 | `@specialize(where T == Int)` | 为泛型 API 的常用具体类型提供预特化实现 |
@@ -55,6 +59,8 @@ public func libraryUtility() { }
 ```
 
 ### 3. 模块名选择器 `::`
+
+> 提案: [SE-0491](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0491-module-selectors.md) · 动机：大型项目中多模块依赖常出现同名 API 冲突，此前只能通过全限定名或重构规避，模块选择器提供了显式消歧语法。
 
 ```swift
 import ModuleA
@@ -108,6 +114,8 @@ if someCondition {
 ```
 
 **`weak let`：**
+> 提案: [SE-0481](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0481-weak-let.md)
+
 ```swift
 class Observer {
     weak let subject: SomeClass?  // 不可变的弱引用
@@ -115,6 +123,8 @@ class Observer {
 ```
 
 **`~Sendable` 抑制并发警告：**
+> 提案: [SE-0518](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0518-tilde-sendable.md) · 动机：某些类型（如与 C 互操作的指针类型）客观上不满足 Sendable，但开发者确知使用安全。提供显式标记避免编译器持续产生噪声警告。
+
 ```swift
 // 标记类型有意不满足 Sendable，抑制编译器诊断
 struct MyType: ~Sendable { }
@@ -155,6 +165,8 @@ func makeLiveActivityWidget() -> some Widget { }
 ```
 
 ### 3. `@diagnose` 属性
+
+> 提案: [SE-0522](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0522-source-warning-control.md) · 动机：团队希望将特定警告升级为错误（或降级为备注），但此前仅能通过命令行全局控制。`@diagnose` 提供声明级细粒度控制。
 
 控制单个声明的警告行为：
 
@@ -214,6 +226,8 @@ let element = document.getElementById("app")
 
 ### 8. 所有权系统与非可复制类型
 
+> 提案: [SE-0390](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0390-noncopyable-structs-and-enums.md) · [SE-0427](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0427-noncopyable-generics.md) · [SE-0515](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0515-noncopyable-reduce.md) · [SE-0528](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0528-noncopyable-continuation.md) · 动机：资源管理（文件句柄、内存缓冲区）需要所有权唯一性保证，避免 double-free 和 use-after-free。非可复制类型在编译期强制执行所有权规则。
+
 ```swift
 // 非可复制类型：所有权唯一，避免意外复制
 struct Buffer: ~Copyable {
@@ -226,6 +240,8 @@ struct Buffer: ~Copyable {
 ```
 
 ### 9. 标准库新类型
+
+> 提案: [SE-0517](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0517-uniquebox.md) · [SE-0527](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0527-rigidarray-uniquearray.md) · [SE-0519](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0519-ref-mutableref-types.md) · 动机：非可复制类型需要配套的标准库容器，`UniqueBox` 提供唯一所有权堆分配，`UniqueArray` 提供动态数组，`Ref` 提供引用计数抽象。
 
 | 类型 | 说明 |
 |------|------|
@@ -240,6 +256,8 @@ let ref = Ref(wrapped: MyClass())
 ```
 
 ### 10. Iterable 协议与 Borrow/Mutate 访问器
+
+> 提案: [SE-0507](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0507-borrow-accessors.md) · [SE-0516](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0516-borrowing-sequence.md) · 动机：精细控制属性访问的所有权语义——区分只读借用（borrow）和可变借用（mutate），在编译期保证无数据竞争。
 
 ```swift
 // Borrow/Mutate 访问器：精细控制属性访问模式
@@ -265,10 +283,44 @@ swift --version
 
 ---
 
-## 参考资源
+## 提案索引
+
+### Swift 6.3 相关提案
+
+| 提案编号 | 标题 | 特性 |
+|----------|------|------|
+| [SE-0460](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0460-specialized.md) | Specialized | `@specialize` 属性 |
+| [SE-0491](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0491-module-selectors.md) | Module Selectors | `::` 模块选择器 |
+| [SE-0495](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0495-cdecl.md) | `@c` Attribute | `@c` / `@c(asmname)` |
+| [SE-0496](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0496-inline-always.md) | Inline Always | `@inline(always)` |
+| [SE-0497](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0497-definition-visibility.md) | Definition Visibility | `@export(implementation)` |
+
+### Swift 6.4 相关提案
+
+| 提案编号 | 标题 | 特性 |
+|----------|------|------|
+| [SE-0390](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0390-noncopyable-structs-and-enums.md) | Noncopyable Structs and Enums | `~Copyable` 基础 |
+| [SE-0427](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0427-noncopyable-generics.md) | Noncopyable Generics | 泛型非可复制类型 |
+| [SE-0481](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0481-weak-let.md) | Weak Let | `weak let` 不可变弱引用 |
+| [SE-0507](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0507-borrow-accessors.md) | Borrow Accessors | `_read` / `_modify` 访问器 |
+| [SE-0515](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0515-noncopyable-reduce.md) | Noncopyable Reduce | 非可复制类型的 reduce 操作 |
+| [SE-0516](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0516-borrowing-sequence.md) | Borrowing Sequence | 借用迭代语义 |
+| [SE-0517](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0517-uniquebox.md) | UniqueBox | `UniqueBox<T>` |
+| [SE-0518](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0518-tilde-sendable.md) | `~Sendable` | 抑制 Sendable 诊断 |
+| [SE-0519](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0519-ref-mutableref-types.md) | Ref / MutableRef | `Ref<T>` 引用计数包装器 |
+| [SE-0522](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0522-source-warning-control.md) | Source Warning Control | `@diagnose` 属性 |
+| [SE-0527](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0527-rigidarray-uniquearray.md) | RigidArray / UniqueArray | `UniqueArray<T>` |
+| [SE-0528](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0528-noncopyable-continuation.md) | Noncopyable Continuation | 非可复制延续 |
+
+### 其他参考
 
 - [Swift 6.3 发布博文](https://www.swift.org/blog/swift-6.3-released/)
 - [WWDC 2026: What's new in Swift (Session 262)](https://developer.apple.com/videos/play/wwdc2026/262/)
 - [Swift Evolution Dashboard](https://www.swift.org/swift-evolution/)
 - [SwiftPM 6.3 Release Notes](https://docs.swift.org/swiftpm/documentation/packagemanagerdocs/6.3)
 - [Swift SDK for Android 入门](https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html)
+- [Embedded Swift 改进详情](https://www.swift.org/blog/embedded-swift-improvements-coming-in-swift-6.3/)
+- [Swift Build 预览](https://docs.swift.org/swiftpm/documentation/packagemanagerdocs/swiftbuildpreview)
+- [Swift Java (GitHub)](https://github.com/swiftlang/swift-java)
+- [Subprocess (GitHub)](https://github.com/swiftlang/swift-subprocess)
+- [JavaScriptKit (GitHub)](https://github.com/swiftlang/JavaScriptKit)

@@ -274,7 +274,7 @@
 <div class="slide active title-slide" id="s0">
   <h1>Swift 6.3 → 6.4</h1>
   <p class="subtitle">C 互操作 · Android SDK · Wasm 40x · 所有权系统 · Subprocess 1.0</p>
-  <p class="meta">Swift 6.3 (2026-03-24) &amp; Swift 6.4 (WWDC 2026) · 共 17 页</p>
+  <p class="meta">Swift 6.3 (2026-03-24) &amp; Swift 6.4 (WWDC 2026) · 共 18 页</p>
   <p class="meta" style="margin-top:8px">来源：swift.org 发布博文 &amp; WWDC 2026 Session 262</p>
 </div>
 
@@ -309,6 +309,7 @@
       <p>警告 Issue · 测试取消 · 图片附件</p>
     </div>
   </div>
+  <p style="margin-top:10px;font-size:0.78rem;color:var(--muted)">📎 提案: <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0460-specialized.md">SE-0460</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0491-module-selectors.md">SE-0491</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0495-cdecl.md">SE-0495</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0496-inline-always.md">SE-0496</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0497-definition-visibility.md">SE-0497</a></p>
 </div>
 
 <!-- ====== 6.3: @c ====== -->
@@ -468,6 +469,7 @@ swift build \
       <p><code>UniqueBox</code> · <code>UniqueArray</code> · <code>Ref&lt;T&gt;</code></p>
     </div>
   </div>
+  <p style="margin-top:10px;font-size:0.78rem;color:var(--muted)">📎 提案: <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0481-weak-let.md">SE-0481</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0518-tilde-sendable.md">SE-0518</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0522-source-warning-control.md">SE-0522</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0390-noncopyable-structs-and-enums.md">SE-0390</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0517-uniquebox.md">SE-0517</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0527-rigidarray-uniquearray.md">SE-0527</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0519-ref-mutableref-types.md">SE-0519</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0507-borrow-accessors.md">SE-0507</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0516-borrowing-sequence.md">SE-0516</a></p>
 </div>
 
 <!-- ====== 6.4: Language ====== -->
@@ -798,6 +800,58 @@ swift --version</div>
 
   <div class="highlight-box blue" style="margin-top:12px">
     <p>💡 本演示基于 Swift.org 官方博文（2026-03-24）与 WWDC 2026 Session 262 整理。</p>
+  </div>
+</div>
+
+<!-- ====== References ====== -->
+<div class="slide" id="s17">
+  <div class="slide-num">17 / 18</div>
+  <h2>📚 提案索引 &amp; 参考资料</h2>
+
+  <div class="grid-2" style="gap:10px;font-size:0.78rem;">
+    <div>
+      <h3 style="font-size:0.9rem;color:var(--accent)">Swift 6.3 提案</h3>
+      <ul style="line-height:1.8">
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0460-specialized.md">SE-0460</a> — @specialize</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0491-module-selectors.md">SE-0491</a> — 模块选择器 ::</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0495-cdecl.md">SE-0495</a> — @c 属性</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0496-inline-always.md">SE-0496</a> — @inline(always)</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0497-definition-visibility.md">SE-0497</a> — @export(implementation)</li>
+      </ul>
+      <h3 style="font-size:0.9rem;color:var(--accent3);margin-top:10px">Swift 6.4 提案</h3>
+      <ul style="line-height:1.8">
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0481-weak-let.md">SE-0481</a> — weak let</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0518-tilde-sendable.md">SE-0518</a> — ~Sendable</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0522-source-warning-control.md">SE-0522</a> — @diagnose</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0507-borrow-accessors.md">SE-0507</a> — Borrow Accessors</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0516-borrowing-sequence.md">SE-0516</a> — Borrowing Sequence</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0517-uniquebox.md">SE-0517</a> — UniqueBox</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0527-rigidarray-uniquearray.md">SE-0527</a> — UniqueArray</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0519-ref-mutableref-types.md">SE-0519</a> — Ref/MutableRef</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0390-noncopyable-structs-and-enums.md">SE-0390</a> — ~Copyable</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0427-noncopyable-generics.md">SE-0427</a> — 泛型非可复制</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0515-noncopyable-reduce.md">SE-0515</a> — Noncopyable Reduce</li>
+        <li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0528-noncopyable-continuation.md">SE-0528</a> — Noncopyable Continuation</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="font-size:0.9rem;color:var(--accent2)">发布 &amp; 文档</h3>
+      <ul style="line-height:1.8">
+        <li><a href="https://www.swift.org/blog/swift-6.3-released/">Swift 6.3 发布博文</a></li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/262/">WWDC 2026 Session 262</a></li>
+        <li><a href="https://www.swift.org/swift-evolution/">Swift Evolution Dashboard</a></li>
+        <li><a href="https://docs.swift.org/swiftpm/">SwiftPM 文档</a></li>
+        <li><a href="https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html">Android SDK 入门</a></li>
+      </ul>
+      <h3 style="font-size:0.9rem;color:var(--accent2);margin-top:10px">库 &amp; 工具</h3>
+      <ul style="line-height:1.8">
+        <li><a href="https://github.com/swiftlang/swift-java">Swift Java (GitHub)</a></li>
+        <li><a href="https://github.com/swiftlang/swift-subprocess">Subprocess (GitHub)</a></li>
+        <li><a href="https://github.com/swiftlang/JavaScriptKit">JavaScriptKit (GitHub)</a></li>
+        <li><a href="https://github.com/swiftlang/swift-build">Swift Build (GitHub)</a></li>
+        <li><a href="https://www.swift.org/blog/embedded-swift-improvements-coming-in-swift-6.3/">Embedded Swift 改进</a></li>
+      </ul>
+    </div>
   </div>
 </div>
 
