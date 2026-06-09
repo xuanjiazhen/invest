@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
 <title>Swift 6.3 → 6.4 · 新特性详解</title>
 <style>
   :root {
@@ -21,6 +21,11 @@
     --purple: #bc8cff;
   }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
 
   body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -28,40 +33,46 @@
     color: var(--ink);
     overflow: hidden;
     height: 100vh;
+    height: 100dvh;
   }
 
   .slide-container {
     width: 100%;
     height: 100vh;
+    height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
   .slide {
     display: none;
     width: min(94vw, 1160px);
     height: min(92vh, 700px);
+    height: min(92dvh, 700px);
     background: var(--slide-bg);
     border-radius: 16px;
-    padding: 44px 52px;
+    padding: clamp(24px, 3.5vw, 44px) clamp(20px, 4vw, 52px);
     box-shadow: 0 8px 40px rgba(0,0,0,0.4);
     flex-direction: column;
     overflow-y: auto;
     position: relative;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
   }
   .slide.active { display: flex; }
 
   .slide-num {
     position: absolute;
-    top: 20px;
-    right: 28px;
-    font-size: 0.8rem;
+    top: 14px;
+    right: 20px;
+    font-size: clamp(0.68rem, 1.2vw, 0.8rem);
     color: var(--muted);
   }
 
   .slide h1 {
-    font-size: 2rem;
+    font-size: clamp(1.4rem, 3.5vw, 2rem);
     font-weight: 800;
     margin-bottom: 8px;
     background: linear-gradient(135deg, var(--accent), var(--accent2));
@@ -70,47 +81,48 @@
     background-clip: text;
   }
   .slide h2 {
-    font-size: 1.45rem;
+    font-size: clamp(1.1rem, 2.5vw, 1.45rem);
     font-weight: 700;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
     color: var(--accent);
     border-left: 4px solid var(--accent);
     padding-left: 14px;
   }
   .slide h3 {
-    font-size: 1.1rem;
+    font-size: clamp(0.9rem, 1.8vw, 1.1rem);
     font-weight: 600;
-    margin: 12px 0 6px;
+    margin: 10px 0 6px;
     color: var(--accent2);
   }
   .slide p, .slide li {
-    font-size: 0.95rem;
-    line-height: 1.65;
+    font-size: clamp(0.8rem, 1.5vw, 0.95rem);
+    line-height: 1.6;
     color: var(--ink);
-    margin-bottom: 4px;
+    margin-bottom: 3px;
   }
-  .slide ul { padding-left: 22px; margin-bottom: 8px; }
-  .slide ul li { margin-bottom: 3px; }
+  .slide ul { padding-left: 20px; margin-bottom: 6px; }
+  .slide ul li { margin-bottom: 2px; }
 
   .code-block {
     background: var(--code-bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 18px;
-    margin: 8px 0;
+    border-radius: clamp(5px, 0.8vw, 8px);
+    padding: clamp(10px, 1.5vw, 14px) clamp(12px, 1.8vw, 18px);
+    margin: 6px 0;
     overflow-x: auto;
     font-family: 'Cascadia Code','Fira Code','JetBrains Mono','Consolas',monospace;
-    font-size: 0.84rem;
-    line-height: 1.55;
+    font-size: clamp(0.65rem, 1.1vw, 0.84rem);
+    line-height: 1.5;
     color: var(--code-ink);
     white-space: pre;
     position: relative;
+    -webkit-overflow-scrolling: touch;
   }
   .code-block .lang-tag {
     position: absolute;
-    top: 5px;
-    right: 10px;
-    font-size: 0.68rem;
+    top: 4px;
+    right: 8px;
+    font-size: clamp(0.55rem, 0.9vw, 0.68rem);
     color: var(--muted);
     text-transform: uppercase;
   }
@@ -124,11 +136,13 @@
 
   .badge {
     display: inline-block;
-    padding: 2px 10px;
+    padding: 2px 8px;
     border-radius: 4px;
-    font-size: 0.75rem;
+    font-size: clamp(0.62rem, 1vw, 0.75rem);
     font-weight: 600;
-    margin-right: 6px;
+    margin-right: 4px;
+    margin-bottom: 2px;
+    white-space: nowrap;
   }
   .badge-v63 { background: #f0513822; color: var(--accent); border: 1px solid #f0513844; }
   .badge-v64 { background: #5e5ce622; color: var(--accent3); border: 1px solid #5e5ce644; }
@@ -137,82 +151,89 @@
   .highlight-box {
     background: linear-gradient(135deg, #f0513820, #ff9f0a20);
     border: 1px solid var(--accent);
-    border-radius: 10px;
-    padding: 14px 18px;
-    margin: 10px 0;
+    border-radius: clamp(6px, 0.8vw, 10px);
+    padding: clamp(10px, 1.2vw, 14px) clamp(12px, 1.5vw, 18px);
+    margin: 8px 0;
   }
   .highlight-box.blue {
     background: linear-gradient(135deg, #5e5ce620, #58a6ff20);
     border-color: var(--accent3);
   }
+  .highlight-box p { margin: 0; font-size: clamp(0.78rem, 1.4vw, 0.95rem); }
 
   .grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 14px;
-    margin-top: 6px;
+    gap: clamp(8px, 1.2vw, 14px);
+    margin-top: 4px;
   }
   .grid-2 .code-block { margin: 0; }
 
   .col-container {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 18px;
+    gap: clamp(10px, 1.5vw, 18px);
     flex: 1;
   }
 
   .feature-list {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-top: 8px;
+    gap: clamp(6px, 0.9vw, 10px);
+    margin-top: 6px;
   }
   .feature-card {
     background: #1a1a2e66;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
+    border-radius: clamp(5px, 0.7vw, 8px);
+    padding: clamp(8px, 1vw, 12px) clamp(10px, 1.2vw, 16px);
   }
   .feature-card h4 {
-    font-size: 0.9rem;
+    font-size: clamp(0.74rem, 1.2vw, 0.9rem);
     color: var(--accent);
-    margin-bottom: 3px;
+    margin-bottom: 2px;
   }
   .feature-card p {
-    font-size: 0.82rem;
+    font-size: clamp(0.68rem, 1vw, 0.82rem);
     color: var(--muted);
-    line-height: 1.45;
+    line-height: 1.4;
     margin: 0;
   }
 
   .section-tag {
-    font-size: 0.78rem;
+    font-size: clamp(0.65rem, 1vw, 0.78rem);
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
   .section-tag.v63 { color: var(--accent); }
   .section-tag.v64 { color: var(--accent3); }
 
   .controls {
     position: fixed;
-    bottom: 20px;
+    bottom: max(12px, env(safe-area-inset-bottom, 12px));
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 10px;
+    gap: 8px;
     z-index: 100;
   }
   .controls button {
     background: var(--slide-bg);
     border: 1px solid var(--border);
     color: var(--ink);
-    padding: 7px 18px;
+    padding: clamp(5px, 0.8vw, 7px) clamp(12px, 1.5vw, 18px);
     border-radius: 8px;
     cursor: pointer;
-    font-size: 0.88rem;
+    font-size: clamp(0.72rem, 1.1vw, 0.88rem);
     transition: all 0.2s;
+    -webkit-tap-highlight-color: rgba(240,81,56,0.3);
+    touch-action: manipulation;
+    min-height: 40px;
+    min-width: 70px;
+    user-select: none;
+    -webkit-user-select: none;
   }
   .controls button:hover {
     background: var(--accent);
@@ -230,10 +251,11 @@
   }
   .page-indicator {
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: clamp(0.68rem, 1vw, 0.82rem);
     display: flex;
     align-items: center;
-    padding: 0 6px;
+    padding: 0 4px;
+    white-space: nowrap;
   }
 
   .title-slide {
@@ -242,27 +264,56 @@
     text-align: center;
   }
   .title-slide h1 {
-    font-size: 2.6rem;
-    margin-bottom: 10px;
+    font-size: clamp(1.6rem, 5vw, 2.6rem);
+    margin-bottom: 8px;
   }
   .title-slide .subtitle {
-    font-size: 1.15rem;
+    font-size: clamp(0.85rem, 2vw, 1.15rem);
     color: var(--muted);
-    margin-bottom: 28px;
+    margin-bottom: 24px;
+    padding: 0 10px;
   }
   .title-slide .meta {
-    font-size: 0.82rem;
+    font-size: clamp(0.68rem, 1.2vw, 0.82rem);
     color: var(--muted);
   }
 
-  a { color: var(--blue); text-decoration: none; }
+  a { color: var(--blue); text-decoration: none; word-break: break-word; }
   a:hover { text-decoration: underline; }
 
-  @media (max-width: 768px) {
-    .slide { padding: 26px 20px; height: min(94vh, auto); }
-    .grid-2, .feature-list, .col-container { grid-template-columns: 1fr; }
-    .title-slide h1 { font-size: 1.6rem; }
-    .controls button { padding: 6px 12px; font-size: 0.78rem; }
+  /* ---- Mobile: phone ---- */
+  @media (max-width: 640px) {
+    .slide {
+      width: 100vw;
+      height: 100dvh;
+      border-radius: 0;
+      padding: 40px 16px 80px;
+    }
+    .slide-num { top: 10px; right: 14px; font-size: 0.68rem; }
+    .grid-2, .feature-list, .col-container { grid-template-columns: 1fr; gap: 8px; }
+    .controls { gap: 6px; bottom: 16px; }
+    .controls button { padding: 6px 14px; font-size: 0.78rem; min-height: 38px; min-width: 60px; }
+    .code-block { font-size: 0.68rem; padding: 10px 12px; }
+    .code-block .lang-tag { display: none; }
+    .title-slide h1 { font-size: 1.5rem; }
+    .title-slide .subtitle { font-size: 0.85rem; }
+    .badge { font-size: 0.65rem; padding: 1px 6px; }
+    .section-tag { font-size: 0.65rem; }
+    .highlight-box p { font-size: 0.78rem; }
+  }
+
+  /* ---- Mobile: small phone ---- */
+  @media (max-width: 380px) {
+    .slide { padding: 36px 12px 80px; }
+    .slide h1 { font-size: clamp(1.1rem, 4vw, 1.3rem); }
+    .slide h2 { font-size: 1rem; }
+    .slide h3 { font-size: 0.85rem; }
+    .slide p, .slide li { font-size: 0.75rem; }
+    .code-block { font-size: 0.62rem; padding: 8px 10px; }
+    .feature-card h4 { font-size: 0.72rem; }
+    .feature-card p { font-size: 0.66rem; }
+    .controls button { padding: 5px 10px; font-size: 0.72rem; min-height: 34px; min-width: 52px; }
+    .badge { font-size: 0.6rem; }
   }
 </style>
 </head>

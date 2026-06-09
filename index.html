@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ArkTS &amp; Cangjie Lint 调研</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>技术调研 · ArkTS &amp; Swift</title>
 <style>
   :root {
     --bg: #f8f5ee;
@@ -16,44 +16,53 @@
     --font-body: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
   }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
   body {
     font-family: var(--font-body);
     background: var(--bg);
     color: var(--ink);
     line-height: 1.7;
     min-height: 100vh;
+    min-height: 100dvh;
   }
   .top-bar {
     background: linear-gradient(90deg, var(--red), var(--red-dark));
     height: 4px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
   }
-  .container { max-width: 800px; margin: 0 auto; padding: 56px 24px 64px; }
+  .container { max-width: 800px; margin: 0 auto; padding: clamp(28px, 5vw, 56px) clamp(16px, 4vw, 24px) clamp(36px, 6vw, 64px); }
 
   header {
-    margin-bottom: 48px;
-    padding-bottom: 32px;
+    margin-bottom: clamp(24px, 4vw, 48px);
+    padding-bottom: clamp(20px, 3vw, 32px);
     border-bottom: 1px solid var(--line);
   }
   header h1 {
     font-family: var(--font-display);
-    font-size: 1.8rem;
+    font-size: clamp(1.3rem, 4vw, 1.8rem);
     font-weight: 900;
     letter-spacing: 0.02em;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
   header p {
     color: var(--muted);
-    font-size: 0.92rem;
+    font-size: clamp(0.8rem, 2vw, 0.92rem);
   }
 
   .section-label {
     font-family: var(--font-display);
-    font-size: 0.82rem;
+    font-size: clamp(0.72rem, 1.8vw, 0.82rem);
     font-weight: 700;
     color: var(--red-dark);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    margin: 36px 0 14px;
+    margin: clamp(22px, 3.5vw, 36px) 0 clamp(10px, 1.5vw, 14px);
   }
   .section-label:first-of-type { margin-top: 0; }
 
@@ -61,37 +70,45 @@
     display: block;
     background: #fff;
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 22px 28px;
-    margin-bottom: 14px;
+    border-radius: clamp(6px, 1vw, 8px);
+    padding: clamp(14px, 2.5vw, 22px) clamp(16px, 3vw, 28px);
+    margin-bottom: clamp(10px, 1.5vw, 14px);
     text-decoration: none;
     color: inherit;
     transition: box-shadow 0.2s, transform 0.15s;
+    -webkit-tap-highlight-color: rgba(197,22,46,0.08);
+    touch-action: manipulation;
   }
+  .card:active { background: #faf6f0; }
   .card:hover {
     box-shadow: 0 4px 20px rgba(0,0,0,0.06);
     transform: translateY(-1px);
   }
+  @media (hover: none) {
+    .card:hover { transform: none; box-shadow: none; }
+  }
   .card h3 {
     font-family: var(--font-display);
-    font-size: 1.1rem;
+    font-size: clamp(0.95rem, 2.2vw, 1.1rem);
     font-weight: 700;
     margin-bottom: 4px;
     color: var(--ink);
+    word-break: break-word;
   }
   .card:hover h3 { color: var(--red); }
   .card .desc {
-    font-size: 0.88rem;
+    font-size: clamp(0.78rem, 1.8vw, 0.88rem);
     color: var(--muted);
   }
   .card .badge {
     display: inline-block;
-    padding: 1px 8px;
+    padding: 2px 8px;
     border-radius: 4px;
-    font-size: 0.72rem;
-    margin-top: 8px;
+    font-size: clamp(0.65rem, 1.4vw, 0.72rem);
+    margin-top: clamp(6px, 1vw, 8px);
     background: #fef0f0;
     color: var(--red-dark);
+    white-space: nowrap;
   }
   .placeholder {
     opacity: 0.45;
@@ -100,20 +117,25 @@
   }
 
   footer {
-    margin-top: 56px;
-    padding-top: 24px;
+    margin-top: clamp(32px, 5vw, 56px);
+    padding-top: clamp(16px, 2.5vw, 24px);
     border-top: 1px solid var(--line);
-    font-size: 0.8rem;
+    font-size: clamp(0.7rem, 1.5vw, 0.8rem);
     color: var(--muted);
     text-align: center;
+    line-height: 1.6;
   }
-  footer a { color: var(--red-dark); text-decoration: none; }
+  footer a { color: var(--red-dark); text-decoration: none; padding: 2px 4px; }
   footer a:hover { text-decoration: underline; }
 
-  @media (max-width: 640px) {
-    .container { padding: 32px 16px 48px; }
-    header h1 { font-size: 1.35rem; }
-    .card { padding: 18px 20px; }
+  @media (max-width: 480px) {
+    .container { padding: 24px 14px 36px; }
+    .card { padding: 14px 16px; border-radius: 6px; }
+    .card h3 { font-size: 0.92rem; }
+    .card .desc { font-size: 0.78rem; }
+    header h1 { font-size: 1.25rem; }
+    .section-label { font-size: 0.7rem; margin: 20px 0 8px; }
+    footer { font-size: 0.7rem; }
   }
 </style>
 </head>
