@@ -309,7 +309,12 @@
       <p>警告 Issue · 测试取消 · 图片附件</p>
     </div>
   </div>
-  <p style="margin-top:10px;font-size:0.78rem;color:var(--muted)">📎 提案: <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0460-specialized.md">SE-0460</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0491-module-selectors.md">SE-0491</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0495-cdecl.md">SE-0495</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0496-inline-always.md">SE-0496</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0497-definition-visibility.md">SE-0497</a></p>
+  <div style="margin-top:12px;padding:10px 14px;background:#1a1a2e44;border-radius:6px;font-size:0.76rem;color:var(--muted);line-height:1.6">
+    <strong style="color:var(--accent)">📎 提案背景</strong><br>
+    <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0495-cdecl.md">SE-0495</a> @c — 将内部 @_cdecl 正式化，Linux 移植与系统框架迁移需要双向 C 互操作<br>
+    <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0460-specialized.md">SE-0460</a> @specialize · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0496-inline-always.md">SE-0496</a> @inline(always) · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0497-definition-visibility.md">SE-0497</a> @export — 下划线属性正式化，库作者需在稳定 API 中使用<br>
+    <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0491-module-selectors.md">SE-0491</a> 模块选择器 :: — 大项目多模块同名 API 冲突的显式消歧方案
+  </div>
 </div>
 
 <!-- ====== 6.3: @c ====== -->
@@ -469,7 +474,15 @@ swift build \
       <p><code>UniqueBox</code> · <code>UniqueArray</code> · <code>Ref&lt;T&gt;</code></p>
     </div>
   </div>
-  <p style="margin-top:10px;font-size:0.78rem;color:var(--muted)">📎 提案: <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0481-weak-let.md">SE-0481</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0518-tilde-sendable.md">SE-0518</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0522-source-warning-control.md">SE-0522</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0390-noncopyable-structs-and-enums.md">SE-0390</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0517-uniquebox.md">SE-0517</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0527-rigidarray-uniquearray.md">SE-0527</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0519-ref-mutableref-types.md">SE-0519</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0507-borrow-accessors.md">SE-0507</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0516-borrowing-sequence.md">SE-0516</a></p>
+  <div style="margin-top:12px;padding:10px 14px;background:#1a1a2e44;border-radius:6px;font-size:0.76rem;color:var(--muted);line-height:1.6">
+    <strong style="color:var(--accent3)">📎 提案背景</strong><br>
+    <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0481-weak-let.md">SE-0481</a> weak let — 此前 weak 仅支持 var，不可变弱引用是长期社区需求<br>
+    <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0518-tilde-sendable.md">SE-0518</a> ~Sendable — C 互操作指针等类型客观上不安全，需显式标记避免噪声警告<br>
+    <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0522-source-warning-control.md">SE-0522</a> @diagnose — 团队需声明级细粒度控制，而非仅命令行全局开关<br>
+    <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0390-noncopyable-structs-and-enums.md">SE-0390</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0427-noncopyable-generics.md">SE-0427</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0515-noncopyable-reduce.md">SE-0515</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0528-noncopyable-continuation.md">SE-0528</a> ~Copyable 所有权 — 资源管理需编译期防 double-free / use-after-free<br>
+    <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0517-uniquebox.md">SE-0517</a> UniqueBox · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0527-rigidarray-uniquearray.md">SE-0527</a> UniqueArray · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0519-ref-mutableref-types.md">SE-0519</a> Ref — 非可复制类型的配套标准库容器<br>
+    <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0507-borrow-accessors.md">SE-0507</a> Borrow · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0516-borrowing-sequence.md">SE-0516</a> Borrowing Sequence — 精细所有权控制，编译期保证无数据竞争
+  </div>
 </div>
 
 <!-- ====== 6.4: Language ====== -->
