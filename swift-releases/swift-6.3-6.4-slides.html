@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Swift 6.3 → 6.4 · 新特性详解</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --slide-bg: #16213e;
+    --ink: #e0e0e0;
+    --accent: #f05138;
+    --accent2: #ff9f0a;
+    --accent3: #5e5ce6;
+    --code-bg: #0d1117;
+    --code-ink: #c9d1d9;
+    --muted: #8b949e;
+    --border: #30363d;
+    --green: #3fb950;
+    --blue: #58a6ff;
+    --purple: #bc8cff;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  .slide-container {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .slide {
+    display: none;
+    width: min(94vw, 1160px);
+    height: min(92vh, 700px);
+    background: var(--slide-bg);
+    border-radius: 16px;
+    padding: 44px 52px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    flex-direction: column;
+    overflow-y: auto;
+    position: relative;
+  }
+  .slide.active { display: flex; }
+
+  .slide-num {
+    position: absolute;
+    top: 20px;
+    right: 28px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .slide h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .slide h2 {
+    font-size: 1.45rem;
+    font-weight: 700;
+    margin-bottom: 14px;
+    color: var(--accent);
+    border-left: 4px solid var(--accent);
+    padding-left: 14px;
+  }
+  .slide h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 12px 0 6px;
+    color: var(--accent2);
+  }
+  .slide p, .slide li {
+    font-size: 0.95rem;
+    line-height: 1.65;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .slide ul { padding-left: 22px; margin-bottom: 8px; }
+  .slide ul li { margin-bottom: 3px; }
+
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 8px 0;
+    overflow-x: auto;
+    font-family: 'Cascadia Code','Fira Code','JetBrains Mono','Consolas',monospace;
+    font-size: 0.84rem;
+    line-height: 1.55;
+    color: var(--code-ink);
+    white-space: pre;
+    position: relative;
+  }
+  .code-block .lang-tag {
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .code-block .kw { color: #ff7b72; }
+  .code-block .fn { color: #d2a8ff; }
+  .code-block .str { color: #a5d6ff; }
+  .code-block .cmt { color: #8b949e; font-style: italic; }
+  .code-block .attr { color: #ff9f0a; }
+  .code-block .num { color: #79c0ff; }
+  .code-block .type { color: #ffa657; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .badge-v63 { background: #f0513822; color: var(--accent); border: 1px solid #f0513844; }
+  .badge-v64 { background: #5e5ce622; color: var(--accent3); border: 1px solid #5e5ce644; }
+  .badge-new { background: #23863622; color: var(--green); border: 1px solid #23863644; }
+
+  .highlight-box {
+    background: linear-gradient(135deg, #f0513820, #ff9f0a20);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 10px 0;
+  }
+  .highlight-box.blue {
+    background: linear-gradient(135deg, #5e5ce620, #58a6ff20);
+    border-color: var(--accent3);
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 6px;
+  }
+  .grid-2 .code-block { margin: 0; }
+
+  .col-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    flex: 1;
+  }
+
+  .feature-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .feature-card {
+    background: #1a1a2e66;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .feature-card h4 {
+    font-size: 0.9rem;
+    color: var(--accent);
+    margin-bottom: 3px;
+  }
+  .feature-card p {
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.45;
+    margin: 0;
+  }
+
+  .section-tag {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .section-tag.v63 { color: var(--accent); }
+  .section-tag.v64 { color: var(--accent3); }
+
+  .controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+  }
+  .controls button {
+    background: var(--slide-bg);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    padding: 7px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    transition: all 0.2s;
+  }
+  .controls button:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .controls button:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .controls button:disabled:hover {
+    background: var(--slide-bg);
+    border-color: var(--border);
+    color: var(--ink);
+  }
+  .page-indicator {
+    color: var(--muted);
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+  }
+
+  .title-slide {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+  .title-slide h1 {
+    font-size: 2.6rem;
+    margin-bottom: 10px;
+  }
+  .title-slide .subtitle {
+    font-size: 1.15rem;
+    color: var(--muted);
+    margin-bottom: 28px;
+  }
+  .title-slide .meta {
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  @media (max-width: 768px) {
+    .slide { padding: 26px 20px; height: min(94vh, auto); }
+    .grid-2, .feature-list, .col-container { grid-template-columns: 1fr; }
+    .title-slide h1 { font-size: 1.6rem; }
+    .controls button { padding: 6px 12px; font-size: 0.78rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="slide-container">
+
+<!-- ====== TITLE ====== -->
+<div class="slide active title-slide" id="s0">
+  <h1>Swift 6.3 → 6.4</h1>
+  <p class="subtitle">C 互操作 · Android SDK · Wasm 40x · 所有权系统 · Subprocess 1.0</p>
+  <p class="meta">Swift 6.3 (2026-03-24) &amp; Swift 6.4 (WWDC 2026) · 共 17 页</p>
+  <p class="meta" style="margin-top:8px">来源：swift.org 发布博文 &amp; WWDC 2026 Session 262</p>
+</div>
+
+<!-- ====== 6.3 OVERVIEW ====== -->
+<div class="slide" id="s1">
+  <div class="slide-num">1 / 17</div>
+  <h2>📋 Swift 6.3 · 核心亮点</h2>
+  <p>Swift 6.3 将 Swift 推向全栈每一层——嵌入式固件、互联网级服务、全功能移动应用。</p>
+  <div class="feature-list" style="margin-top:14px">
+    <div class="feature-card">
+      <h4>🔗 C 互操作</h4>
+      <p><code>@c</code> 属性暴露 Swift 函数/枚举给 C，双向互操作更灵活</p>
+    </div>
+    <div class="feature-card">
+      <h4>⚡ 性能控制</h4>
+      <p><code>@specialize</code> / <code>@inline(always)</code> / <code>@export(implementation)</code></p>
+    </div>
+    <div class="feature-card">
+      <h4>📦 模块选择器</h4>
+      <p><code>ModuleA::getValue()</code> 消除同名 API 歧义</p>
+    </div>
+    <div class="feature-card">
+      <h4>🏗️ Swift Build 预览</h4>
+      <p>统一构建引擎集成到 SwiftPM</p>
+    </div>
+    <div class="feature-card">
+      <h4>📱 Android SDK</h4>
+      <p>首个官方 Swift SDK for Android</p>
+    </div>
+    <div class="feature-card">
+      <h4>🧪 Swift Testing</h4>
+      <p>警告 Issue · 测试取消 · 图片附件</p>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 6.3: @c ====== -->
+<div class="slide" id="s2">
+  <div class="slide-num">2 / 17</div>
+  <div class="section-tag v63">Swift 6.3</div>
+  <h2>🔗 <code>@c</code> 属性 — Swift ↔ C</h2>
+  <p>用 <code>@c</code> 将 Swift 函数暴露给 C 代码，编译器自动生成头文件声明。</p>
+
+  <div class="grid-2">
+    <div class="code-block"><span class="lang-tag">Swift</span><span class="cmt">// 暴露给 C</span>
+<span class="attr">@c</span>
+<span class="kw">func</span> <span class="fn">callFromC</span>() {
+    <span class="fn">print</span>(<span class="str">"Hello!"</span>)
+}</div>
+    <div class="code-block"><span class="lang-tag">C header (生成)</span><span class="kw">void</span> <span class="fn">callFromC</span>(<span class="kw">void</span>);</div>
+  </div>
+
+  <div class="grid-2">
+    <div class="code-block"><span class="lang-tag">Swift</span><span class="cmt">// 自定义 C 名称</span>
+<span class="attr">@c</span>(MyLib_callFromC)
+<span class="kw">func</span> <span class="fn">callFromC</span>() { }</div>
+    <div class="code-block"><span class="lang-tag">C header (生成)</span><span class="kw">void</span> <span class="fn">MyLib_callFromC</span>(<span class="kw">void</span>);</div>
+  </div>
+
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="cmt">// 实现 C 头中声明的函数（Swift 校验签名）</span>
+<span class="attr">@c</span> <span class="attr">@implementation</span>
+<span class="kw">func</span> <span class="fn">callFromC</span>() { <span class="fn">print</span>(<span class="str">"Swift impl"</span>) }
+
+<span class="attr">@c</span> <span class="attr">@implementation</span>
+<span class="kw">func</span> <span class="fn">add</span>(<span class="kw">_</span> a: <span class="kw">Int</span>, <span class="kw">_</span> b: <span class="kw">Int</span>) -> <span class="kw">Int</span> { a + b }</div>
+
+  <p style="margin-top:8px"><span class="badge badge-v63">6.3</span> 适用于函数和枚举。C → Swift 方向亦可用。</p>
+</div>
+
+<!-- ====== 6.3: Performance + Module Selectors ====== -->
+<div class="slide" id="s3">
+  <div class="slide-num">3 / 17</div>
+  <div class="section-tag v63">Swift 6.3</div>
+  <h2>⚡ 性能控制 + 📦 模块选择器</h2>
+
+  <h3>性能控制属性</h3>
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="attr">@specialize</span>(where T == Int)           <span class="cmt">// 预特化泛型</span>
+<span class="kw">func</span> <span class="fn">process</span>&lt;T&gt;(<span class="kw">_</span> value: T) { }
+
+<span class="attr">@inline</span>(always)                    <span class="cmt">// 保证内联</span>
+<span class="kw">func</span> <span class="fn">criticalPath</span>() -> <span class="kw">Int</span> { <span class="num">42</span> }
+
+<span class="attr">@export</span>(implementation)            <span class="cmt">// 暴露实现体</span>
+<span class="kw">public func</span> <span class="fn">libraryAPI</span>() { }</div>
+
+  <h3>模块名选择器 <code>::</code></h3>
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="kw">import</span> ModuleA
+<span class="kw">import</span> ModuleB
+
+<span class="kw">let</span> x = ModuleA<span class="attr">::</span>getValue()   <span class="cmt">// ModuleA 的版本</span>
+<span class="kw">let</span> y = ModuleB<span class="attr">::</span>getValue()   <span class="cmt">// ModuleB 的版本</span>
+
+<span class="cmt">// 访问标准库</span>
+<span class="kw">let</span> task = Swift<span class="attr">::</span>Task { <span class="str">"async"</span> }</div>
+</div>
+
+<!-- ====== 6.3: Build + DocC + Testing ====== -->
+<div class="slide" id="s4">
+  <div class="slide-num">4 / 17</div>
+  <div class="section-tag v63">Swift 6.3</div>
+  <h2>🏗️ Swift Build + 📖 DocC + 🧪 Testing</h2>
+
+  <h3>Swift Build 预览版</h3>
+  <div class="code-block"><span class="lang-tag">Shell</span><span class="cmt"># 统一构建引擎</span>
+swift build --build-system swiftbuild
+
+<span class="cmt"># 新命令</span>
+swift package show-traits</div>
+
+  <h3>DocC 代码块注解</h3>
+  <div class="code-block"><span class="lang-tag">Markdown</span>```<span class="kw">swift</span>, <span class="attr">nocopy</span>
+<span class="kw">let</span> config = loadDefaultConfig()
+```
+
+```<span class="kw">swift</span>, <span class="attr">highlight=[1, 3]</span>
+<span class="kw">let</span> name = <span class="str">"World"</span>      <span class="cmt">// 高亮</span>
+<span class="fn">print</span>(name)             <span class="cmt">// 高亮</span>
+```
+
+```<span class="kw">swift</span>, <span class="attr">showLineNumbers</span>, <span class="attr">wrap=80</span>
+<span class="kw">func</span> <span class="fn">example</span>() { }</div>
+
+  <h3>Swift Testing</h3>
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="fn">Issue</span>.<span class="fn">record</span>(<span class="str">"msg"</span>, severity: <span class="attr">.</span>warning)  <span class="cmt">// 警告不失败</span>
+<span class="kw">try</span> <span class="fn">Test</span>.<span class="fn">cancel</span>()                        <span class="cmt">// 取消测试</span></div>
+</div>
+
+<!-- ====== 6.3: Platforms ====== -->
+<div class="slide" id="s5">
+  <div class="slide-num">5 / 17</div>
+  <div class="section-tag v63">Swift 6.3</div>
+  <h2>🌍 平台扩展</h2>
+
+  <div class="col-container">
+    <div>
+      <h3>📱 Android SDK</h3>
+      <div class="code-block"><span class="lang-tag">Shell</span><span class="cmt"># 安装 Android SDK</span>
+swift sdk install \
+  https://github.com/swiftlang/\
+  swift-sdk-android
+
+<span class="cmt"># 构建 Android 目标</span>
+swift build \
+  --swift-sdk aarch64-unknown-\
+  linux-android</div>
+      <p style="margin-top:6px;font-size:0.85rem">首个官方 Swift SDK for Android。可通过 Swift Java + JNI 与 Kotlin/Java 集成。</p>
+    </div>
+    <div>
+      <h3>🔧 Embedded Swift</h3>
+      <div class="code-block"><span class="lang-tag">Swift (Embedded)</span><span class="attr">@c</span>
+<span class="kw">func</span> <span class="fn">main</span>() {
+    <span class="fn">setupPeripherals</span>()
+    <span class="kw">while</span> <span class="kw">true</span> {
+        <span class="fn">processSensorData</span>()
+        <span class="fn">sleep</span>(ms: <span class="num">100</span>)
+    }
+}</div>
+      <p style="margin-top:6px;font-size:0.85rem">增强 C 互操作 · 更好调试 · 完整链接模型 · ARM Cortex-M / RISC-V</p>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 6.4 OVERVIEW ====== -->
+<div class="slide" id="s6">
+  <div class="slide-num">6 / 17</div>
+  <div class="section-tag v64">Swift 6.4 · WWDC 2026</div>
+  <h2>📋 Swift 6.4 · 核心亮点</h2>
+  <div class="feature-list" style="margin-top:14px">
+    <div class="feature-card">
+      <h4>✨ 日常改进</h4>
+      <p><code>weak let</code> · <code>~Sendable</code> · 可选括号省略 · 新成员初始化器</p>
+    </div>
+    <div class="feature-card">
+      <h4>🍎 anyAppleOS</h4>
+      <p><code>@available(anyAppleOS 27, *)</code> 一行替代冗长声明</p>
+    </div>
+    <div class="feature-card">
+      <h4>⚙️ Subprocess 1.0</h4>
+      <p>全新子进程管理库，async/await 原生支持</p>
+    </div>
+    <div class="feature-card">
+      <h4>🌐 Wasm + JSKit</h4>
+      <p>WebAssembly 编译目标，JS 桥接性能提升 40x</p>
+    </div>
+    <div class="feature-card">
+      <h4>🔒 所有权系统</h4>
+      <p><code>~Copyable</code> 非可复制类型，Borrow/Mutate 访问器</p>
+    </div>
+    <div class="feature-card">
+      <h4>📦 新标准库类型</h4>
+      <p><code>UniqueBox</code> · <code>UniqueArray</code> · <code>Ref&lt;T&gt;</code></p>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 6.4: Language ====== -->
+<div class="slide" id="s7">
+  <div class="slide-num">7 / 17</div>
+  <div class="section-tag v64">Swift 6.4</div>
+  <h2>✨ 日常语言改进</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3><code>weak let</code></h3>
+      <div class="code-block"><span class="lang-tag">Swift</span><span class="kw">class</span> <span class="type">Observer</span> {
+    <span class="kw">weak let</span> subject: <span class="type">SomeClass</span>?
+    <span class="cmt">// 不可变的弱引用</span>
+}</div>
+    </div>
+    <div>
+      <h3><code>~Sendable</code></h3>
+      <div class="code-block"><span class="lang-tag">Swift</span><span class="cmt">// 有意不满足 Sendable</span>
+<span class="kw">struct</span> <span class="type">MyType</span>: <span class="type">~Sendable</span> { }
+<span class="cmt">// 抑制并发诊断</span></div>
+    </div>
+  </div>
+
+  <h3>新成员初始化器</h3>
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="kw">struct</span> <span class="type">Meeting</span> {
+    <span class="kw">var</span> topic: <span class="type">String</span>
+    <span class="kw">var</span> scheduledAt: <span class="type">Date</span>
+    <span class="kw">var</span> attendees: [<span class="type">String</span>] = []  <span class="cmt">// 有默认值</span>
+
+    <span class="cmt">// 6.4: 自动生成 init(topic:scheduledAt:)</span>
+    <span class="cmt">// 仅要求无默认值的参数！</span>
+}</div>
+
+  <h3><code>@diagnose</code> 属性</h3>
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="attr">@diagnose</span>(warning: <span class="attr">.</span>unusedVariable, severity: <span class="attr">.</span>error)
+<span class="kw">func</span> <span class="fn">critical</span>() {
+    <span class="kw">let</span> x = <span class="num">1</span>  <span class="cmt">// warning → error</span>
+}</div>
+</div>
+
+<!-- ====== 6.4: anyAppleOS ====== -->
+<div class="slide" id="s8">
+  <div class="slide-num">8 / 17</div>
+  <div class="section-tag v64">Swift 6.4</div>
+  <h2>🍎 <code>anyAppleOS</code> 可用性</h2>
+  <p>告别冗长的多平台声明 — 一行替代五行。</p>
+
+  <div class="grid-2">
+    <div>
+      <h3 style="color:var(--muted)">之前 (6.3)</h3>
+      <div class="code-block"><span class="lang-tag">Swift</span><span class="attr">@available</span>(
+  macOS <span class="num">27</span>,
+  iOS <span class="num">27</span>,
+  watchOS <span class="num">27</span>,
+  tvOS <span class="num">27</span>,
+  visionOS <span class="num">27</span>, *
+)
+<span class="kw">func</span> <span class="fn">showStatus</span>() { }
+
+<span class="attr">#if</span> os(macOS) || os(iOS)
+  || os(watchOS) || os(tvOS)
+  || os(visionOS)
+<span class="kw">func</span> <span class="fn">widget</span>() { }
+<span class="attr">#endif</span></div>
+    </div>
+    <div>
+      <h3 style="color:var(--green)">6.4 ✓</h3>
+      <div class="code-block"><span class="lang-tag">Swift</span><span class="attr">@available</span>(anyAppleOS <span class="num">27</span>, *)
+<span class="kw">func</span> <span class="fn">showStatus</span>() { }
+
+<span class="attr">#if</span> os(anyAppleOS)
+<span class="kw">func</span> <span class="fn">widget</span>() { }
+<span class="attr">#endif</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 6.4: Subprocess + Foundation ====== -->
+<div class="slide" id="s9">
+  <div class="slide-num">9 / 17</div>
+  <div class="section-tag v64">Swift 6.4</div>
+  <h2>⚙️ Subprocess 1.0 + 📚 Foundation</h2>
+
+  <h3>Subprocess 1.0 — 全新子进程库</h3>
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="kw">import</span> Subprocess
+
+<span class="kw">let</span> process = <span class="kw">try</span> <span class="type">Subprocess</span>(
+    executable: <span class="attr">.</span>named(<span class="str">"git"</span>),
+    arguments: [<span class="str">"status"</span>, <span class="str">"--short"</span>]
+)
+<span class="kw">let</span> output = <span class="kw">try await</span> process.<span class="fn">launch</span>()
+<span class="fn">print</span>(output.standardOutput)
+
+<span class="cmt">// 也支持管道、环境变量、超时控制</span></div>
+
+  <h3>Foundation 更新</h3>
+  <div class="feature-list">
+    <div class="feature-card">
+      <h4>🌍 跨平台增强</h4>
+      <p>非 Apple 平台上兼容性和功能覆盖大幅改进</p>
+    </div>
+    <div class="feature-card">
+      <h4>📡 网络层</h4>
+      <p>URLSession 和网络 API 在 Linux/Windows 上更稳定</p>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 6.4: Cross-platform ====== -->
+<div class="slide" id="s10">
+  <div class="slide-num">10 / 17</div>
+  <div class="section-tag v64">Swift 6.4</div>
+  <h2>🌐 跨平台扩展</h2>
+
+  <div class="feature-list">
+    <div class="feature-card" style="grid-column:1/-1">
+      <h4>🚀 WebAssembly &amp; JavaScriptKit — 性能提升 40x</h4>
+      <p>Swift 编译到 Wasm，JS ↔ Swift 安全桥接性能提升 40 倍</p>
+    </div>
+  </div>
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="kw">import</span> JavaScriptKit
+
+<span class="kw">let</span> document = <span class="type">JSObject</span>.<span class="fn">global</span>.document
+<span class="kw">let</span> el = document.<span class="fn">getElementById</span>(<span class="str">"app"</span>)
+el.innerText = <span class="str">"Hello from Swift!"</span></div>
+
+  <div class="grid-2">
+    <div>
+      <h3>☕ Swift-Java 增强</h3>
+      <div class="code-block"><span class="lang-tag">Swift</span><span class="cmt">// Java 调用 Swift async
+// Java 类遵循 Swift 协议
+// 约束扩展支持</span></div>
+    </div>
+    <div>
+      <h3>🛠️ 编辑器支持</h3>
+      <div class="code-block"><span class="lang-tag">VSCode</span><span class="cmt">// Swiftly 工具链管理
+// OpenVSX 市场上架
+// Cursor / VSCodium 可用</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 6.4: Embedded + Performance ====== -->
+<div class="slide" id="s11">
+  <div class="slide-num">11 / 17</div>
+  <div class="section-tag v64">Swift 6.4</div>
+  <h2>🔧 Embedded Swift + ⚡ 性能调优</h2>
+
+  <div class="col-container">
+    <div>
+      <h3>Embedded Swift 增强</h3>
+      <div class="feature-list" style="grid-template-columns:1fr">
+        <div class="feature-card">
+          <h4>🧬 Existential 类型</h4>
+          <p><code>any Error</code> / <code>any Equatable</code> 等协议类型在嵌入式模式可用</p>
+        </div>
+        <div class="feature-card">
+          <h4>🎯 Untyped Throws</h4>
+          <p>嵌入式代码可使用无类型错误抛出</p>
+        </div>
+        <div class="feature-card">
+          <h4>🐛 DWARF 调试</h4>
+          <p>改进的调试信息生成，嵌入式目标调试体验大幅提升</p>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3>编译器优化控制</h3>
+      <div class="code-block"><span class="lang-tag">Swift</span><span class="cmt">// @inline(always) — 保证内联</span>
+<span class="attr">@inline</span>(always)
+<span class="kw">func</span> <span class="fn">hotPath</span>() -> <span class="kw">Int</span> { <span class="num">42</span> }
+
+<span class="cmt">// @specialize — 泛型特化</span>
+<span class="attr">@specialize</span>(where T == Int)
+<span class="kw">func</span> <span class="fn">process</span>&lt;T&gt;(<span class="kw">_</span> x: T) { }
+
+<span class="cmt">// 减少运行时泛型开销</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 6.4: Ownership ====== -->
+<div class="slide" id="s12">
+  <div class="slide-num">12 / 17</div>
+  <div class="section-tag v64">Swift 6.4</div>
+  <h2>🔒 所有权系统与非可复制类型</h2>
+
+  <h3><code>~Copyable</code> — 所有权唯一，防止意外复制</h3>
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="kw">struct</span> <span class="type">Buffer</span>: <span class="type">~Copyable</span> {
+    <span class="kw">let</span> ptr: <span class="type">UnsafeMutablePointer</span>&lt;<span class="type">Int</span>&gt;
+
+    <span class="kw">consuming func</span> <span class="fn">dispose</span>() {
+        ptr.<span class="fn">deallocate</span>()
+    }
+}
+
+<span class="kw">struct</span> <span class="type">FileHandle</span>: <span class="type">~Copyable</span> {
+    <span class="kw">let</span> fd: <span class="type">Int32</span>
+
+    <span class="kw">borrowing func</span> <span class="fn">read</span>() -> <span class="type">Data</span> { <span class="cmt">/* 借用读取 */</span> }
+    <span class="kw">mutating func</span> <span class="fn">write</span>(<span class="kw">_</span> data: <span class="type">Data</span>) { <span class="cmt">/* 可变写入 */</span> }
+    <span class="kw">consuming func</span> <span class="fn">close</span>() { <span class="cmt">/* 消费后不可再用 */</span> }
+}</div>
+  <p style="margin-top:8px"><span class="badge badge-v64">6.4</span> consuming / borrowing / mutating 三种所有权模式，编译期保证无 use-after-free。</p>
+</div>
+
+<!-- ====== 6.4: Borrow/Mutate + Stdlib ====== -->
+<div class="slide" id="s13">
+  <div class="slide-num">13 / 17</div>
+  <div class="section-tag v64">Swift 6.4</div>
+  <h2>📦 标准库新类型 + Borrow/Mutate 访问器</h2>
+
+  <h3>新标准库类型</h3>
+  <div class="grid-2">
+    <div>
+      <div class="code-block"><span class="lang-tag">Swift</span><span class="cmt">// 唯一所有权的堆分配值</span>
+<span class="kw">let</span> box = <span class="type">UniqueBox</span>(<span class="num">42</span>)
+<span class="fn">print</span>(box.value)  <span class="cmt">// 42</span></div>
+    </div>
+    <div>
+      <div class="code-block"><span class="lang-tag">Swift</span><span class="cmt">// 唯一所有权的动态数组</span>
+<span class="kw">var</span> arr: <span class="type">UniqueArray</span> = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>]
+arr.<span class="fn">append</span>(<span class="num">4</span>)</div>
+    </div>
+  </div>
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="cmt">// 引用计数包装器</span>
+<span class="kw">let</span> ref = <span class="type">Ref</span>(wrapped: <span class="type">MyClass</span>())
+ref.<span class="fn">access</span> { obj <span class="kw">in</span> obj.<span class="fn">doWork</span>() }</div>
+
+  <h3>Borrow / Mutate 访问器</h3>
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="kw">var</span> items: [<span class="type">Item</span>] {
+    <span class="kw">_read</span>   { <span class="kw">yield</span> storage.items }      <span class="cmt">// borrow — 只读借用</span>
+    <span class="kw">_modify</span> { <span class="kw">yield</span> &storage.items }     <span class="cmt">// mutate — 可变借用</span>
+}
+<span class="cmt">// 编译期保证无数据竞争</span></div>
+</div>
+
+<!-- ====== 6.4: Iterable ====== -->
+<div class="slide" id="s14">
+  <div class="slide-num">14 / 17</div>
+  <div class="section-tag v64">Swift 6.4</div>
+  <h2>🔄 Iterable 协议 + 所有权传递</h2>
+
+  <div class="code-block"><span class="lang-tag">Swift</span><span class="kw">protocol</span> <span class="type">Iterable</span> {
+    <span class="kw">associatedtype</span> <span class="type">Element</span>
+    <span class="kw">mutating func</span> <span class="fn">next</span>() <span class="kw">throws</span> -> <span class="type">Element</span>?
+}
+
+<span class="cmt">// 所有权感知的迭代</span>
+<span class="kw">for</span> item <span class="kw">in</span> values {
+    <span class="cmt">// item 被 borrow — 不复制大对象</span>
+    <span class="fn">process</span>(item)
+}  <span class="cmt">// item 所有权在此归还</span>
+
+<span class="cmt">// consuming 迭代 — 消费原集合</span>
+<span class="kw">for</span> <span class="kw">consuming</span> item <span class="kw">in</span> values {
+    <span class="fn">takeOwnership</span>(item)
+}  <span class="cmt">// values 在此之后不可用</span></div>
+
+  <div class="highlight-box" style="margin-top:10px">
+    <p>✅ 所有权系统 + Borrow/Mutate 访问器 + consuming 迭代 = <strong>零拷贝高性能数据管道</strong></p>
+  </div>
+</div>
+
+<!-- ====== Slides: 6.3 6.4 Comparison ====== -->
+<div class="slide" id="s15">
+  <div class="slide-num">15 / 17</div>
+  <h2>📊 6.3 vs 6.4 · 对比总览</h2>
+
+  <div class="grid-2" style="gap:12px">
+    <div>
+      <div class="section-tag v63" style="margin-bottom:8px">Swift 6.3</div>
+      <div class="feature-list" style="grid-template-columns:1fr">
+        <div class="feature-card"><h4>@c 属性</h4><p>暴露 Swift 给 C</p></div>
+        <div class="feature-card"><h4>性能控制属性</h4><p>@specialize/@inline/@export</p></div>
+        <div class="feature-card"><h4>模块选择器 ::</h4><p>消除同名 API 歧义</p></div>
+        <div class="feature-card"><h4>Swift Build 预览</h4><p>统一构建引擎</p></div>
+        <div class="feature-card"><h4>DocC 注解</h4><p>nocopy/highlight/wrap</p></div>
+        <div class="feature-card"><h4>Swift Testing 增强</h4><p>警告/取消/图片</p></div>
+        <div class="feature-card"><h4>Android SDK</h4><p>首个官方支持</p></div>
+      </div>
+    </div>
+    <div>
+      <div class="section-tag v64" style="margin-bottom:8px">Swift 6.4</div>
+      <div class="feature-list" style="grid-template-columns:1fr">
+        <div class="feature-card"><h4>weak let / ~Sendable</h4><p>语言日常改进</p></div>
+        <div class="feature-card"><h4>anyAppleOS</h4><p>一行替代多行声明</p></div>
+        <div class="feature-card"><h4>@diagnose</h4><p>细粒度警告控制</p></div>
+        <div class="feature-card"><h4>Subprocess 1.0</h4><p>新子进程库</p></div>
+        <div class="feature-card"><h4>Wasm + JSKit 40x</h4><p>Web 平台性能飞跃</p></div>
+        <div class="feature-card"><h4>~Copyable 所有权</h4><p>非可复制类型系统</p></div>
+        <div class="feature-card"><h4>UniqueBox/Array/Ref</h4><p>新标准库类型</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Quick Start + Ref ====== -->
+<div class="slide" id="s16">
+  <div class="slide-num">16 / 17</div>
+  <h2>🚀 快速开始 &amp; 参考</h2>
+
+  <div class="col-container">
+    <div>
+      <h3>安装</h3>
+      <div class="code-block"><span class="lang-tag">Shell</span><span class="cmt"># macOS</span>
+xcode-select --install
+
+<span class="cmt"># Linux</span>
+curl -sSf https://www.swift.org/\
+install/linux.sh | bash
+
+<span class="cmt"># 验证</span>
+swift --version</div>
+    </div>
+    <div>
+      <h3>参考资源</h3>
+      <ul style="font-size:0.85rem;line-height:2">
+        <li><a href="https://www.swift.org/blog/swift-6.3-released/">Swift 6.3 发布博文</a></li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/262/">WWDC 2026 · What's new in Swift</a></li>
+        <li><a href="https://www.swift.org/swift-evolution/">Swift Evolution Dashboard</a></li>
+        <li><a href="https://docs.swift.org/swiftpm/">SwiftPM 文档</a></li>
+        <li><a href="https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html">Android SDK 入门</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="highlight-box blue" style="margin-top:12px">
+    <p>💡 本演示基于 Swift.org 官方博文（2026-03-24）与 WWDC 2026 Session 262 整理。</p>
+  </div>
+</div>
+
+</div><!-- /slide-container -->
+
+<div class="controls">
+  <button id="prevBtn" onclick="navigate(-1)">◀ 上一页</button>
+  <span class="page-indicator" id="pageIndicator">1 / 17</span>
+  <button id="nextBtn" onclick="navigate(1)">下一页 ▶</button>
+</div>
+
+<script>
+  let current = 0;
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+
+  function navigate(dir) {
+    slides[current].classList.remove('active');
+    current = Math.max(0, Math.min(total - 1, current + dir));
+    slides[current].classList.add('active');
+    updateUI();
+  }
+
+  function updateUI() {
+    document.getElementById('prevBtn').disabled = current === 0;
+    document.getElementById('nextBtn').disabled = current === total - 1;
+    document.getElementById('pageIndicator').textContent = `${current + 1} / ${total}`;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault();
+      navigate(1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigate(-1);
+    }
+  });
+
+  let touchStartX = 0;
+  document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', (e) => {
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) navigate(diff > 0 ? 1 : -1);
+  });
+
+  updateUI();
+</script>
+</body>
+</html>
