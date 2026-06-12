@@ -1,7 +1,7 @@
 # 仓颉语言资料部署方案分析
 
 > 调研时间：2026-06-12
-> 调研范围：Kotlin/Android、Swift/iOS、ArkTS/HarmonyOS 竞品资料部署策略
+> 调研范围：Kotlin/Android、Swift/iOS、ArkTS/HarmonyOS 资料部署模式
 
 ---
 
@@ -19,7 +19,7 @@
 
 ---
 
-## 2. 竞品部署模式对照
+## 2. 同类语言部署模式
 
 ### 2.1 Kotlin on Android（Google + JetBrains）
 
@@ -33,22 +33,24 @@ kotlinlang.org（语言站）          developer.android.com（平台站）
                                   → 语言基础类文档链接至 kotlinlang.org
 ```
 
-**核心特征**：语言归语言站，平台归平台站，**标准库 API 不跨站重复**。
-
-**根本原因**：Kotlin 由 JetBrains 所有，Google 无权限也无动机复制其语言级文档。这是组织边界决定的，不是产品设计选择。
+**核心特征**：语言归语言站，平台归平台站，**标准库 API 不跨站重复**。Kotlin 由 JetBrains 所有，Android 由 Google 所有，语言站与平台站分属不同组织。
 
 ### 2.2 Swift on iOS（Apple）
 
 ```
-swift.org（社区站）               developer.apple.com（平台站）
+docs.swift.org（语言指南）         developer.apple.com（平台站）
 ──────────────────────────────────────────────────────────────
-✅ 开源社区/语言演进/贡献           ✅ **Swift 语言指南**（THE primary hub）
-✅ 源码、工具链下载                 ✅ **标准库 API 参考**（documentation/swift/）
-                                  ✅ SwiftUI / SwiftData 等框架文档
-                                  ✅ 视频课程、Sample Code、CodeLab
+✅ The Swift Programming Language  ✅ 标准库 API 参考（documentation/swift/）
+   完整书籍（权威语言指南）          ✅ SwiftUI / SwiftData 等框架文档
+                                  ✅ 视频课程、发行说明
+                                  → resources 页外链至 docs.swift.org
+
+swift.org（社区站）
+────────────────────
+✅ 开源社区、源码、论坛、开发构建
 ```
 
-**核心特征**：Apple 同时拥有语言和平台，**developer.apple.com 是唯一主站**，swift.org 退化为社区/开源辅助站。标准库 API、语言指南全部统一在平台站。
+**核心特征**：Apple 同时拥有语言和平台。**语言指南完整书籍托管于 docs.swift.org**，developer.apple.com 通过 resources 页面外链至该书。**标准库 API 参考托管于平台站**（developer.apple.com/documentation/swift/）。swift.org 为开源社区站。
 
 ### 2.3 ArkTS on HarmonyOS（华为现有模式）
 
@@ -132,7 +134,7 @@ swift.org（社区站）               developer.apple.com（平台站）
 
 ### 依据
 
-1. **Swift 是唯一可类比先例**：同一家公司拥有语言和平台，且语言有独立社区站。Apple 选择 developer.apple.com 做主站，swift.org 做开源社区站。仓颉应走同一条路。
+1. **Swift 的事实模式**：同一家公司拥有语言和平台。语言指南完整书籍托管于 docs.swift.org，平台站 developer.apple.com 外链至该书；标准库 API 托管于平台站。仓颉面临类似的双站结构。
 
 2. **Kotlin 模式不适用**：Kotlin/Android 的分立是组织边界导致的（JetBrains ≠ Google），不是产品设计选择。仓颉/鸿蒙没有这个边界。
 
@@ -154,14 +156,14 @@ swift.org（社区站）               developer.apple.com（平台站）
 
 ---
 
-## 7. 竞品资料快速索引
+## 7. 同类资料快速索引
 
-| 竞品 | 语言站 | 平台站 | 标准库 API 位置 | 模式 |
-|---|---|---|---|---|
-| Kotlin / Android | [kotlinlang.org](https://kotlinlang.org/docs/home.html) | [developer.android.com/kotlin](https://developer.android.com/kotlin) | kotlinlang.org（不重复） | 分站 + 链接 |
-| Swift / iOS | [swift.org](https://www.swift.org/) | [developer.apple.com/swift](https://developer.apple.com/swift/) | developer.apple.com | 平台主站 |
-| ArkTS / HarmonyOS | — | [developer.huawei.com](https://developer.huawei.com) | developer.huawei.com | 统一平台站 |
+| 语言/平台 | 语言站 | 平台站 | 语言指南位置 | 标准库 API 位置 | 模式 |
+|---|---|---|---|---|---|
+| Kotlin / Android | [kotlinlang.org](https://kotlinlang.org/docs/home.html) | [developer.android.com/kotlin](https://developer.android.com/kotlin) | 语言站 | 语言站（不重复） | 分站 + 链接 |
+| Swift / iOS | [docs.swift.org](https://docs.swift.org)（书籍） / [swift.org](https://www.swift.org/)（社区） | [developer.apple.com/swift](https://developer.apple.com/swift/) | docs.swift.org（平台站外链） | 平台站 | 语言指南在语言站，API 在平台站 |
+| ArkTS / HarmonyOS | — | [developer.huawei.com](https://developer.huawei.com) | 平台站 | 平台站 | 统一平台站 |
 
 ---
 
-> **核心结论**：仓颉应走 Swift/Apple 路线——开发者统一入口在 developer.huawei.com，cangjie-lang.cn 转型为语言开源社区站。不推荐 Kotlin/Google 的"分站链接"模式，因为那反映的是跨公司组织边界而非产品设计选择。
+> **核心结论**：仓颉与鸿蒙同属华为。Swift 的语言指南完整书籍在 docs.swift.org（平台站仅外链），Kotlin 的语言指南和标准库均在语言站（平台站仅外链），ArkTS 全部统一于平台站。仓颉的部署需结合自身双站结构特点。
