@@ -1,0 +1,67 @@
+<mxGraphModel dx="1100" dy="800" grid="1" gridSize="10" page="1" pageWidth="800" pageHeight="600" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="bg" style="rounded=0;fillColor=#ffffff;strokeColor=none;fontSize=1;" vertex="1" parent="1">
+      <mxGeometry x="0" y="0" width="800" height="600" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="title" value="DFX For AI 精简流程" style="text;html=1;strokeColor=none;fillColor=none;fontSize=22;fontStyle=1;fontColor=#1f2937;align=center;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="245" y="28" width="310" height="36" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="app" value="鸿蒙应用开发" style="swimlane;startSize=34;rounded=1;arcSize=4;fillColor=#f5fbff;strokeColor=#1f6feb;fontSize=16;fontStyle=1;verticalAlign=top;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="40" y="90" width="220" height="235" as="geometry"/>
+    </mxCell>
+    <mxCell id="coding" value="编码阶段" style="rounded=1;arcSize=6;fillColor=#e8f0fe;strokeColor=#1f6feb;fontSize=15;fontStyle=1;whiteSpace=wrap;html=1;" vertex="1" parent="app">
+      <mxGeometry x="25" y="58" width="170" height="46" as="geometry"/>
+    </mxCell>
+    <mxCell id="ops" value="运维阶段" style="rounded=1;arcSize=6;fillColor=#e8f0fe;strokeColor=#1f6feb;fontSize=15;fontStyle=1;whiteSpace=wrap;html=1;" vertex="1" parent="app">
+      <mxGeometry x="25" y="150" width="170" height="46" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="skills" value="DFX Skills" style="swimlane;startSize=36;rounded=1;arcSize=4;fillColor=#fff8e8;strokeColor=#d4a017;fontSize=17;fontStyle=1;verticalAlign=top;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="330" y="86" width="300" height="245" as="geometry"/>
+    </mxCell>
+    <mxCell id="perf" value="性能调优 Skill&#xa;源码 / 内存等性能问题&#xa;识别、分析、修改验证" style="rounded=1;arcSize=6;fillColor=#fff5cc;strokeColor=#d4a017;fontSize=14;fontStyle=1;whiteSpace=wrap;html=1;" vertex="1" parent="skills">
+      <mxGeometry x="35" y="58" width="230" height="72" as="geometry"/>
+    </mxCell>
+    <mxCell id="fault" value="故障定位 Skill&#xa;内存 / crash 等故障&#xa;问题定位、分析定位" style="rounded=1;arcSize=6;fillColor=#fff5cc;strokeColor=#d4a017;fontSize=14;fontStyle=1;whiteSpace=wrap;html=1;" vertex="1" parent="skills">
+      <mxGeometry x="35" y="152" width="230" height="72" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="sources" value="模式来源" style="swimlane;startSize=32;rounded=1;arcSize=4;fillColor=#f7fbff;strokeColor=#4f81bd;fontSize=15;fontStyle=1;verticalAlign=top;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="45" y="395" width="210" height="135" as="geometry"/>
+    </mxCell>
+    <mxCell id="source-list" value="专家录入&#xa;案例反馈&#xa;社区贡献&#xa;自动挖掘" style="rounded=1;arcSize=6;fillColor=#e8f0fe;strokeColor=#4f81bd;fontSize=14;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="sources">
+      <mxGeometry x="28" y="48" width="154" height="72" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="pattern-lib" value="故障模式库" style="swimlane;startSize=34;rounded=1;arcSize=4;fillColor=#eef8ee;strokeColor=#2e7d32;fontSize=16;fontStyle=1;verticalAlign=top;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="335" y="395" width="270" height="135" as="geometry"/>
+    </mxCell>
+    <mxCell id="coverage" value="覆盖故障类型&#xa;内存 / crash / freeze 等" style="rounded=1;arcSize=6;fillColor=#e8f5e9;strokeColor=#2e7d32;fontSize=14;fontStyle=1;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="pattern-lib">
+      <mxGeometry x="35" y="52" width="200" height="62" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="sink" value="识别、定位与修复验证" style="rounded=1;arcSize=6;fillColor=#f3f4f6;strokeColor=#6b7280;fontSize=15;fontStyle=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+      <mxGeometry x="650" y="168" width="120" height="80" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="e-code-perf" value="源码/内存问题识别分析&#xa;修改验证" style="dashed=1;dashPattern=6 4;endArrow=classic;endFill=1;strokeColor=#1f6feb;strokeWidth=2;fontSize=12;whiteSpace=wrap;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="coding" target="perf" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e-ops-fault" value="内存/crash 故障定位分析" style="dashed=1;dashPattern=6 4;endArrow=classic;endFill=1;strokeColor=#1f6feb;strokeWidth=2;fontSize=12;whiteSpace=wrap;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="ops" target="fault" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e-sources-lib" value="沉淀生成" style="dashed=1;dashPattern=6 4;endArrow=classic;endFill=1;strokeColor=#4f81bd;strokeWidth=2;fontSize=13;whiteSpace=wrap;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="sources" target="pattern-lib" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e-lib-skills" value="支撑 DFX Skill" style="endArrow=classic;endFill=1;strokeColor=#2e7d32;strokeWidth=2;fontSize=13;whiteSpace=wrap;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" source="pattern-lib" target="skills" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e-skills-sink" value="输出" style="endArrow=classic;endFill=1;strokeColor=#6b7280;strokeWidth=2;fontSize=13;whiteSpace=wrap;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="skills" target="sink" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>
