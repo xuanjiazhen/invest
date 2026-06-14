@@ -7,6 +7,9 @@
 .DS_Store
 Thumbs.db
 
+# Skill run outputs
+output/
+
 # Jekyll (GitHub Pages)
 _site/
 .sass-cache/
