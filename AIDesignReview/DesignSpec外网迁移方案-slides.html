@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DesignSpec 设计评审平台外网迁移方案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root{--stage-bg:#111;--paper:#f8f5ee;--ink:#151515;--muted:#645e55;--line:#ddd0bc;--red:#c5162e;--red-dark:#841324;--soft:#fffaf3;--font-display:'Noto Serif SC',serif;--font-body:'Noto Sans SC',sans-serif}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--stage-bg)}
+.deck-viewport{position:fixed;inset:0;overflow:hidden;background:var(--stage-bg)}
+.deck-stage{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;transform-origin:0 0;background:var(--paper)}
+.slide{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden;display:block;visibility:hidden;opacity:0;pointer-events:none;background:linear-gradient(90deg,rgba(197,22,46,.04),transparent 24%),var(--paper);padding:70px 86px 80px;font-family:var(--font-body);color:var(--ink)}
+.slide.active,.slide.visible{visibility:visible;opacity:1;pointer-events:auto;z-index:1}
+.slide:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.18;background-image:radial-gradient(circle at 1px 1px,rgba(197,22,46,.16) .7px,transparent 1px);background-size:6px 6px}
+.top-rule{position:absolute;left:86px;right:86px;top:44px;height:2px;background:linear-gradient(90deg,var(--red) 0 190px,var(--line) 190px 100%)}
+.page-no{position:absolute;right:86px;bottom:42px;color:var(--red);font:900 20px/1 var(--font-body)}
+.kicker{position:relative;z-index:2;color:var(--red-dark);font-weight:700;letter-spacing:.18em;font-size:18px;text-transform:uppercase;margin-top:6px}
+h1{position:relative;z-index:2;margin:18px 0 22px;font:900 42px/1.15 var(--font-display);color:var(--ink)}
+main{position:relative;z-index:2;height:initial}
+.note{font-size:21px;line-height:1.7;color:var(--ink);max-width:1500px}
+.muted{color:var(--muted)}
+
+/* cover */
+.cover{display:flex;flex-direction:column;justify-content:center;padding-left:140px}
+.cover .big{font:900 92px/1.1 var(--font-display);color:var(--red-dark);margin:0 0 14px}
+.cover .sub{font:700 34px/1.4 var(--font-display);color:var(--ink);margin-bottom:40px}
+.cover .tags{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+.cover .tag{border:2px solid var(--red);color:var(--red-dark);border-radius:999px;padding:8px 24px;font-size:20px;font-weight:700;background:#fff}
+.cover .meta{margin-top:48px;color:var(--muted);font-size:22px}
+
+/* generic blocks */
+.cards{display:flex;gap:28px;margin-top:8px}
+.card{flex:1;background:#fff;border:2px solid var(--line);border-radius:12px;padding:28px 30px;box-shadow:0 6px 0 rgba(197,22,46,.06)}
+.card h2{font:900 26px/1.3 var(--font-display);color:var(--red-dark);margin:0 0 16px;display:flex;align-items:center;gap:12px}
+.card h2 .dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--red)}
+.card ul{margin:0;padding-left:24px}
+.card li{font-size:20px;line-height:1.62;margin-bottom:12px}
+.card li strong{color:var(--red-dark)}
+
+.split{display:flex;gap:40px;align-items:stretch}
+.split .left{flex:0 0 40%}
+.split .right{flex:1;display:flex;align-items:center;justify-content:center}
+.figure{background:#fff;border:2px solid var(--line);border-radius:12px;padding:18px;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.figure img{max-width:100%;max-height:760px;height:auto}
+.figure.full img{max-height:820px}
+.bullets{margin:0;padding-left:26px}
+.bullets li{font-size:22px;line-height:1.7;margin-bottom:18px}
+.bullets li strong{color:var(--red-dark)}
+
+table{border-collapse:collapse;width:100%;background:#fff;font-size:19px}
+th,td{border:1px solid var(--line);padding:13px 16px;text-align:left;vertical-align:top;line-height:1.5}
+thead th{background:var(--red);color:#fff;font-weight:700;font-size:19px}
+tbody tr:nth-child(even){background:#fbf7ef}
+td code,p code,li code{background:#f3ead9;border-radius:4px;padding:1px 7px;font-size:.92em;color:var(--red-dark)}
+.tag-yes{color:#1c7c3f;font-weight:900}
+.tag-no{color:var(--red);font-weight:900}
+
+.flow2{display:flex;align-items:center;gap:22px;justify-content:center}
+.flow2 .col{flex:1}
+.flow2 .arrow{flex:0 0 64px;text-align:center;color:var(--red);font-size:46px;font-weight:900}
+
+/* timeline */
+.timeline{display:flex;gap:0;margin-top:26px;position:relative}
+.timeline .ph{flex:1;background:#fff;border:2px solid var(--line);border-left:8px solid var(--red);border-radius:10px;padding:24px 24px;margin-right:18px}
+.timeline .ph:last-child{margin-right:0}
+.timeline .ph .stage{font:900 22px/1 var(--font-display);color:var(--red-dark);margin-bottom:6px}
+.timeline .ph .name{font-weight:700;font-size:20px;margin-bottom:12px}
+.timeline .ph p{font-size:18px;line-height:1.55;color:var(--ink);margin:0}
+
+.lead{font-size:24px;line-height:1.8;background:#fff;border:2px solid var(--line);border-left:8px solid var(--red);border-radius:10px;padding:24px 30px;margin-bottom:24px}
+
+.deck-controls{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:16px;z-index:50;background:rgba(20,20,20,.72);padding:8px 16px;border-radius:999px;color:#fff;font-family:var(--font-body)}
+.deck-controls button{background:var(--red);color:#fff;border:0;border-radius:999px;padding:7px 18px;font-size:15px;font-weight:700;cursor:pointer}
+.deck-controls button:disabled{opacity:.4;cursor:default}
+#slideCount{font-size:14px;min-width:74px;text-align:center}
+.progress-track{width:180px;height:5px;background:rgba(255,255,255,.25);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;width:0;background:var(--red);transition:width .25s}
+</style>
+</head>
+<body>
+<div class="deck-viewport">
+  <div class="deck-stage" id="deckStage">
+
+    <!-- 01 cover -->
+    <section class="slide cover active" data-page="01 / 10">
+      <div class="top-rule"></div><div class="page-no">01 / 10</div>
+      <div class="kicker">技术方案汇报</div>
+      <div class="big">DesignSpec 设计评审平台<br>外网迁移方案</div>
+      <div class="sub">从内网三层 MCP 取数，到外网 opencsitool + gitcode wiki 双源评审</div>
+      <div class="tags">
+        <span class="tag">现状梳理</span>
+        <span class="tag">计划调整</span>
+        <span class="tag">GAP 与落地路线</span>
+      </div>
+      <div class="meta">面向管理者 / 评审专家 · 2026-06</div>
+    </section>
+
+    <!-- 02 现状 -->
+    <section class="slide" data-page="02 / 10">
+      <div class="top-rule"></div><div class="page-no">02 / 10</div>
+      <div class="kicker">一、内网现状</div>
+      <h1>能力定位与三层取数链路</h1>
+      <main class="split">
+        <div class="left">
+          <ul class="bullets">
+            <li><strong>定位</strong>：输入功能 / 版本，由 opencode AI 代理打分，输出结构化评审结果与建议。</li>
+            <li><strong>取数</strong>：平台不直连业务系统，全部经 opencode 调用三层 MCP（需求→SR→功能）。</li>
+            <li><strong>能力</strong>：评审打分（功能定义 40 + 设计说明书 60）、收口跟踪、版本同步、质量看板。</li>
+            <li><strong>边界</strong>：当前仅「评审 + 收口」，<span class="muted">辅助生成尚未实现</span>。</li>
+          </ul>
+        </div>
+        <div class="right">
+          <div class="figure"><img src="current-state.svg" alt="内网现状架构图"></div>
+        </div>
+      </main>
+    </section>
+
+    <!-- 03 迁移目标与底座 -->
+    <section class="slide" data-page="03 / 10">
+      <div class="top-rule"></div><div class="page-no">03 / 10</div>
+      <div class="kicker">二、迁移目标</div>
+      <h1>外网底座与三方分工</h1>
+      <main>
+        <div class="cards">
+          <div class="card">
+            <h2><span class="dot"></span>opencsitool</h2>
+            <ul>
+              <li>外网已建工具平台</li>
+              <li>承载<strong>项目版本信息</strong>与<strong>需求列表</strong></li>
+              <li>作为评审任务入口与组织维度</li>
+              <li>不归档功能设计内容</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2><span class="dot"></span>gitcode wiki</h2>
+            <ul>
+              <li>开启仓库 <strong>wiki 功能</strong></li>
+              <li>下发<strong>功能设计模板 + 设计规范</strong></li>
+              <li>承载功能设计内容</li>
+              <li>显式标记关联的需求 ID</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2><span class="dot"></span>DesignSpec</h2>
+            <ul>
+              <li>新建<strong>外网分支</strong></li>
+              <li>改造取数层为双源接入</li>
+              <li>复用评审引擎与 JSON 契约</li>
+              <li>聚合需求 + 设计做评审 / 生成</li>
+            </ul>
+          </div>
+        </div>
+      </main>
+    </section>
+
+    <!-- 04 数据来源重构 前后对比 -->
+    <section class="slide" data-page="04 / 10">
+      <div class="top-rule"></div><div class="page-no">04 / 10</div>
+      <div class="kicker">三、计划调整</div>
+      <h1>数据来源重构：前后对比</h1>
+      <main>
+        <table>
+          <colgroup><col style="width:20%"><col style="width:38%"><col style="width:42%"></colgroup>
+          <thead><tr><th>维度</th><th>内网现状</th><th>外网目标</th></tr></thead>
+          <tbody>
+            <tr><td>运行环境</td><td>内网</td><td>外网可访问区域</td></tr>
+            <tr><td>版本与需求来源</td><td>需求 MCP / SR MCP</td><td><strong>opencsitool</strong>（版本信息 + 需求列表）</td></tr>
+            <tr><td>功能设计来源</td><td>功能获取 MCP</td><td><strong>gitcode wiki</strong>（模板 + 规范承载内容）</td></tr>
+            <tr><td>需求与设计关联</td><td>系统内建链路</td><td>wiki 内<strong>显式标记 opencsitool 需求</strong></td></tr>
+            <tr><td>取数方式</td><td>opencode 调三层 MCP</td><td>平台数据接入层调 <strong>API + wiki 双源</strong></td></tr>
+            <tr><td>评审与生成</td><td>评审 + 收口</td><td>评审 + 收口 + <span class="muted">（规划）辅助生成</span></td></tr>
+          </tbody>
+        </table>
+      </main>
+    </section>
+
+    <!-- 05 目标态数据流 大图 -->
+    <section class="slide" data-page="05 / 10">
+      <div class="top-rule"></div><div class="page-no">05 / 10</div>
+      <div class="kicker">四、目标态</div>
+      <h1>外网双源取数与关联评审数据流</h1>
+      <main>
+        <div class="figure full"><img src="target-state.svg" alt="目标态数据流架构图"></div>
+      </main>
+    </section>
+
+    <!-- 06 关联机制 -->
+    <section class="slide" data-page="06 / 10">
+      <div class="top-rule"></div><div class="page-no">06 / 10</div>
+      <div class="kicker">五、关联机制</div>
+      <h1>需求 ↔ wiki 如何绑定</h1>
+      <main>
+        <div class="lead">opencsitool 只提供需求列表、不归档设计；gitcode wiki 承载设计。两者通过 wiki 模板中的<strong>需求关联字段</strong>绑定，平台据此把「需求 + 设计」聚合为评审输入。</div>
+        <div class="cards">
+          <div class="card">
+            <h2><span class="dot"></span>绑定方式</h2>
+            <ul>
+              <li>wiki 模板内置<strong>需求 ID 字段</strong></li>
+              <li>每个设计页显式标注对应 opencsitool 需求</li>
+              <li>以<strong>稳定 ID</strong>（非标题）作为主键</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2><span class="dot"></span>聚合流程</h2>
+            <ul>
+              <li>从 opencsitool 拉取需求清单</li>
+              <li>按关联字段从 wiki 检索设计页</li>
+              <li>组装为「需求 + 设计」评审输入</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2><span class="dot"></span>成立前提</h2>
+            <ul>
+              <li>关联字段需<strong>强约束</strong>，避免漏标</li>
+              <li>需<strong>一致性校验</strong>兜底</li>
+              <li>页面改名 / 迁移不破坏标识</li>
+            </ul>
+          </div>
+        </div>
+      </main>
+    </section>
+
+    <!-- 07 GAP 总览 -->
+    <section class="slide" data-page="07 / 10">
+      <div class="top-rule"></div><div class="page-no">07 / 10</div>
+      <div class="kicker">六、GAP 总览</div>
+      <h1>六大缺口与影响</h1>
+      <main>
+        <table>
+          <colgroup><col style="width:16%"><col style="width:46%"><col style="width:38%"></colgroup>
+          <thead><tr><th>GAP 域</th><th>缺口描述</th><th>影响</th></tr></thead>
+          <tbody>
+            <tr><td>数据接入</td><td>现无 opencsitool API 客户端与 gitcode wiki 取数能力</td><td>需新建外网数据接入层替换 MCP 链路</td></tr>
+            <tr><td>设计归档</td><td>opencsitool 无设计归档，依赖 wiki 模板规范化</td><td>模板未落地则结构不一，影响打分维度提取</td></tr>
+            <tr><td>关联一致性</td><td>需求 ↔ wiki 关联靠人工标记，缺强约束</td><td>漏标 / 错标导致取数缺失或张冠李戴</td></tr>
+            <tr><td>评审闭环</td><td>收口依赖可重复取数与稳定标识</td><td>wiki 改名 / 迁移破坏标识，影响收口跟踪</td></tr>
+            <tr><td>安全合规</td><td>外网访问权限、数据脱敏与凭据管理</td><td>内外网数据边界与权限模型需重新界定</td></tr>
+            <tr><td>辅助生成</td><td>平台尚未实现辅助生成</td><td>属增量能力，需单列里程碑</td></tr>
+          </tbody>
+        </table>
+      </main>
+    </section>
+
+    <!-- 08 风险与待决策 -->
+    <section class="slide" data-page="08 / 10">
+      <div class="top-rule"></div><div class="page-no">08 / 10</div>
+      <div class="kicker">七、风险与决策</div>
+      <h1>关键风险与待决策项</h1>
+      <main>
+        <div class="cards">
+          <div class="card">
+            <h2><span class="dot"></span>关键风险</h2>
+            <ul>
+              <li><strong>关联强约束缺失</strong>：人工漏标导致评审取数缺失。</li>
+              <li><strong>wiki 质量参差</strong>：人工撰写结构与完整度不一。</li>
+              <li><strong>标识不稳定</strong>：以标题为主键易在改名时失效。</li>
+              <li><strong>权限边界</strong>：外网数据可见范围与凭据托管未定。</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2><span class="dot"></span>待管理者决策</h2>
+            <ul>
+              <li>是否在 wiki 模板<strong>强制需求 ID 字段</strong>并做提交校验。</li>
+              <li>opencsitool / gitcode <strong>凭据与可见范围</strong>由谁审批托管。</li>
+              <li><strong>辅助生成范围</strong>：模板化草稿 vs 规范符合性生成。</li>
+              <li>评审主键采用 <strong>wiki 稳定 ID</strong> 的落地方式。</li>
+            </ul>
+          </div>
+        </div>
+      </main>
+    </section>
+
+    <!-- 09 落地路线 -->
+    <section class="slide" data-page="09 / 10">
+      <div class="top-rule"></div><div class="page-no">09 / 10</div>
+      <div class="kicker">八、落地路线</div>
+      <h1>分阶段推进</h1>
+      <main>
+        <div class="timeline">
+          <div class="ph">
+            <div class="stage">阶段一</div>
+            <div class="name">接入 opencsitool</div>
+            <p>打通版本与需求列表取数，跑通评审任务入口与组织维度。</p>
+          </div>
+          <div class="ph">
+            <div class="stage">阶段二</div>
+            <div class="name">接入 gitcode wiki</div>
+            <p>下发模板与规范，实现按需求关联检索设计内容。</p>
+          </div>
+          <div class="ph">
+            <div class="stage">阶段三</div>
+            <div class="name">关联校验 + 评审闭环</div>
+            <p>建立关联强约束与一致性校验，恢复评审 + 收口全流程。</p>
+          </div>
+          <div class="ph">
+            <div class="stage">阶段四</div>
+            <div class="name">辅助生成</div>
+            <p>评审闭环稳定后，增量实现设计草稿辅助生成。</p>
+          </div>
+        </div>
+        <div class="lead" style="margin-top:34px">先验证「需求 ↔ wiki」关联可用，再推进评审闭环，最后叠加辅助生成，逐阶段降低迁移风险。</div>
+      </main>
+    </section>
+
+    <!-- 10 结论 -->
+    <section class="slide" data-page="10 / 10">
+      <div class="top-rule"></div><div class="page-no">10 / 10</div>
+      <div class="kicker">九、结论</div>
+      <h1>可行性结论与决策建议</h1>
+      <main>
+        <div class="cards">
+          <div class="card">
+            <h2><span class="dot"></span>可行性结论</h2>
+            <ul>
+              <li>评审引擎与 JSON 契约<strong>可复用</strong>。</li>
+              <li>工作量集中在<strong>外网数据接入层 + 关联机制</strong>。</li>
+              <li>方案在工程上<strong>可行</strong>。</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2><span class="dot"></span>需管理者拍板</h2>
+            <ul>
+              <li>关联强约束策略</li>
+              <li>外网权限与凭据托管</li>
+              <li>辅助生成范围边界</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2><span class="dot"></span>下一步动作</h2>
+            <ul>
+              <li>先落地阶段一接入与 wiki 模板规范</li>
+              <li>验证「需求 ↔ wiki」关联可用</li>
+              <li>再推进评审闭环与辅助生成</li>
+            </ul>
+          </div>
+        </div>
+      </main>
+    </section>
+
+  </div>
+</div>
+
+<div class="deck-controls">
+  <button id="prevBtn">Prev</button>
+  <span id="slideCount">01 / 10</span>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <button id="nextBtn">Next</button>
+</div>
+
+<script>
+class Deck{
+  constructor(){
+    this.slides=[...document.querySelectorAll('.slide')];
+    this.i=0;
+    this.stage=document.getElementById('deckStage');
+    this.prev=document.getElementById('prevBtn');
+    this.nextBtn=document.getElementById('nextBtn');
+    this.count=document.getElementById('slideCount');
+    this.fill=document.getElementById('progressFill');
+    this.scale();
+    addEventListener('resize',()=>this.scale());
+    addEventListener('keydown',e=>{
+      if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();this.show(this.i+1)}
+      if(['ArrowLeft','PageUp','Backspace'].includes(e.key)){e.preventDefault();this.show(this.i-1)}
+      if(e.key==='Home')this.show(0);
+      if(e.key==='End')this.show(this.slides.length-1)
+    });
+    this.prev.onclick=()=>this.show(this.i-1);
+    this.nextBtn.onclick=()=>this.show(this.i+1);
+    this.show(0);
+  }
+  scale(){
+    const f=Math.min(innerWidth/1920,innerHeight/1080);
+    this.stage.style.transform=`translate(${(innerWidth-1920*f)/2}px,${(innerHeight-1080*f)/2}px) scale(${f})`;
+  }
+  show(n){
+    this.i=Math.max(0,Math.min(this.slides.length-1,n));
+    this.slides.forEach((s,k)=>s.classList.toggle('active',k===this.i));
+    const total=this.slides.length;
+    const lbl=String(this.i+1).padStart(2,'0')+' / '+String(total).padStart(2,'0');
+    this.count.textContent=lbl;
+    this.fill.style.width=((this.i+1)/total*100)+'%';
+    this.prev.disabled=this.i===0;
+    this.nextBtn.disabled=this.i===total-1;
+  }
+}
+new Deck();
+</script>
+</body>
+</html>
