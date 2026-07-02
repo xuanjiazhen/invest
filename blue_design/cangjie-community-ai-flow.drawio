@@ -1,0 +1,125 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="lifecycle" name="生命周期泳道">
+    <mxGraphModel dx="1800" dy="1050" grid="1" gridSize="10" page="1" pageWidth="1800" pageHeight="1050" background="#ffffff">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="bg" value="" style="rounded=0;fillColor=#ffffff;strokeColor=none;fontSize=1;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="1800" height="1050" as="geometry"/></mxCell>
+        <mxCell id="title" value="仓颉开源社区 + AI 社区化开发生命周期" style="text;html=1;strokeColor=none;fillColor=none;fontSize=24;fontStyle=1;fontColor=#1f2937;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="30" width="920" height="40" as="geometry"/></mxCell>
+        <mxCell id="sub" value="STS 半年版本周期：版本初期整体规划与设计，每月迭代入口评估；入口冻结后控制变更" style="text;html=1;strokeColor=none;fillColor=none;fontSize=13;fontColor=#4b5563;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="68" width="960" height="28" as="geometry"/></mxCell>
+
+        <mxCell id="c1" value="洞察规划" style="rounded=0;fillColor=#eef2ff;strokeColor=#4f46e5;fontSize=13;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="190" y="120" width="180" height="44" as="geometry"/></mxCell>
+        <mxCell id="c2" value="需求 / Issue 收集" style="rounded=0;fillColor=#eef2ff;strokeColor=#4f46e5;fontSize=13;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="380" y="120" width="180" height="44" as="geometry"/></mxCell>
+        <mxCell id="c3" value="需求评审" style="rounded=0;fillColor=#eef2ff;strokeColor=#4f46e5;fontSize=13;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="570" y="120" width="180" height="44" as="geometry"/></mxCell>
+        <mxCell id="c4" value="分析及设计" style="rounded=0;fillColor=#eef2ff;strokeColor=#4f46e5;fontSize=13;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="760" y="120" width="180" height="44" as="geometry"/></mxCell>
+        <mxCell id="c5" value="迭代入口" style="rounded=0;fillColor=#eef2ff;strokeColor=#4f46e5;fontSize=13;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="950" y="120" width="180" height="44" as="geometry"/></mxCell>
+        <mxCell id="c6" value="迭代开发" style="rounded=0;fillColor=#eef2ff;strokeColor=#4f46e5;fontSize=13;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1140" y="120" width="180" height="44" as="geometry"/></mxCell>
+        <mxCell id="c7" value="测试 / 发布准备" style="rounded=0;fillColor=#eef2ff;strokeColor=#4f46e5;fontSize=13;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1330" y="120" width="180" height="44" as="geometry"/></mxCell>
+        <mxCell id="c8" value="发布 / 闭环" style="rounded=0;fillColor=#eef2ff;strokeColor=#4f46e5;fontSize=13;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1520" y="120" width="180" height="44" as="geometry"/></mxCell>
+
+        <mxCell id="r-ai" value="AI Robot / AI Agent" style="swimlane;horizontal=0;startSize=120;fillColor=#f8fafc;strokeColor=#94a3b8;fontStyle=1;fontSize=12;verticalAlign=middle;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="180" width="1660" height="100" as="geometry"/></mxCell>
+        <mxCell id="r-pm" value="项目经理 / PMC / 版本SE" style="swimlane;horizontal=0;startSize=120;fillColor=#f8fafc;strokeColor=#94a3b8;fontStyle=1;fontSize=12;verticalAlign=middle;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="280" width="1660" height="110" as="geometry"/></mxCell>
+        <mxCell id="r-sig" value="各特性SIG / Committer" style="swimlane;horizontal=0;startSize=120;fillColor=#f8fafc;strokeColor=#94a3b8;fontStyle=1;fontSize=12;verticalAlign=middle;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="390" width="1660" height="130" as="geometry"/></mxCell>
+        <mxCell id="r-qa" value="QA SIG" style="swimlane;horizontal=0;startSize=120;fillColor=#f8fafc;strokeColor=#94a3b8;fontStyle=1;fontSize=12;verticalAlign=middle;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="520" width="1660" height="110" as="geometry"/></mxCell>
+        <mxCell id="r-ci" value="CI/CD SIG" style="swimlane;horizontal=0;startSize=120;fillColor=#f8fafc;strokeColor=#94a3b8;fontStyle=1;fontSize=12;verticalAlign=middle;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="630" width="1660" height="100" as="geometry"/></mxCell>
+        <mxCell id="r-doc" value="Doc SIG / 特性Owner" style="swimlane;horizontal=0;startSize=120;fillColor=#f8fafc;strokeColor=#94a3b8;fontStyle=1;fontSize=12;verticalAlign=middle;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="730" width="1660" height="100" as="geometry"/></mxCell>
+        <mxCell id="r-user" value="Contributor / Issue 提出人" style="swimlane;horizontal=0;startSize=120;fillColor=#f8fafc;strokeColor=#94a3b8;fontStyle=1;fontSize=12;verticalAlign=middle;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="830" width="1660" height="100" as="geometry"/></mxCell>
+
+        <mxCell id="ai1" value="仓库/社区数据洞察&#xa;候选需求聚类" style="rounded=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="210" y="202" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="ai2" value="Issue 规范审查&#xa;去重 / 分类 / 分派" style="rounded=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="400" y="202" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="ai3" value="评审包生成&#xa;价值 / 风险摘要" style="rounded=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="590" y="202" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="ai4" value="设计资产初始化&#xa;代码仓统计归档" style="rounded=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="780" y="202" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="ai5" value="入口看板刷新&#xa;变更影响提示" style="rounded=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="970" y="202" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="ai6" value="PR 辅助检视&#xa;关联 Issue 检查" style="rounded=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1160" y="202" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="ai7" value="缺陷归因 / 回归建议&#xa;Release Note 校验" style="rounded=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1350" y="202" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="ai8" value="超时关闭提醒&#xa;生命周期归档" style="rounded=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1540" y="202" width="130" height="56" as="geometry"/></mxCell>
+
+        <mxCell id="pm1" value="STS/LTS 版本目标&#xa;版本节奏与范围" style="rounded=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="210" y="310" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="pm2" value="组织需求评审&#xa;确定版本计划" style="rounded=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="590" y="310" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="pm3" value="评审计划&#xa;跨 SIG 依赖协调" style="rounded=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="780" y="310" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="pm4" value="迭代入口评估&#xa;冻结当月范围" style="rounded=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="970" y="310" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="pm5" value="发布评估&#xa;遗留问题决策" style="rounded=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1540" y="310" width="130" height="56" as="geometry"/></mxCell>
+
+        <mxCell id="sig1" value="Team 初筛&#xa;需求/缺陷/讨论/漏洞" style="rounded=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="400" y="428" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="sig2" value="价值与可行性审视&#xa;规划到迭代" style="rounded=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="590" y="428" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="sig3" value="特性设计文档&#xa;需求/DT/架构影响" style="rounded=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="780" y="428" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="sig4" value="开发自测&#xa;PR 关联 Issue" style="rounded=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1160" y="428" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="sig5" value="修复测试问题&#xa;待提出人确认" style="rounded=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1350" y="428" width="130" height="56" as="geometry"/></mxCell>
+
+        <mxCell id="qa1" value="测试策略输入&#xa;设计/DT 审视" style="rounded=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="780" y="548" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="qa2" value="准入质量门禁&#xa;测试串讲计划" style="rounded=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="970" y="548" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="qa3" value="特性测试设计&#xa;反串讲" style="rounded=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1160" y="548" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="qa4" value="特性测试 / SIT&#xa;回归与验收" style="rounded=1;fillColor=#fee2e2;strokeColor=#dc2626;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1350" y="548" width="130" height="56" as="geometry"/></mxCell>
+
+        <mxCell id="ci1" value="门禁策略&#xa;质量基线" style="rounded=1;fillColor=#f3e8ff;strokeColor=#9333ea;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="970" y="652" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="ci2" value="PR 门禁 / 构建&#xa;自测流水线" style="rounded=1;fillColor=#f3e8ff;strokeColor=#9333ea;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1160" y="652" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="ci3" value="转测版本&#xa;回归版本构建" style="rounded=1;fillColor=#f3e8ff;strokeColor=#9333ea;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1350" y="652" width="130" height="56" as="geometry"/></mxCell>
+
+        <mxCell id="doc1" value="公共文档规划&#xa;发布说明框架" style="rounded=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="780" y="752" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="doc2" value="Release Note 编写&#xa;文档测试验收" style="rounded=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1350" y="752" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="doc3" value="版本文档发布&#xa;生命周期维护" style="rounded=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1540" y="752" width="130" height="56" as="geometry"/></mxCell>
+
+        <mxCell id="user1" value="提交 Issue / PR&#xa;社区讨论" style="rounded=1;fillColor=#ecfeff;strokeColor=#0891b2;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="400" y="852" width="130" height="56" as="geometry"/></mxCell>
+        <mxCell id="user2" value="响应补充信息&#xa;确认解决结果" style="rounded=1;fillColor=#ecfeff;strokeColor=#0891b2;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1540" y="852" width="130" height="56" as="geometry"/></mxCell>
+
+        <mxCell id="e1" value="候选池" style="endArrow=block;endFill=1;strokeColor=#4f46e5;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="ai1" target="ai2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" value="分派" style="endArrow=block;endFill=1;strokeColor=#0284c7;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="ai2" target="sig1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" value="评审输入" style="endArrow=block;endFill=1;strokeColor=#16a34a;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="sig1" target="sig2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="版本计划" style="endArrow=block;endFill=1;strokeColor=#d97706;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="pm2" target="sig2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" value="设计评审" style="endArrow=block;endFill=1;strokeColor=#16a34a;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="sig2" target="sig3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="测试输入" style="endArrow=block;endFill=1;strokeColor=#dc2626;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="sig3" target="qa1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="冻结范围" style="endArrow=block;endFill=1;strokeColor=#d97706;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="pm4" target="sig4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" value="构建门禁" style="endArrow=block;endFill=1;strokeColor=#9333ea;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="sig4" target="ci2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" value="转测" style="endArrow=block;endFill=1;strokeColor=#9333ea;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="ci2" target="ci3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" value="验证" style="endArrow=block;endFill=1;strokeColor=#dc2626;fontSize=10;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" source="ci3" target="qa4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" value="解决确认" style="endArrow=block;endFill=1;strokeColor=#16a34a;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="sig5" target="pm5" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" value="一周超时默认关闭" style="endArrow=block;endFill=1;strokeColor=#0891b2;fontSize=10;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" source="user2" target="ai8" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="legend" value="图例：蓝=AI辅助活动；黄=版本治理/人工决策；绿=特性SIG工程活动；红=QA活动；紫=CI/CD；灰=文档；青=社区交互。所有等待提出人答复的状态进入超时计时。" style="rounded=1;fillColor=#ffffff;strokeColor=#cbd5e1;fontSize=12;align=left;spacing=10;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="960" width="1660" height="42" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="deliverables" name="交付件与平台能力">
+    <mxGraphModel dx="1600" dy="980" grid="1" gridSize="10" page="1" pageWidth="1600" pageHeight="980" background="#ffffff">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="bg2" value="" style="rounded=0;fillColor=#ffffff;strokeColor=none;fontSize=1;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="1600" height="980" as="geometry"/></mxCell>
+        <mxCell id="t2" value="活动交付件视角：DesignSpec / SDD 对齐 + 平台看板能力" style="text;html=1;strokeColor=none;fillColor=none;fontSize=23;fontStyle=1;fontColor=#1f2937;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="30" width="980" height="42" as="geometry"/></mxCell>
+        <mxCell id="s2" value="以 Issue 为主线串联需求、设计、开发、测试、发布；opencsitool 汇总跨仓状态，AI 负责规范化、生成、校验和刷新" style="text;html=1;strokeColor=none;fillColor=none;fontSize=13;fontColor=#4b5563;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="68" width="1120" height="28" as="geometry"/></mxCell>
+
+        <mxCell id="d1" value="需求池 / Issue 包&#xa;forum + 仓库 + 初期导入" style="rounded=1;fillColor=#ecfeff;strokeColor=#0891b2;fontSize=12;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="70" y="150" width="190" height="70" as="geometry"/></mxCell>
+        <mxCell id="d2" value="AI 预处理结果&#xa;合法性 / 分类 / 去重 / Team" style="rounded=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=12;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="300" y="150" width="190" height="70" as="geometry"/></mxCell>
+        <mxCell id="d3" value="需求评审包&#xa;价值、风险、依赖、优先级" style="rounded=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=12;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="530" y="150" width="190" height="70" as="geometry"/></mxCell>
+        <mxCell id="d4" value="版本 / 迭代计划&#xa;STS / LTS + 月度范围" style="rounded=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=12;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="760" y="150" width="190" height="70" as="geometry"/></mxCell>
+        <mxCell id="d5" value="特性设计包&#xa;功能定义 + 规格约束 + 设计说明书" style="rounded=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=12;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="990" y="150" width="210" height="70" as="geometry"/></mxCell>
+        <mxCell id="d6" value="开发与验证证据&#xa;PR / 门禁 / 自测 / QA 回归" style="rounded=1;fillColor=#f3e8ff;strokeColor=#9333ea;fontSize=12;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="1240" y="150" width="210" height="70" as="geometry"/></mxCell>
+
+        <mxCell id="ds1" value="DesignSpec 对齐：功能基本信息&#xa;背景、目标、非目标、用户场景、范围边界" style="rounded=1;fillColor=#ffffff;strokeColor=#94a3b8;fontSize=12;align=left;spacing=8;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="990" y="270" width="420" height="66" as="geometry"/></mxCell>
+        <mxCell id="ds2" value="DesignSpec 对齐：功能规格与约束&#xa;规格名称、触发场景、处理动作、输出结果、限制主题" style="rounded=1;fillColor=#ffffff;strokeColor=#94a3b8;fontSize=12;align=left;spacing=8;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="990" y="350" width="420" height="66" as="geometry"/></mxCell>
+        <mxCell id="ds3" value="设计说明书 / SDD 承载内容&#xa;架构影响、接口设计、兼容性、安全、DFX、测试策略、演进风险" style="rounded=1;fillColor=#ffffff;strokeColor=#94a3b8;fontSize=12;align=left;spacing=8;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="990" y="430" width="420" height="78" as="geometry"/></mxCell>
+        <mxCell id="ds4" value="持续设计资产&#xa;由代码合入触发刷新，人工只审视不手改" style="rounded=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=12;align=left;spacing=8;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="990" y="522" width="420" height="66" as="geometry"/></mxCell>
+
+        <mxCell id="p0" value="平台能力看板" style="swimlane;startSize=34;fillColor=#f8fafc;strokeColor=#64748b;fontStyle=1;fontSize=14;verticalAlign=top;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="70" y="275" width="840" height="480" as="geometry"/></mxCell>
+        <mxCell id="p1" value="GitCode Issue / PR&#xa;跨仓关联、模板适配、标签状态" style="rounded=1;fillColor=#ffffff;strokeColor=#0891b2;fontSize=12;whiteSpace=wrap;" vertex="1" parent="p0"><mxGeometry x="30" y="60" width="220" height="70" as="geometry"/></mxCell>
+        <mxCell id="p2" value="opencsitool 需求与迭代看板&#xa;统一候选池、评审状态、入口冻结" style="rounded=1;fillColor=#ffffff;strokeColor=#d97706;fontSize=12;whiteSpace=wrap;" vertex="1" parent="p0"><mxGeometry x="310" y="60" width="230" height="70" as="geometry"/></mxCell>
+        <mxCell id="p3" value="AI Robot 服务&#xa;规范审查、摘要生成、自动提醒" style="rounded=1;fillColor=#ffffff;strokeColor=#0284c7;fontSize=12;whiteSpace=wrap;" vertex="1" parent="p0"><mxGeometry x="590" y="60" width="220" height="70" as="geometry"/></mxCell>
+        <mxCell id="p4" value="DesignSpec / SDD 评审平台&#xa;模板生成、质量评分、追溯检查" style="rounded=1;fillColor=#ffffff;strokeColor=#16a34a;fontSize=12;whiteSpace=wrap;" vertex="1" parent="p0"><mxGeometry x="30" y="170" width="220" height="70" as="geometry"/></mxCell>
+        <mxCell id="p5" value="CI/CD 门禁平台&#xa;构建、静态检查、自测证据" style="rounded=1;fillColor=#ffffff;strokeColor=#9333ea;fontSize=12;whiteSpace=wrap;" vertex="1" parent="p0"><mxGeometry x="310" y="170" width="230" height="70" as="geometry"/></mxCell>
+        <mxCell id="p6" value="QA 测试管理&#xa;DT、特性测试、SIT、回归记录" style="rounded=1;fillColor=#ffffff;strokeColor=#dc2626;fontSize=12;whiteSpace=wrap;" vertex="1" parent="p0"><mxGeometry x="590" y="170" width="220" height="70" as="geometry"/></mxCell>
+        <mxCell id="p7" value="文档与发布平台&#xa;Release Note、版本文档、归档" style="rounded=1;fillColor=#ffffff;strokeColor=#64748b;fontSize=12;whiteSpace=wrap;" vertex="1" parent="p0"><mxGeometry x="310" y="300" width="230" height="70" as="geometry"/></mxCell>
+
+        <mxCell id="g1" value="补齐重点：跨仓 Issue 归一、版本/迭代字段、需求评审记录、准入冻结、等待提出人超时状态、漏洞 SLA、设计资产自动刷新、证据链追溯。" style="rounded=1;fillColor=#fff7ed;strokeColor=#ea580c;fontSize=13;align=left;spacing=10;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="70" y="795" width="1340" height="70" as="geometry"/></mxCell>
+        <mxCell id="g2" value="状态口径：新建 → AI审查 → Team分析 → 候选池 → 评审通过 → 迭代已规划 → 设计中 → 入口冻结 → 开发中 → 待QA验证 → 迭代完成 → 待提出人确认 → 已关闭。" style="rounded=1;fillColor=#ffffff;strokeColor=#cbd5e1;fontSize=13;align=left;spacing=10;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="70" y="885" width="1340" height="52" as="geometry"/></mxCell>
+
+        <mxCell id="de1" value="" style="endArrow=block;endFill=1;strokeColor=#64748b;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="d1" target="d2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de2" value="" style="endArrow=block;endFill=1;strokeColor=#64748b;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="d2" target="d3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de3" value="" style="endArrow=block;endFill=1;strokeColor=#64748b;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="d3" target="d4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de4" value="" style="endArrow=block;endFill=1;strokeColor=#64748b;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="d4" target="d5" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de5" value="" style="endArrow=block;endFill=1;strokeColor=#64748b;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="d5" target="d6" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de6" value="DesignSpec" style="endArrow=block;endFill=1;strokeColor=#16a34a;fontSize=10;exitX=0.5;exitY=1;entryX=0.25;entryY=0;" edge="1" source="d5" target="ds1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de7" value="证据回填" style="endArrow=block;endFill=1;strokeColor=#9333ea;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=1;" edge="1" source="d6" target="p5" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

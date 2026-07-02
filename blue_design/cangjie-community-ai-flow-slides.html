@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>仓颉开源社区 AI 协同开发流程活动指导书</title>
+  <style>
+    :root {
+      --ink: #17211f;
+      --muted: #5c6864;
+      --paper: #f7f4ec;
+      --panel: #fffdf8;
+      --line: #d8d0c1;
+      --teal: #006d77;
+      --green: #2f7d48;
+      --gold: #b7791f;
+      --red: #b54235;
+      --slate: #3d4a46;
+      --shadow: 0 20px 50px rgba(35, 38, 32, .14);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "LXGW WenKai Screen", "Source Han Serif SC", "Microsoft YaHei", serif;
+      background:
+        radial-gradient(circle at 14% 18%, rgba(0, 109, 119, .16), transparent 24rem),
+        radial-gradient(circle at 86% 8%, rgba(183, 121, 31, .18), transparent 22rem),
+        linear-gradient(135deg, #f9f5ea 0%, #e8efe9 46%, #fbf7ef 100%);
+      overflow: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(23, 33, 31, .035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(23, 33, 31, .035) 1px, transparent 1px);
+      background-size: 38px 38px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.25));
+    }
+
+    .deck {
+      height: 100%;
+      width: 100%;
+      position: relative;
+      z-index: 1;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: clamp(28px, 4vw, 62px);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 24px;
+      opacity: 0;
+      transform: translateX(28px) scale(.985);
+      pointer-events: none;
+      transition: opacity .35s ease, transform .35s ease;
+    }
+
+    .slide.active {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+      pointer-events: auto;
+    }
+
+    header {
+      max-width: 1180px;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      font-size: 13px;
+      letter-spacing: .08em;
+      color: var(--teal);
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    h1, h2 {
+      margin: 0;
+      font-weight: 850;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    h1 { font-size: clamp(40px, 7vw, 92px); max-width: 1180px; }
+    h2 { font-size: clamp(30px, 4.3vw, 58px); max-width: 1120px; }
+    p { margin: 0; color: var(--muted); font-size: clamp(16px, 1.5vw, 22px); line-height: 1.72; }
+
+    .lead { max-width: 900px; margin-top: 24px; }
+    .content { min-height: 0; display: grid; align-items: center; }
+    .two { display: grid; grid-template-columns: 1.05fr .95fr; gap: 28px; align-items: stretch; }
+    .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .stack { display: grid; gap: 16px; }
+
+    .panel, .tile, .note {
+      background: rgba(255, 253, 248, .86);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel { padding: clamp(20px, 2.4vw, 34px); }
+    .tile { padding: 20px; min-height: 132px; }
+    .note { padding: 18px 20px; }
+
+    .tile h3, .panel h3, .note h3 {
+      margin: 0 0 10px;
+      font-size: clamp(18px, 1.7vw, 26px);
+      line-height: 1.2;
+    }
+
+    .tile p, .panel p, .note p { font-size: clamp(14px, 1.2vw, 18px); }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid currentColor;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--teal);
+      background: rgba(0, 109, 119, .08);
+      margin-bottom: 12px;
+    }
+
+    .diagram {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+      min-height: 0;
+      display: grid;
+      align-items: center;
+    }
+
+    .diagram img {
+      width: 100%;
+      height: min(72vh, 720px);
+      object-fit: contain;
+      display: block;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: rgba(255, 253, 248, .9);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      font-size: clamp(13px, 1.05vw, 17px);
+    }
+
+    th, td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      line-height: 1.55;
+    }
+
+    th { color: var(--slate); background: rgba(0, 109, 119, .09); }
+    tr:last-child td { border-bottom: 0; }
+
+    .rail {
+      position: fixed;
+      left: clamp(24px, 3.5vw, 54px);
+      right: clamp(24px, 3.5vw, 54px);
+      bottom: 24px;
+      height: 4px;
+      background: rgba(23, 33, 31, .12);
+      border-radius: 999px;
+      overflow: hidden;
+      z-index: 3;
+    }
+
+    .bar { height: 100%; width: 0; background: linear-gradient(90deg, var(--teal), var(--gold)); transition: width .25s ease; }
+    .nav {
+      position: fixed;
+      right: clamp(24px, 3.5vw, 54px);
+      bottom: 42px;
+      z-index: 4;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button {
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink);
+      background: rgba(255, 253, 248, .92);
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .count { color: var(--muted); font-size: 14px; min-width: 52px; text-align: center; }
+    .accent-teal { color: var(--teal); }
+    .accent-green { color: var(--green); }
+    .accent-gold { color: var(--gold); }
+    .accent-red { color: var(--red); }
+
+    @media (max-width: 900px) {
+      body { overflow: auto; }
+      .deck { min-height: 100%; }
+      .slide { position: relative; display: none; min-height: 100vh; padding-bottom: 86px; }
+      .slide.active { display: grid; }
+      .two, .three, .grid-4 { grid-template-columns: 1fr; }
+      .diagram img { height: auto; max-height: none; }
+      table { font-size: 13px; }
+      th, td { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" id="deck">
+    <section class="slide active">
+      <header>
+        <p class="eyebrow">Cangjie Community Operating Model</p>
+        <h1>仓颉开源社区 AI 协同开发流程活动指导书</h1>
+        <p class="lead">面向 GitCode 社区协作，把需求、Issue、设计、开发、测试、发布和生命周期维护连成统一活动链路。</p>
+      </header>
+      <div class="content two">
+        <div class="panel">
+          <span class="tag">半年 STS 版本周期</span>
+          <h3>版本初期做整体洞察和设计，每月迭代入口做范围评估</h3>
+          <p>入口冻结后控制范围变更。最新社区 Issue、漏洞事项和已规划内容进入下一次入口统一审视。</p>
+        </div>
+        <div class="panel">
+          <span class="tag">AI 嵌入活动出口</span>
+          <h3>AI 负责审查、摘要、生成、校验、提醒和资产刷新</h3>
+          <p>人工保留价值判断、范围冻结、评审结论和发布决策，避免把治理责任交给自动化。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <header>
+        <p class="eyebrow">Scope</p>
+        <h2>目标是统一入口、状态、证据链和看板</h2>
+      </header>
+      <div class="content grid-4">
+        <div class="tile"><h3>入口统一</h3><p>forum、特性仓、版本导入、漏洞跟踪项进入同一候选池。</p></div>
+        <div class="tile"><h3>状态统一</h3><p>从新建到关闭的状态标签可被人和 AI 同时理解。</p></div>
+        <div class="tile"><h3>证据统一</h3><p>Issue 关联设计包、PR、自测、构建、测试和发布结论。</p></div>
+        <div class="tile"><h3>看板统一</h3><p>opencsitool 聚合跨仓、跨 SIG、跨平台的版本视图。</p></div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <header>
+        <p class="eyebrow">Lifecycle</p>
+        <h2>角色泳道生命周期</h2>
+      </header>
+      <div class="content diagram">
+        <img src="cangjie-community-ai-lifecycle.svg" alt="仓颉开源社区 AI 协同开发生命周期" />
+      </div>
+    </section>
+
+    <section class="slide">
+      <header>
+        <p class="eyebrow">Roles</p>
+        <h2>关键角色分工</h2>
+      </header>
+      <div class="content">
+        <table>
+          <thead><tr><th>角色</th><th>主要职责</th><th>关键输出</th></tr></thead>
+          <tbody>
+            <tr><td>项目经理 / PMC / 版本 SE</td><td>版本目标、需求评审、迭代入口、发布评估</td><td>版本计划、评审结论、准入准出记录</td></tr>
+            <tr><td>各特性 SIG / Committer</td><td>Issue 分析、设计、编码、检视、领域质量看护</td><td>特性设计包、PR、自测证据、修复记录</td></tr>
+            <tr><td>QA / CI/CD / Doc SIG</td><td>测试设计、门禁构建、SIT、回归、Release Note 和公共文档</td><td>转测版本、测试报告、发布说明、版本文档</td></tr>
+            <tr><td>Contributor / AI Robot</td><td>社区反馈、代码贡献、自动审查、摘要、提醒和资产刷新</td><td>Issue、PR、分类结果、评审摘要、巡检记录</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="slide">
+      <header>
+        <p class="eyebrow">Issue State</p>
+        <h2>Issue 以状态模型承载社区治理</h2>
+      </header>
+      <div class="content two">
+        <div class="panel stack">
+          <div><span class="tag">输入来源</span><p>社区 forum、具体特性仓、版本初期导入、漏洞跟踪项。</p></div>
+          <div><span class="tag">类型判断</span><p>需求、缺陷、讨论、漏洞。需求与缺陷进入候选池，讨论以答复闭环为主。</p></div>
+          <div><span class="tag">超时规则</span><p>等待提出人补充或确认时开始计时，一周无答复默认关闭。</p></div>
+        </div>
+        <div class="panel">
+          <h3>推荐状态口径</h3>
+          <p>新建 → AI 审查 → 待补充 → Team 分析 → 候选池 → 评审通过 → 迭代已规划 → 设计中 → 入口冻结 → 开发中 → 待 QA 验证 → 迭代完成 → 待提出人确认 → 已关闭。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <header>
+        <p class="eyebrow">Deliverables</p>
+        <h2>交付件与平台能力</h2>
+      </header>
+      <div class="content diagram">
+        <img src="cangjie-community-ai-deliverables.svg" alt="活动交付件与平台能力" />
+      </div>
+    </section>
+
+    <section class="slide">
+      <header>
+        <p class="eyebrow">DesignSpec / SDD</p>
+        <h2>设计包对齐 DesignSpec 与 SDD</h2>
+      </header>
+      <div class="content three">
+        <div class="tile"><span class="tag">功能定义</span><h3>基本信息</h3><p>背景、目标、非目标、用户场景、范围边界。</p></div>
+        <div class="tile"><span class="tag">规格约束</span><h3>验收口径</h3><p>触发场景、处理动作、输出结果、边界条件。</p></div>
+        <div class="tile"><span class="tag">设计说明书</span><h3>工程影响</h3><p>架构影响、接口、兼容、安全、DFX、测试策略和风险。</p></div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <header>
+        <p class="eyebrow">Platform</p>
+        <h2>平台组合与补齐重点</h2>
+      </header>
+      <div class="content">
+        <table>
+          <thead><tr><th>平台</th><th>定位</th><th>补齐重点</th></tr></thead>
+          <tbody>
+            <tr><td>GitCode Issue / PR</td><td>承载社区反馈、代码贡献和检视</td><td>跨仓归一、模板适配、PR 强关联、自测证据</td></tr>
+            <tr><td>opencsitool</td><td>版本和迭代治理总看板</td><td>候选池、需求评审、入口冻结、漏洞 SLA、跨 SIG 依赖</td></tr>
+            <tr><td>AI Robot / Agent</td><td>自动审查、生成、校验、提醒</td><td>分类分派、评审摘要、设计评分、状态巡检</td></tr>
+            <tr><td>CI/CD、QA、文档平台</td><td>构建、测试、回归、发布文档</td><td>转测版本、回归记录、Release Note 验证、生命周期归档</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="slide">
+      <header>
+        <p class="eyebrow">Gates</p>
+        <h2>准入准出让迭代边界可控</h2>
+      </header>
+      <div class="content three">
+        <div class="tile"><span class="tag">迭代准入</span><h3>范围冻结</h3><p>关键设计通过评审，漏洞和高优缺陷有处置计划，QA 与 CI/CD 输入可执行。</p></div>
+        <div class="tile"><span class="tag">测试准入</span><h3>证据齐备</h3><p>串讲完成、测试设计完成、转测版本构建成功、PR 与 Issue 关联完整。</p></div>
+        <div class="tile"><span class="tag">发布准出</span><h3>风险收敛</h3><p>计划 Issue 解决程度、SIT、回归、Release Note、版本文档和 PMC 审核结论满足要求。</p></div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <header>
+        <p class="eyebrow">Roadmap</p>
+        <h2>落地优先级</h2>
+      </header>
+      <div class="content stack">
+        <div class="note"><h3><span class="accent-teal">第一阶段：</span>状态口径和最小看板</h3><p>统一 Issue 类型、标签、等待提出人状态、迭代字段和 PR 关联要求。</p></div>
+        <div class="note"><h3><span class="accent-gold">第二阶段：</span>AI Robot 能力</h3><p>上线模板审查、分类分派、评审摘要、超时提醒、设计评分和 Release Note 校验。</p></div>
+        <div class="note"><h3><span class="accent-green">第三阶段：</span>证据链贯通</h3><p>以 Issue 为主键串联需求评审、DesignSpec/SDD、PR、构建、测试、发布和归档。</p></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="nav" aria-label="slides navigation">
+    <button type="button" id="prev" aria-label="上一页">‹</button>
+    <span class="count" id="count"></span>
+    <button type="button" id="next" aria-label="下一页">›</button>
+  </div>
+  <div class="rail"><div class="bar" id="bar"></div></div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const count = document.getElementById('count');
+    const bar = document.getElementById('bar');
+    let current = 0;
+
+    function show(index) {
+      current = Math.max(0, Math.min(index, slides.length - 1));
+      slides.forEach((slide, i) => slide.classList.toggle('active', i === current));
+      count.textContent = `${current + 1} / ${slides.length}`;
+      bar.style.width = `${((current + 1) / slides.length) * 100}%`;
+    }
+
+    document.getElementById('prev').addEventListener('click', () => show(current - 1));
+    document.getElementById('next').addEventListener('click', () => show(current + 1));
+    window.addEventListener('keydown', event => {
+      if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') show(current + 1);
+      if (event.key === 'ArrowLeft' || event.key === 'PageUp') show(current - 1);
+      if (event.key === 'Home') show(0);
+      if (event.key === 'End') show(slides.length - 1);
+    });
+    show(0);
+  </script>
+</body>
+</html>
