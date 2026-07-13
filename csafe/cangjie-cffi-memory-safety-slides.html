@@ -1,0 +1,144 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>仓颉 C-FFI 内存安全问题分析</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet"><style>:root{--stage-bg:#111;--paper:#f8f5ee;--ink:#151515;--muted:#645e55;--line:#ddd0bc;--red:#c5162e;--red-dark:#841324;--soft:#fffaf3;--green:#2d6a4f;--amber:#b45309;--font-display:'Noto Serif SC',serif;--font-body:'Noto Sans SC',sans-serif}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--stage-bg)}.deck-viewport{position:fixed;inset:0;overflow:hidden;background:var(--stage-bg)}.deck-stage{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;transform-origin:0 0;background:var(--paper)}.slide{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden;display:block;visibility:hidden;opacity:0;pointer-events:none;background:linear-gradient(90deg,rgba(197,22,46,.04),transparent 24%),var(--paper);padding:70px 86px 72px;font-family:var(--font-body);color:var(--ink)}.slide.active,.slide.visible{visibility:visible;opacity:1;pointer-events:auto;z-index:1}.slide:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.18;background-image:radial-gradient(circle at 1px 1px,rgba(197,22,46,.16) .7px,transparent 1px);background-size:6px 6px}.top-rule{position:absolute;left:86px;right:86px;top:44px;height:2px;background:linear-gradient(90deg,var(--red) 0 190px,var(--line) 190px 100%)}.page-no{position:absolute;right:86px;bottom:42px;color:var(--red);font:900 20px/1 var(--font-body)}h1{position:relative;z-index:2;margin:22px 0 22px;font:900 40px/1.15 var(--font-display);letter-spacing:0;color:var(--ink)}h2{font:900 26px/1.2 var(--font-display);color:var(--ink);margin:0 0 12px}h3{font:700 18px/1.3 var(--font-body);color:var(--red-dark);margin:0 0 6px}main{position:relative;z-index:2;display:flex;flex-direction:column;justify-content:center;height:calc(100% - 130px)}.v-center main{justify-content:center}.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.summary-card{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:20px 24px}table{width:100%;border-collapse:collapse;font-size:15px;margin:8px 0}thead th{background:var(--red);color:#fff;font-weight:700;padding:10px 14px;text-align:left;font-size:14px}tbody td{padding:10px 14px;border-bottom:1px solid var(--line)}tbody tr:nth-child(even){background:var(--soft)}.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700}.tag-red{background:#fef0f0;color:var(--red)}.tag-green{background:#e8f5e9;color:var(--green)}.tag-amber{background:#fff8e1;color:var(--amber)}pre{background:#1a1a1a;color:#e0e0e0;border-radius:6px;padding:14px 18px;font-size:13px;line-height:1.55;overflow-x:auto;margin:8px 0}.kpi-grid{display:flex;gap:32px;margin:8px 0}.kpi{text-align:center}.kpi .num{font:900 42px/1 var(--font-display);color:var(--red)}.kpi .label{font-size:14px;color:var(--muted);margin-top:4px}.risk-high{color:var(--red);font-weight:700}.risk-mid{color:var(--amber);font-weight:700}.note{font-size:14px;color:var(--muted);position:relative;z-index:2}pre .cmt{color:#6a9955}pre .kw{color:#569cd6}pre .ty{color:#4ec9b0}pre .fn{color:#dcdcaa}.deck-controls{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;z-index:100}.deck-controls button{background:var(--red);color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer}.deck-controls button:disabled{opacity:.4;cursor:default}.deck-controls span{color:#ccc;font-size:14px;font-weight:700;min-width:64px;text-align:center}.progress-track{width:120px;height:4px;background:#333;border-radius:2px;overflow:hidden}.progress-fill{height:100%;background:var(--red);transition:width .3s}</style></head><body>
+<div class="deck-viewport">
+<div class="deck-stage" id="deckStage">
+
+<!-- Slide 1: Title -->
+<section class="slide v-center" data-page="01 / 12"><div class="top-rule"></div><div class="page-no">01 / 12</div><h1>仓颉 C-FFI 内存安全问题</h1><main><p style="font-size:22px;color:var(--muted);margin-bottom:32px">互操作边界上的内存安全风险全景分析</p><div class="kpi-grid"><div class="kpi"><div class="num">5</div><div class="label">问题大类</div></div><div class="kpi"><div class="num">17+</div><div class="label">典型案例</div></div><div class="kpi"><div class="num">3</div><div class="label">竞品对照</div></div><div class="kpi"><div class="num">1.1.3</div><div class="label">基准版本</div></div></div><p style="font-size:16px;color:var(--muted);margin-top:28px">覆盖：ABI 不匹配 · 指针安全 · 堆内存暴露 · 栈内存暴露 · 竞品安全措施</p></main></section>
+
+<!-- Slide 2: 分析范围 -->
+<section class="slide v-center" data-page="02 / 12"><div class="top-rule"></div><div class="page-no">02 / 12</div><h1>仓颉 C-FFI 两大机制</h1><main><div class="summary-grid"><div class="summary-card"><h2>方向一：C → 仓颉（声明式调用）</h2><pre><span class="cmt">// foreign 声明导入 C 符号</span>
+<span class="kw">foreign</span> <span class="fn">func</span> printf(fmt: <span class="ty">CString</span>, ...): <span class="ty">Int32</span>
+
+<span class="cmt">// @C struct 共享内存布局</span>
+<span class="kw">@C</span> <span class="kw">struct</span> <span class="ty">Point</span> { <span class="kw">var</span> x: <span class="ty">Float64</span>; <span class="kw">var</span> y: <span class="ty">Float64</span> }
+
+<span class="cmt">// CFunc 表示 C 函数指针</span>
+<span class="kw">var</span> cb: <span class="ty">CFunc</span>&lt;(<span class="ty">Int32</span>) -&gt; <span class="ty">Unit</span>&gt;</pre></div><div class="summary-card"><h2>方向二：仓颉 → C（运行时桥接）</h2><pre><span class="cmt">// Cangjie.h 底层接口（现状）</span>
+InitCJRuntime(&amp;param)           <span class="cmt">// 手工配置堆/GC/并发参数</span>
+LoadCJLibraryWithInit(<span class="kw">"lib.so"</span>) <span class="cmt">// 加载动态库</span>
+FindCJSymbol(<span class="kw">"lib.so"</span>, <span class="kw">"mangled"</span>) <span class="cmt">// 查找符号</span>
+RunCJTask(fn, packArgs(...))    <span class="cmt">// 协程调度执行</span>
+
+<span class="cmt">// @C 导出（提案 CJ-0001，未落地）</span>
+<span class="kw">@C</span> <span class="kw">public</span> <span class="fn">func</span> add(a: <span class="ty">Int64</span>, b: <span class="ty">Int64</span>): <span class="ty">Int64</span></pre></div></div><p class="note" style="margin-top:14px">核心风险：两套机制共享同一套类型系统和内存模型，但编译器不提供 FFI 边界的安全检查。</p></main></section>
+
+<!-- Slide 3: ABI 不匹配 — 类型映射 -->
+<section class="slide v-center" data-page="03 / 12"><div class="top-rule"></div><div class="page-no">03 / 12</div><h1>问题 ① ABI 不匹配：类型映射错误</h1><main><div class="summary-grid"><div class="summary-card"><h2>整型宽度不匹配</h2><pre><span class="cmt">// C 侧：int64_t add(int64_t a, int64_t b);</span>
+<span class="kw">foreign</span> <span class="fn">func</span> add(a: <span class="ty">Int32</span>, b: <span class="ty">Int32</span>): <span class="ty">Int32</span>
+<span class="cmt">// ❌ ABI 不匹配：C 侧 8 字节，仓颉侧 4 字节</span>
+<span class="cmt">// 后果：参数错位、返回值截断、栈帧破坏</span></pre></div><div class="summary-card"><h2>结构体对齐差异</h2><pre><span class="kw">@C</span> <span class="kw">struct</span> <span class="ty">S</span> {
+    <span class="kw">var</span> a: <span class="ty">Int8</span>   <span class="cmt">// offset 0</span>
+    <span class="kw">var</span> b: <span class="ty">Int64</span>  <span class="cmt">// offset 8（自然对齐）</span>
+}
+<span class="cmt">// C 侧 #pragma pack(1) → b 在 offset 1</span>
+<span class="cmt">// 跨平台 32/64 位也不同</span></pre></div></div><div class="summary-grid" style="margin-top:20px"><div class="summary-card"><h2>CFunc 调用约定不匹配</h2><pre><span class="kw">var</span> cb: <span class="ty">CFunc</span>&lt;(<span class="ty">Int32</span>) -&gt; <span class="ty">Unit</span>&gt;  <span class="cmt">// 默认 cdecl</span>
+<span class="cmt">// C 侧 typedef void (__stdcall *cb)(int);</span>
+<span class="cmt">// ❌ 调用约定不匹配 → Windows 上栈失衡</span></pre></div><div class="summary-card"><h2>CString 编码假设</h2><pre><span class="kw">foreign</span> <span class="fn">func</span> getName(): <span class="ty">CString</span>
+<span class="kw">let</span> s = <span class="ty">String</span>(getName())
+<span class="cmt">// 默认 UTF-8，若 C 侧返回 GBK/Latin-1</span>
+<span class="cmt">// → 乱码或 UTF-8 解码失败 crash</span></pre></div></div></main></section>
+
+<!-- Slide 4: 指针安全 — use-after-free & double-free -->
+<section class="slide v-center" data-page="04 / 12"><div class="top-rule"></div><div class="page-no">04 / 12</div><h1>问题 ② 指针安全：悬垂 & 双重释放</h1><main><div class="summary-grid"><div class="summary-card"><h2>Use-after-free</h2><pre><span class="kw">foreign</span> <span class="fn">func</span> createData(): <span class="ty">CPointer</span>&lt;<span class="ty">Int32</span>&gt;
+<span class="kw">foreign</span> <span class="fn">func</span> freeData(p: <span class="ty">CPointer</span>&lt;<span class="ty">Int32</span>&gt;): <span class="ty">Unit</span>
+
+<span class="kw">let</span> p = createData()
+freeData(p)          <span class="cmt">// C 侧 free</span>
+<span class="kw">let</span> v = p[<span class="fn">0</span>]         <span class="cmt">// ❌ use-after-free</span>
+<span class="cmt">// CPointer 无生命周期，编译器无感知</span></pre></div><div class="summary-card"><h2>Double-free</h2><pre><span class="kw">let</span> p: <span class="ty">CPointer</span>&lt;<span class="ty">UInt8</span>&gt; = malloc(<span class="fn">100</span>)
+free(p)               <span class="cmt">// 仓颉侧释放</span>
+<span class="cmt">// ... 跨 FFI 返回给 C 侧 ...</span>
+<span class="cmt">// C 侧再次 free(p) → ❌ double-free</span>
+<span class="cmt">// 无所有权转移，两侧各自释放</span></pre></div></div><div class="summary-grid" style="margin-top:20px"><div class="summary-card"><h2>空指针：无 Option 语义</h2><pre><span class="kw">foreign</span> <span class="fn">func</span> mayReturnNull(): <span class="ty">CPointer</span>&lt;<span class="ty">Int64</span>&gt;
+<span class="kw">let</span> p = mayReturnNull()  <span class="cmt">// 可能为 NULL</span>
+<span class="kw">let</span> v = p[<span class="fn">0</span>]               <span class="cmt">// ❌ 段错误</span>
+<span class="cmt">// CPointer 无 Option&lt;CPointer&lt;T&gt;&gt; 惯用表达</span></pre></div><div class="summary-card"><h2>数组越界：无长度信息</h2><pre><span class="kw">foreign</span> <span class="fn">func</span> getArray(): <span class="ty">CPointer</span>&lt;<span class="ty">Int32</span>&gt;
+<span class="kw">let</span> p = getArray()
+<span class="kw">for</span> (i <span class="kw">in</span> <span class="fn">0</span>..<span class="fn">100</span>) {        <span class="cmt">// 不知道实际长度</span>
+    process(p[i])          <span class="cmt">// ❌ 越界读写</span>
+}
+<span class="cmt">// CPointer 不携带长度信息</span></pre></div></div></main></section>
+
+<!-- Slide 5: 指针安全 — 更多场景 -->
+<section class="slide v-center" data-page="05 / 12"><div class="top-rule"></div><div class="page-no">05 / 12</div><h1>问题 ② 指针安全：越界 & 类型混淆</h1><main><div class="summary-grid"><div class="summary-card"><h2>指针算术无边界检查</h2><pre><span class="kw">let</span> p: <span class="ty">CPointer</span>&lt;<span class="ty">UInt8</span>&gt; = getBuffer()
+<span class="kw">let</span> offset: <span class="ty">Int64</span> = getOffset()
+<span class="kw">let</span> q = p + offset   <span class="cmt">// 无任何边界校验</span>
+<span class="cmt">// offset 为负数 → 读任意前置内存</span>
+<span class="cmt">// offset 超界 → 读任意后置内存</span>
+<span class="cmt">// 攻击者可实现任意地址读写</span></pre></div><div class="summary-card"><h2>类型混淆 / Reinterpret Cast</h2><pre><span class="cmt">// C 侧返回 void*</span>
+<span class="kw">foreign</span> <span class="fn">func</span> getHandle(): <span class="ty">CPointer</span>&lt;<span class="ty">Unit</span>&gt;
+
+<span class="kw">let</span> raw = getHandle()
+<span class="cmt">// 仓颉侧 reinterpret 为任意类型</span>
+<span class="kw">let</span> asFloat: <span class="ty">CPointer</span>&lt;<span class="ty">Float64</span>&gt; = <span class="kw">unsafe</span> { raw }
+asFloat[<span class="fn">0</span>] = <span class="fn">1.0</span>  <span class="cmt">// ❌ 若实际是 Int32 数组</span></pre></div></div><div class="summary-card" style="margin-top:20px"><h2>多线程竞态</h2><table style="font-size:14px;margin:8px 0 0"><thead><tr><th style="width:30%">场景</th><th>风险</th></tr></thead><tbody><tr><td>C 线程 free + 仓颉协程读</td><td>use-after-free 竞态</td></tr><tr><td>C 线程写 + 仓颉协程写</td><td>数据竞争、未定义行为</td></tr><tr><td>GC 线程回收 + C 线程持有指针</td><td>GC 回收后 C 侧悬垂</td></tr></tbody></table><p style="font-size:14px;color:var(--muted);margin-top:4px">CPointer 无 Sync/Send trait，多线程场景无编译期保护。</p></div></main></section>
+
+<!-- Slide 6: 堆内存暴露 — acquireRawData -->
+<section class="slide v-center" data-page="06 / 12"><div class="top-rule"></div><div class="page-no">06 / 12</div><h1>问题 ③ 仓颉堆内存暴露到 C 侧</h1><main><div class="summary-grid"><div class="summary-card"><h2>acquireRawData：String 原始指针</h2><pre><span class="kw">let</span> s = <span class="kw">"Hello, 仓颉"</span>
+<span class="kw">let</span> raw = acquireRawData(s)  <span class="cmt">// CPointer&lt;UInt8&gt;</span>
+<span class="cmt">// raw 指向 GC 托管堆上的 String 内部缓冲区</span>
+<span class="cmt">// 风险：</span>
+<span class="cmt">// 1. GC 回收 s → raw 悬垂</span>
+<span class="cmt">// 2. C 侧 free(raw) → 破坏 GC 堆</span>
+<span class="cmt">// 3. C 侧写入 raw → 破坏 String 不可变性</span></pre></div><div class="summary-card"><h2>acquireArrayRawData：Array 缓冲区</h2><pre><span class="kw">var</span> arr = [<span class="fn">1</span>, <span class="fn">2</span>, <span class="fn">3</span>, <span class="fn">4</span>, <span class="fn">5</span>]
+<span class="kw">let</span> raw = acquireArrayRawData(arr)
+<span class="cmt">// 危险 1：arr 不再引用 → GC 回收</span>
+<span class="cmt">// 危险 2：arr.append(6) → realloc</span>
+<span class="cmt">//   旧缓冲区失效，raw 悬垂</span>
+<span class="cmt">// 该指针是瞬时的，C 侧必须用完即弃</span></pre></div></div><div class="summary-grid" style="margin-top:20px"><div class="summary-card"><h2>acquire/release 配对遗漏</h2><pre><span class="kw">let</span> p: <span class="ty">CPointer</span>&lt;<span class="ty">UInt8</span>&gt; = acquire(ptr)
+<span class="cmt">// ... 传给 C 侧使用 ...</span>
+<span class="kw">if</span> (someCondition) { <span class="kw">return</span> }  <span class="cmt">// ❌ 提前返回</span>
+release(ptr)  <span class="cmt">// 永远执行不到 → 内存泄漏</span>
+<span class="cmt">// 无 RAII，依赖程序员纪律</span></pre></div><div class="summary-card"><h2>C 侧长期持有堆指针</h2><pre><span class="fn">func</span> onData(cb: <span class="ty">CFunc</span>&lt;(<span class="ty">CPointer</span>&lt;<span class="ty">UInt8</span>&gt;)&gt;) {
+    <span class="kw">let</span> buf = acquireArrayRawData(globalBuf)
+    cb(buf)   <span class="cmt">// 传给 C 侧回调</span>
+} <span class="cmt">// 函数返回 → buf 可能失效</span>
+<span class="cmt">// 若 C 侧将 buf 保存为全局变量 → 💥</span></pre></div></div></main></section>
+
+<!-- Slide 7: 栈内存暴露 -->
+<section class="slide v-center" data-page="07 / 12"><div class="top-rule"></div><div class="page-no">07 / 12</div><h1>问题 ④ 仓颉栈内存暴露到 C 侧</h1><main><div class="summary-grid"><div class="summary-card"><h2>inout 参数暴露栈地址</h2><pre><span class="kw">foreign</span> <span class="fn">func</span> readBuf(buf: <span class="ty">CPointer</span>&lt;<span class="ty">Int32</span>&gt;, len: <span class="ty">Int32</span>)
+
+<span class="fn">func</span> processData() {
+    <span class="kw">var</span> buf = <span class="ty">Array</span>&lt;<span class="ty">Int32</span>&gt;(<span class="fn">100</span>, item: <span class="fn">0</span>)
+    <span class="kw">var</span> raw = acquireArrayRawData(buf)
+    readBuf(raw, <span class="fn">100</span>)  <span class="cmt">// C 侧写入</span>
+} <span class="cmt">// buf 在栈上？在堆上？取决于编译器</span>
+<span class="cmt">// 若分配在栈上 → C 侧获得栈地址</span>
+<span class="cmt">// 函数返回后 C 侧继续用 → use-after-return</span></pre></div><div class="summary-card"><h2>栈缓冲区溢出</h2><pre><span class="kw">foreign</span> <span class="fn">func</span> strcpy(dst: <span class="ty">CPointer</span>&lt;<span class="ty">UInt8</span>&gt;, src: <span class="ty">CString</span>)
+
+<span class="fn">func</span> vulnerable() {
+    <span class="kw">var</span> buf = <span class="ty">Array</span>&lt;<span class="ty">UInt8</span>&gt;(<span class="fn">16</span>, item: <span class="fn">0</span>)
+    <span class="kw">let</span> raw = acquireArrayRawData(buf)
+    <span class="kw">let</span> long = <span class="kw">"overflow string..."</span>
+    strcpy(raw, long)  <span class="cmt">// ❌ 溢出 16 字节</span>
+}
+<span class="cmt">// CPointer 无边界保护 → 栈破坏/代码执行</span></pre></div></div><div class="summary-card" style="margin-top:20px"><h2>关键结论</h2><table style="font-size:14px;margin:8px 0 0"><thead><tr><th style="width:22%">场景</th><th style="width:30%">风险</th><th style="width:25%">编译期检测</th><th style="width:23%">竞品防护</th></tr></thead><tbody><tr><td>栈变量暴露给 C</td><td>use-after-return</td><td class="risk-high">❌ 无</td><td>Swift 闭包 / Rust borrow</td></tr><tr><td>缓冲区溢出</td><td>栈破坏、代码执行</td><td class="risk-high">❌ 无</td><td>Rust slice / Swift BufferPointer</td></tr><tr><td>inout 参数跨 FFI</td><td>API 语义误导</td><td class="risk-high">❌ 无</td><td>Swift 编译期 pinning</td></tr></tbody></table></div></main></section>
+
+<!-- Slide 8: C 经典安全问题投射 -->
+<section class="slide v-center" data-page="08 / 12"><div class="top-rule"></div><div class="page-no">08 / 12</div><h1>问题 ⑤ C 经典安全问题的仓颉投射</h1><main><table><thead><tr><th style="width:20%">C 经典问题</th><th style="width:40%">仓颉 C-FFI 中的体现</th><th style="width:20%">编译器防护</th><th style="width:20%">风险等级</th></tr></thead><tbody><tr><td>Use-after-free</td><td>C 侧 free → 仓颉侧 CPointer 仍可用</td><td class="risk-high">❌ 无</td><td class="risk-high">🔴 高</td></tr><tr><td>Double-free</td><td>仓颉 + C 两侧各 free 一次</td><td class="risk-high">❌ 无</td><td class="risk-high">🔴 高</td></tr><tr><td>空指针解引用</td><td>CPointer 无 Option 语义</td><td class="risk-high">❌ 无</td><td>🟡 中</td></tr><tr><td>缓冲区溢出</td><td>CPointer 无边界长度信息</td><td class="risk-high">❌ 无</td><td class="risk-high">🔴 高</td></tr><tr><td>整数溢出/截断</td><td>Int32↔Int64 FFI 边界隐式截断</td><td class="risk-high">❌ 无</td><td>🟡 中</td></tr><tr><td>类型混淆</td><td>CPointer&lt;UInt8&gt; reinterpret 为任意类型</td><td class="risk-high">❌ 无</td><td>🟡 中</td></tr><tr><td>竞态条件</td><td>GC 线程 + C 线程同时访问 CPointer</td><td class="risk-high">❌ 无</td><td class="risk-high">🔴 高</td></tr><tr><td>栈地址逃逸</td><td>inout + acquire 将栈地址传给 C</td><td class="risk-high">❌ 无</td><td class="risk-high">🔴 高</td></tr></tbody></table><p class="note" style="margin-top:14px">核心问题：CPointer&lt;T&gt; 本质上是 C 语言 T* 的薄封装，不携带任何安全语义信息（长度、可空性、所有权、生命周期）。</p></main></section>
+
+<!-- Slide 9: 竞品对照 — 安全措施 -->
+<section class="slide v-center" data-page="09 / 12"><div class="top-rule"></div><div class="page-no">09 / 12</div><h1>竞品安全措施对照</h1><main><table><thead><tr><th style="width:18%">能力</th><th style="width:22%">Swift</th><th style="width:20%">Go (cgo)</th><th style="width:20%">Rust</th><th style="width:20%">仓颉现状</th></tr></thead><tbody><tr><td>编译期类型映射校验</td><td><span class="tag tag-green">✅ @c 编译期校验</span></td><td>⚠️ cgo 桥接代码</td><td><span class="tag tag-green">✅ #[repr(C)]</span></td><td>⚠️ CType trait</td></tr><tr><td>指针生命周期</td><td><span class="tag tag-green">✅ UnsafePointer</span></td><td>⚠️ unsafe.Pointer</td><td><span class="tag tag-green">✅ borrow checker</span></td><td class="risk-high">❌ 无</td></tr><tr><td>空指针安全</td><td><span class="tag tag-green">✅ Optional</span></td><td>⚠️ panic</td><td><span class="tag tag-green">✅ Option</span></td><td class="risk-high">❌ 无</td></tr><tr><td>数组边界</td><td><span class="tag tag-green">✅ BufferPointer+count</span></td><td><span class="tag tag-green">✅ GoSlice cap/len</span></td><td><span class="tag tag-green">✅ &[T] 带长度</span></td><td class="risk-high">❌ 无</td></tr><tr><td>堆内存暴露管控</td><td><span class="tag tag-green">✅ withUnsafe 闭包</span></td><td>⚠️ C.CBytes 手动</td><td><span class="tag tag-green">✅ unsafe 块声明</span></td><td class="risk-high">❌ acquire 直接暴露</td></tr><tr><td>栈内存暴露管控</td><td><span class="tag tag-green">✅ withUnsafe 闭包</span></td><td>⚠️ 指针 pinning</td><td><span class="tag tag-green">✅ borrow checker</span></td><td class="risk-high">❌ 无</td></tr><tr><td>所有权转移</td><td>⚠️ Unmanaged 手动</td><td>⚠️ 手动 C.free</td><td><span class="tag tag-green">✅ 编译期所有权</span></td><td class="risk-high">❌ 全手动</td></tr><tr><td>自动头文件</td><td><span class="tag tag-green">✅ swiftc emit-header</span></td><td><span class="tag tag-green">✅ c-shared</span></td><td><span class="tag tag-green">✅ cbindgen</span></td><td>⚠️ CJ-0001 提案</td></tr></tbody></table><p class="note" style="margin-top:14px">仓颉在 FFI 边界的内存安全上对标竞品差距显著——几乎所有安全维度均为"无保护/全手动"状态。</p></main></section>
+
+<!-- Slide 10: 竞品深度分析 -->
+<section class="slide v-center" data-page="10 / 12"><div class="top-rule"></div><div class="page-no">10 / 12</div><h1>竞品关键安全设计借鉴</h1><main><div class="summary-grid"><div class="summary-card"><h2>Swift：withUnsafe 闭包模式</h2><p style="font-size:14px;margin:4px 0;color:var(--muted)">对堆/栈内存的所有 FFI 暴露都限定在闭包内</p><pre><span class="cmt">// Swift 闭包保证指针生命周期</span>
+<span class="kw">var</span> arr = [<span class="fn">1</span>, <span class="fn">2</span>, <span class="fn">3</span>]
+arr.withUnsafeBufferPointer { buf <span class="kw">in</span>
+    c_function(buf.baseAddress, buf.count)
+} <span class="cmt">// 闭包结束 → 指针立即失效</span></pre><p style="font-size:13px;color:var(--green);margin:4px 0"><strong>仓颉可借鉴</strong>：用 withRawData 闭包替代 acquireRawData。</p></div><div class="summary-card"><h2>Rust：unsafe 块 + borrow checker</h2><p style="font-size:14px;margin:4px 0;color:var(--muted)">FFI 调用必须包裹在 unsafe 块中</p><pre><span class="cmt">// Rust unsafe 块声明危险操作</span>
+<span class="kw">let</span> slice: &amp;[i32] = &amp;vec;
+<span class="kw">unsafe</span> {
+    c_function(slice.as_ptr(), slice.len());
+} <span class="cmt">// borrow checker 保证 vec 存活</span></pre><p style="font-size:13px;color:var(--green);margin:4px 0"><strong>仓颉可借鉴</strong>：引入 unsafe 上下文 + CBuffer&lt;T&gt; 携带长度。</p></div></div><div class="summary-grid" style="margin-top:20px"><div class="summary-card"><h2>Go cgo：指针 pinning + GoSlice</h2><p style="font-size:14px;margin:4px 0;color:var(--muted)">cgo 在调用期间 pin 住 Go 指针，GoSlice 携带长度</p><pre><span class="cmt">// Go cgo 自动 pin 指针</span>
+<span class="cmt">// C.CBytes 需手动 free</span>
+s := <span class="kw">"hello"</span>
+cs := C.CString(s)        <span class="cmt">// 复制到 C 堆</span>
+<span class="kw">defer</span> C.free(<span class="kw">unsafe</span>.Pointer(cs)) <span class="cmt">// defer 保证释放</span></pre></div><div class="summary-card"><h2>综合对比结论</h2><table style="font-size:13px;margin:4px 0"><thead><tr><th>模式</th><th>来源</th><th>仓颉适配</th></tr></thead><tbody><tr><td>闭包生命周期</td><td>Swift</td><td class="risk-high">需新增</td></tr><tr><td>unsafe 标注</td><td>Rust</td><td class="risk-high">需新增</td></tr><tr><td>指针 pinning</td><td>Go</td><td class="risk-high">需新增</td></tr><tr><td>携带长度/容量</td><td>Go/Rust/Swift</td><td class="risk-high">需新增 CBuffer</td></tr></tbody></table></div></div></main></section>
+
+<!-- Slide 11: 风险汇总 -->
+<section class="slide v-center" data-page="11 / 12"><div class="top-rule"></div><div class="page-no">11 / 12</div><h1>风险等级汇总 & 缓解建议</h1><main><table><thead><tr><th style="width:5%">#</th><th style="width:22%">问题类别</th><th style="width:10%">风险</th><th style="width:23%">典型后果</th><th style="width:12%">修复难度</th><th style="width:28%">建议方向</th></tr></thead><tbody><tr><td>1</td><td>整型宽度/对齐不匹配</td><td class="risk-high">🔴 高</td><td>栈破坏、数据损坏</td><td>中</td><td>编译期 ABI 校验</td></tr><tr><td>2</td><td>use-after-free</td><td class="risk-high">🔴 高</td><td>任意代码执行</td><td>高</td><td>CPointer 生命周期标注</td></tr><tr><td>3</td><td>Double-free</td><td class="risk-high">🔴 高</td><td>堆破坏、crash</td><td>中</td><td>所有权转移语义</td></tr><tr><td>4</td><td>空指针解引用</td><td>🟡 中</td><td>段错误</td><td>低</td><td>Option&lt;CPointer&lt;T&gt;&gt;</td></tr><tr><td>5</td><td>数组越界</td><td class="risk-high">🔴 高</td><td>任意读写、信息泄漏</td><td>中</td><td>CBuffer&lt;T&gt; 携带长度</td></tr><tr><td>6</td><td>acquire 系列泄漏</td><td>🟡 中</td><td>内存泄漏</td><td>低</td><td>withRawData 闭包</td></tr><tr><td>7</td><td>栈地址逃逸</td><td class="risk-high">🔴 高</td><td>use-after-return</td><td>高</td><td>编译期 escape 分析</td></tr><tr><td>8</td><td>缓冲区溢出</td><td class="risk-high">🔴 高</td><td>栈破坏、代码执行</td><td>中</td><td>CBuffer + 边界信息</td></tr><tr><td>9</td><td>类型混淆</td><td>🟡 中</td><td>数据损坏</td><td>中</td><td>禁止 CPointer 隐式转换</td></tr></tbody></table></main></section>
+
+<!-- Slide 12: 总结 -->
+<section class="slide v-center" data-page="12 / 12"><div class="top-rule"></div><div class="page-no">12 / 12</div><h1>总结与建议</h1><main><div class="summary-grid"><div class="summary-card"><h2>态势判断</h2><ul style="font-size:15px;padding-left:20px"><li><strong>"信任程序员"模型</strong>：所有安全检查依赖手动保证</li><li><strong>acquire 系列是最大风险点</strong>：GC 堆指针无生命周期追踪</li><li><strong>CPointer&lt;T&gt; 是 C 语言 T* 的薄封装</strong>：无长度、无 Option、无所有权</li><li><strong>与竞品差距显著</strong>：Swift/Rust/Go 均有系统性防护</li><li><strong>CJ-0001 提案方向正确</strong>：但未解决 CPointer/acquire 根本问题</li></ul></div><div class="summary-card"><h2>优先投入</h2><ul style="font-size:15px;padding-left:20px"><li><strong>P0</strong>：acquire 系列改为闭包形式（withRawData）</li><li><strong>P0</strong>：引入 CBuffer&lt;T&gt;，携带 data + len</li><li><strong>P1</strong>：CPointer&lt;T&gt; 支持 Option 语义</li><li><strong>P1</strong>：编译期对齐/宽度校验</li><li><strong>P2</strong>：引入 unsafe 上下文标注</li><li><strong>P2</strong>：CPointer 生命周期标注</li></ul></div></div><p style="font-size:16px;color:var(--muted);margin-top:24px;text-align:center;position:relative;z-index:2">基准版本 仓颉 1.1.3 · 对照 Swift 6.4 / Go 1.24 / Rust 1.85</p></main></section>
+
+</div></div><div class="deck-controls"><button id="prevBtn">Prev</button><span id="slideCount">01 / 12</span><div class="progress-track"><div class="progress-fill" id="progressFill"></div></div><button id="nextBtn">Next</button></div><script>class Deck{constructor(){this.slides=[...document.querySelectorAll('.slide')];this.i=0;this.stage=document.getElementById('deckStage');this.prev=document.getElementById('prevBtn');this.nextBtn=document.getElementById('nextBtn');this.count=document.getElementById('slideCount');this.fill=document.getElementById('progressFill');this.scale();addEventListener('resize',()=>this.scale());addEventListener('keydown',e=>{if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();this.show(this.i+1)}if(['ArrowLeft','PageUp','Backspace'].includes(e.key)){e.preventDefault();this.show(this.i-1)}if(e.key==='Home')this.show(0);if(e.key==='End')this.show(this.slides.length-1)});this.prev.onclick=()=>this.show(this.i-1);this.nextBtn.onclick=()=>this.show(this.i+1);this.show(0)}scale(){const f=Math.min(innerWidth/1920,innerHeight/1080);this.stage.style.transform=`scale(${f})`;this.stage.style.left=`${(innerWidth-1920*f)/2}px`;this.stage.style.top=`${(innerHeight-1080*f)/2}px`}show(i){if(i<0||i>=this.slides.length)return;this.slides[this.i].classList.remove('active');this.i=i;this.slides[this.i].classList.add('active');this.count.textContent=`${String(this.i+1).padStart(2,'0')} / ${String(this.slides.length).padStart(2,'0')}`;this.fill.style.width=`${((this.i+1)/this.slides.length)*100}%`}}new Deck();</script></body></html>
