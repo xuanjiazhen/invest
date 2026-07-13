@@ -15,7 +15,7 @@
 1. `req.spec.md`：保留原始任务与评审意见。
 2. `plan.spec.md`：范围、证据与验证标准。
 3. `report.spec.md`：风险分类、真实 API、可运行案例、竞品对照及建议。
-4. `cangjie-cffi-memory-safety-slides.html`：12 页交互式网页演示。
+4. `cangjie-cffi-memory-safety-slides.html`：16 页交互式网页演示，以风险全景为主线，竞品校验作为辅助章节。
 5. `index.html`：继续仅索引 slides HTML。
 
 ## 证据与验证
@@ -32,4 +32,4 @@
 - 回答六项竞品质疑：布局校验、指针生命周期、可空表达、unsafe、栈地址、头文件/绑定生成。
 - 不出现不存在的 `acquireRawData`/`release` 等 API；数组借用使用 handle 的 `.pointer` 并成对释放。
 - `inout` 示例展示“仅调用期间有效”。
-- HTML 可加载、12 页完整、键盘与按钮翻页可用、无外部脚本依赖。
+- HTML 可加载、16 页完整、键盘与按钮翻页可用、无外部脚本依赖；主体内容完整覆盖风险分类、案例、已有防线、剩余缺口和增强路线。

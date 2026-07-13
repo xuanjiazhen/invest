@@ -1,108 +1,232 @@
-# 仓颉调用 C：内存安全边界与改进机会
+# 仓颉调用 C 的内存安全问题分析
 
-> **结论先行**：仓颉已经用 `CType`/`@C` 约束布局类型，用 `unsafe` 标记 C 调用、指针读写和数组借用，并提供 `isNull()`、`@CallingConv`、`inout` 有效期规则及 GWP-Asan 抽样检测；这些能力能暴露风险、约束部分误用，但不能证明 C 实现、手写声明、长度、所有权或生命周期正确。Rust、Swift、Go 的原始 C 指针边界同样需要显式契约，差异主要在安全封装和工具链成熟度，不宜简单判定谁“天然安全”。
+> 基于仓颉 1.1 文档与本机 Cangjie Compiler 1.1.0-beta.10，系统梳理仓颉代码调用 C 时的内存安全风险、语言已有约束、仍需人工维护的契约，以及可落地的增强方向。
 
-## 一、范围、版本与证据
+## 一、结论摘要
 
-本报告只分析**仓颉代码调用 C**：`foreign func`/`CFunc` 声明与调用、C 数据布局、原始指针、字符串、数组及 `inout`。不讨论 C 通过 `Cangjie.h` 调仓颉，也不把仓颉函数导出给 C 纳入结论。
+仓颉调用 C 的安全边界可以概括为：**语言负责限制哪些类型和操作能够进入 FFI，并用 `unsafe` 显式标记危险行为；开发者仍需保证 C 声明、地址、长度、生命周期、所有权和线程契约正确。**
 
-- 文档基线：`cangjie_docs` 1.1 分支的《仓颉与 C 互操作》与运行时环境文档。
-- 实测 SDK：Cangjie Compiler `1.1.0-beta.10 (cjnative)`，目标 `x86_64-w64-mingw32`。
-- 实测链路：Clang 构建 Windows C DLL；`cjc` 编译、链接并运行仓颉调用端，退出码为 0。
+仓颉已经提供以下基础防线：
 
-“需要 `unsafe`”只表示开发者主动承担前置条件，并不自动验证这些条件；报告据此区分**风险显式化**与**风险消除**。
+- `CType` 与 `@C struct` 限定可参与 C ABI 的类型和布局；
+- `foreign func`、`CFunc`、原始指针读写、数组借用均进入 `unsafe` 上下文；
+- `CPointer<T>` 支持类型参数、判空、读写与偏移；
+- `@CallingConv` 可声明 `CDECL` 或 `STDCALL`；
+- `inout` 将可变值按引用传给 C，并限定地址仅在调用期间有效；
+- `acquireArrayRawData`/`releaseArrayRawData` 为仓颉数组提供成对的固定借用协议；
+- Linux/OpenHarmony 的 GWP-Asan 可抽样检测部分数组越界写和未释放借用。
 
-## 二、仓颉已有防线及其边界
+这些能力不能覆盖 C 边界的全部语义。当前主要风险集中在八类：
 
-| 设施 | 已提供的约束 | 仍需人工保证 |
+1. ABI 声明与真实 C 接口不一致；
+2. 空指针、悬垂指针和错误类型转换；
+3. 所有权、释放器和资源生命周期不明确；
+4. 指针不携带长度导致越界；
+5. 仓颉堆数组借用被越界、逃逸或漏释放；
+6. `inout` 临时地址被 C 保存并延后使用；
+7. 字符串编码、NUL 终止和分配释放协议不一致；
+8. 回调、线程、错误处理和并发契约失配。
+
+因此，更安全的仓颉 C-FFI 不应只增加一个新指针类型，而应形成“**绑定生成 + 契约元数据 + 作用域借用 + 安全包装 + 动态检测 + E2E 验证**”的组合方案。
+
+## 二、分析范围与互操作模型
+
+本报告只分析**仓颉代码调用 C**，包括：
+
+- `foreign func` 与 `CFunc`；
+- `CType`、`@C struct`、`VArray` 和 `@CallingConv`；
+- `CPointer<T>`、`CString`；
+- `acquireArrayRawData`/`releaseArrayRawData`；
+- `inout` 引用传值；
+- 调用 C 引入的线程、回调和错误边界。
+
+不分析 C 通过 `Cangjie.h` 调用仓颉，也不讨论仓颉函数导出为 C API 的设计。
+
+一次典型调用包含四层责任：
+
+| 层次 | 主要责任 | 失配后果 |
 |---|---|---|
-| `CType` / `@C struct` | FFI 签名只接受 C 兼容类型；字段也受 `CType` 约束 | C 头文件与仓颉声明是否一致；packed、位域、联合体、平台 ABI |
-| `unsafe` | `foreign`/`CFunc` 调用、指针读写/偏移、数组借用可见 | 指针是否有效、长度是否正确、释放者是谁、C 是否保存借用地址 |
-| `CPointer<T>` | 有泛型元素类型、`isNull()`、显式读写/偏移 | 不携带长度、生命周期与所有权；类型转换仍可误用 |
-| `CString` | 可判空、测长、复制为 `String`；`mallocCString`/`free` 有明确路径 | 编码、终止符、来源与释放器契约 |
-| `VArray<T,$N>` | 长度进入类型；调用时以 `inout` 传址 | C 声明和 `$N` 必须一致；C 不得越界或保存地址 |
-| `@CallingConv` | 支持 `CDECL`、`STDCALL`，默认 CDECL | 必须与 C 侧完全一致；不是所有平台 ABI 都由该标记覆盖 |
-| GWP-Asan | Linux/OpenHarmony 对数组借用做抽样 canary 与未释放检测 | 非全量、非 Windows；不能代替契约和测试 |
+| ABI 声明 | 符号、参数、返回值、布局、调用约定一致 | 参数误读、返回值截断、崩溃或数据损坏 |
+| 地址契约 | 指针非空、对齐、可读写、指向正确对象 | 空指针、越界、类型混淆、非法访问 |
+| 生命周期契约 | 借用期、所有权、释放器和释放时机一致 | 泄漏、悬垂、double-free、堆破坏 |
+| 行为契约 | 长度、编码、线程、回调、错误码一致 | 数据破坏、竞态、死锁、语义错误 |
+
+`unsafe` 会让责任边界可见，但不会自动证明以上契约成立。
 
 ## 三、风险全景
 
-### 3.1 ABI 与声明漂移
+### 3.1 ABI 与类型映射错误
 
-`CType` 检查的是“仓颉类型是否可用于 C ABI”，不是“手写声明是否等于真实头文件”。以下错误仍可能越过编译器：
+#### 风险来源
 
-- `int64_t` 被声明为 `Int32`，造成参数/返回值解释错误；
-- C 使用 `#pragma pack`、位域、联合体或柔性数组，而仓颉按普通 `@C struct` 表达；
-- C 的 `size_t`/`long` 等平台相关类型被写成固定但错误的宽度；
-- 调用约定不一致。仓颉并非“不支持调用约定”：应使用 `@CallingConv[CDECL|STDCALL]`，但双方仍须一致；
-- 头文件演进后，手写 `foreign` 声明未同步。
+- C 的 `int64_t` 被声明为仓颉 `Int32`；
+- C 的 `size_t`、`long` 等平台相关类型被映射为错误宽度；
+- C 使用 packed、位域、联合体、柔性数组或条件编译，仓颉声明没有同步；
+- 结构体字段顺序、嵌套结构、数组长度或对齐不同；
+- C 侧调用约定与仓颉侧 `@CallingConv` 不一致；
+- C 头文件升级后，手写 `foreign` 声明继续使用旧签名。
 
-**改进重点**：优先由头文件生成绑定并在 CI 做头文件漂移检测、`sizeof`/`alignof`/字段偏移断言，而不是仅依赖 `@C`。
+#### 仓颉已有约束
 
-### 3.2 指针、可空性与所有权
+`CType` 限制 FFI 签名可使用的类型，`@C struct` 提供 C 兼容布局，`VArray<T,$N>` 将固定数组长度写入类型，`@CallingConv[CDECL|STDCALL]` 表达调用约定。
 
-`CPointer<T>` 可以直接表示空指针，`CPointer<T>()` 创建 null，`isNull()` 判空；因此问题不是“没有 Option 就不能判空”，而是 C 函数签名无法强制调用方检查。`Option<CPointer<T>>`、Swift Optional 与 Rust `Option<NonNull<T>>` 更适合安全包装层，却通常不能直接替代原始 C ABI 参数。
+#### 仍存在的缺口
 
-主要风险：
+这些机制验证“声明是否合法”，不能验证“声明是否等于目标头文件”。`@C` 与 Rust `#[repr(C)]` 在此维度类似：都规定本语言一侧的布局规则，但不自动核对独立 C 声明。
 
-1. C 返回 null，仓颉未先 `isNull()` 就读写；
-2. C 释放后仓颉继续持有，形成 use-after-free；
-3. 两侧对释放责任理解不同，造成 double-free 或泄漏；
-4. `CPointer<T>` 不带长度，错误的索引或偏移造成越界；
-5. `CPointer` 间显式转换允许把同一地址按错误类型解释；
-6. 分配器不配对，例如 C 自定义 allocator 的结果被交给 `LibC.free`。
+#### 缓解措施
 
-**安全包装建议**：原始 `foreign` 声明保持 ABI 形态；对上层暴露可空返回、拥有型 `Resource`、借用型回调以及 `(pointer, length)`/复制后的 `Array`，集中执行判空和释放。
+- 优先使用官方 HLE `cj-c2cj` 或社区 cjbind 生成绑定；
+- CI 中对 `sizeof`、`alignof`、字段偏移和符号做跨语言断言；
+- 固定目标平台和编译选项，避免直接映射含糊的 C 类型；
+- 头文件变更触发绑定再生成和 E2E 测试。
 
-### 3.3 仓颉堆数组借给 C
+### 3.2 空指针、悬垂指针与类型混淆
 
-真实 API 是 `acquireArrayRawData<T>(array)` 与 `releaseArrayRawData(handle)`。前者返回 handle，传给 C 的地址是 `handle.pointer`。两者均要求 `unsafe`，且必须配对。
+`CPointer<T>` 可以表示 null，`CPointer<T>()` 可构造空指针，`isNull()` 可显式判空。风险在于 FFI 签名不能强制调用方检查，也不携带生命周期。
+
+典型场景：
+
+- C 返回 NULL，仓颉直接 `read()` 或写入；
+- C 已释放对象，仓颉仍保存并使用地址；
+- 仓颉把 `CPointer<A>` 转为 `CPointer<B>` 后按错误布局访问；
+- 指针算术产生对象范围之外的地址；
+- C 返回栈上局部变量地址或短生命周期内部缓冲区。
+
+`Option<CPointer<T>>` 更适合仓颉安全包装层，而不是直接替代原始 C ABI。包装层可在进入业务代码前集中判空、验证状态并转换为领域对象。
+
+### 3.3 所有权、释放器与资源生命周期
+
+原始指针没有表达以下信息：
+
+- 返回值是 borrowed 还是 owned；
+- 调用方是否必须释放；
+- 应使用 `free`、库专用 destroy 函数还是不允许释放；
+- C 是否接管传入对象；
+- 同一资源能否被多个句柄共享；
+- 释放是否要求特定线程或上下文。
+
+由此产生内存泄漏、double-free、use-after-free 和分配器不匹配。较安全的包装方式是：
+
+- 为拥有型句柄建立实现 `Resource` 的包装；
+- 将 destroy 函数与构造函数绑定；
+- `close()` 保证幂等，关闭后拒绝继续调用；
+- 使用 `try/finally` 覆盖异常和提前返回；
+- 不向业务层暴露可任意复制的裸拥有型指针。
+
+### 3.4 长度、边界与整数换算
+
+`CPointer<T>` 不携带长度。C 常用 `(pointer, length)`、NUL 终止、哨兵值或固定结构字段表达边界，如果仓颉调用端遗漏或误解长度，就会发生越界读写。
+
+重点风险包括：
+
+- 元素数与字节数混淆；
+- 有符号长度转无符号后变为超大值；
+- `Int64` 到 `Int32` 截断；
+- `length * sizeof(T)` 溢出；
+- C 在输出缓冲区中写入的数据超过容量；
+- C 返回指针但未同时返回可验证长度。
+
+应将 pointer、length、capacity 作为一个契约整体，在包装层先检查非负、上限和乘法溢出，再进入 `unsafe` 调用。固定长度 C 数组可使用 `VArray<T,$N>`，动态缓冲区应使用携带长度的包装类型。
+
+### 3.5 仓颉堆数组借给 C
+
+真实接口为：
 
 ```cangjie
 let handle = acquireArrayRawData(values)
 try {
-    use_buffer(handle.pointer, values.size)
+    consume(handle.pointer, values.size)
 } finally {
     releaseArrayRawData(handle)
 }
 ```
 
-风险不是普通 `Array.append` 后“realloc 使裸指针自然失效”这么简单；acquire/release 协议用于固定/借用托管数组。真正需要明确的是：
+`acquireArrayRawData` 返回数组原始数据的 handle，C 侧使用 `handle.pointer`；`releaseArrayRawData` 接收该 handle。两者都需要 `unsafe`。
 
-- release 前 C 只能在约定范围访问；
-- C 不得在调用结束或 release 后保存和使用 `handle.pointer`；
-- C 不得 `free` 该地址；
-- 长度必须单独传递且双方单位一致；
-- 异常、提前返回也必须执行 release；
-- C 越界写仍可能破坏仓颉堆。
+借用期间必须满足：
 
-仓颉文档提供的 GWP-Asan 可在 Linux/OpenHarmony 抽样发现部分越界写及未 release，但它不是全量证明。
+- C 访问范围不超过数组长度；
+- C 不调用 `free`；
+- C 不保存地址供 release 后使用；
+- 仓颉所有控制流都执行 release；
+- C 与仓颉对元素类型、长度单位和可写性理解一致；
+- 多线程访问遵守同步约束。
 
-### 3.4 `inout`：调用期间有效的地址
+违规后果包括仓颉堆越界写、借用泄漏和 release 后悬垂访问。GWP-Asan 可在 Linux/OpenHarmony 抽样发现部分问题，但不能覆盖所有访问，也不能替代契约验证。
 
-`inout` 是**调用点修饰符**，不是参数类型写法。它只可用于 `CFunc` 调用，把可变、满足 `CType` 的变量临时形成 `CPointer<T>`；字面量、`let`、入参、临时表达式和源自 class 实例成员的值受限制。文档明确：该地址**仅在函数调用期间保证有效**，C 不应保存。
+### 3.6 `inout` 暴露临时地址
+
+`inout` 是 CFunc 调用点的引用传值表达式：
 
 ```cangjie
 foreign func write_value(p: CPointer<Int32>): Unit
+
 var value: Int32 = 0
 unsafe { write_value(inout value) }
 ```
 
-这与 Swift `withUnsafePointer`/`withUnsafeMutablePointer` 的闭包借用目标相近：都要求指针不逃逸，但 C 仍可违规保存。Rust 在安全引用内部有借用检查；一旦降为 `*mut T` 并进入 `unsafe` FFI，C 是否保存和何时使用也依赖契约。Go cgo 还施加“C 不能在调用返回后保留 Go 指针”等运行时规则。四者都不能证明任意 C 实现遵约。
+仓颉对可使用 `inout` 的对象做限制：对象必须可变并满足 `CType`，不能是字面量、`let`、入参或临时表达式，也不能直接或间接来自 class 实例成员。传给 C 的地址仅在该次调用期间保证有效。
 
-### 3.5 字符串、回调、并发和错误边界
+主要风险不是调用期内的正常写入，而是 C 将地址保存到全局变量、异步任务或回调上下文，在调用返回后再次访问。编译器可以约束仓颉调用点，无法证明任意 C 实现没有让地址逃逸。
 
-- `CString` 是以 NUL 结尾的 C 字符串视图；`toString()` 会复制，但编码和来源必须约定。仓颉 `String` 传 C 应用 `LibC.mallocCString` 并在 `finally` 中 `LibC.free`。
-- `CFunc` 回调不能捕获变量，但函数指针强转、回调上下文指针与注销时机仍可能造成悬垂。
-- 仓颉线程可能恢复到不同 OS 线程；C 的 TLS、线程亲和性、长时间阻塞和进程退出语义可能与预期冲突。
-- C 的错误码、`errno`、部分初始化和异常/longjmp 不应跨边界泄漏；包装层要把它们转换成明确结果并执行清理。
+### 3.7 字符串边界
 
-## 四、可运行的 E2E 案例
+`CString` 表达 C 的 NUL 终止字符串视图，可判空、测长并复制成仓颉 `String`。从仓颉 `String` 创建 C 字符串可使用 `LibC.mallocCString`，使用后必须由匹配的释放函数清理。
+
+风险包括：
+
+- C 返回的字节不是约定编码；
+- 输入包含内嵌 NUL，C 只看到前缀；
+- C 返回的地址未 NUL 终止；
+- 返回地址属于静态区、调用方所有或新分配内存，但仓颉误判所有权；
+- C 写入只读字符串或越过目标容量；
+- 仓颉用错误释放器清理 C 返回字符串。
+
+安全包装必须同时记录编码、最大长度、可写性、所有权和释放器，而不能只把 `CString` 转为 `String`。
+
+### 3.8 回调、线程、并发与错误边界
+
+CFunc lambda 不能捕获变量，这减少了闭包环境跨边界的问题，但回调仍涉及函数指针和 userdata 的联合生命周期：
+
+- C 在注销后继续调用回调；
+- userdata 已释放或被错误转换；
+- 回调发生在未预期线程；
+- 回调与销毁并发，产生竞态；
+- C 长时间阻塞占用执行仓颉线程的 native 线程；
+- C TLS、线程亲和性与仓颉线程调度假设冲突；
+- C 通过错误码、`errno`、部分初始化结果或 `longjmp` 离开，清理逻辑没有执行。
+
+包装层应明确注册、注销、并发和重入协议，将错误码转换为仓颉结果，并确保 C 异常机制不越过语言边界。
+
+## 四、风险矩阵
+
+| 风险类别 | 主要后果 | 仓颉现有防线 | 关键剩余责任 |
+|---|---|---|---|
+| ABI/布局失配 | 数据误读、崩溃、内存破坏 | `CType`、`@C`、`VArray`、`@CallingConv` | 与真实头文件和目标平台一致 |
+| null/悬垂/类型混淆 | 非法访问、use-after-free | `isNull()`、unsafe 指针操作 | 生命周期、有效对象与正确类型 |
+| 所有权/释放器 | 泄漏、double-free、堆破坏 | 可用 `Resource`、`try/finally` 包装 | owned/borrowed 与 destroy 契约 |
+| 长度/整数 | 越界读写、信息泄漏 | 固定数组 `VArray` | pointer+len+capacity 统一校验 |
+| 堆数组借用 | 仓颉堆破坏、借用泄漏 | acquire/release handle、GWP-Asan | 不逃逸、不 free、不越界、必 release |
+| `inout` 地址 | 调用返回后悬垂访问 | 调用点限制、调用期有效规则 | C 不保存地址 |
+| 字符串 | 越界、乱码、错误释放 | `CString`、`mallocCString` | 编码、NUL、容量、所有权 |
+| 回调/并发/错误 | 竞态、死锁、悬垂回调 | CFunc 限制、unsafe 边界 | 注册期、线程、重入、清理协议 |
+
+风险等级取决于 C API 是否处理外部输入、是否跨线程或长期保存地址。不能仅凭 API 类型断言所有场景都可被利用，但所有高权限或不可信输入场景都应按高风险边界治理。
+
+## 五、可运行 E2E 案例
+
+以下案例覆盖 `foreign func`、`unsafe`、`inout`、数组借用、长度传递和成对释放。
 
 C 动态库：
 
 ```c
 #include <stdint.h>
-__declspec(dllexport) void write_value(int32_t *p) { if (p) *p = 42; }
+
+__declspec(dllexport) void write_value(int32_t *p) {
+    if (p) *p = 42;
+}
+
 __declspec(dllexport) int64_t sum_values(const int32_t *p, int64_t n) {
     int64_t sum = 0;
     for (int64_t i = 0; i < n; ++i) sum += p[i];
@@ -132,39 +256,87 @@ main(): Int64 {
 }
 ```
 
-本机验证结果：C DLL 编译成功；仓颉代码编译链接成功；程序退出码 `0`。该案例同时验证了 `foreign func`、`unsafe`、`inout`、数组 handle 的 `.pointer`、长度传递与 `finally` 配对释放。
+本机验证环境与结果：
 
-## 五、竞品校验：相同维度、同一标尺
+- Cangjie Compiler `1.1.0-beta.10 (cjnative)`；
+- 目标 `x86_64-w64-mingw32`；
+- Clang 构建 C DLL：退出码 0；
+- `cjc` 编译链接仓颉调用端：退出码 0；
+- 程序运行：退出码 0。
+
+## 六、竞品参照
+
+竞品比较只用于寻找增强手段，不把“进入 unsafe 区域”误认为已经消除风险。
 
 | 维度 | 仓颉 | Rust | Swift | Go/cgo |
 |---|---|---|---|---|
-| 布局声明 | `CType` + `@C struct`；仍需与头文件一致 | `#[repr(C)]` 固定 Rust 类型布局；仍需声明与头文件一致 | Clang importer 导入 C 声明；手工 raw layout 仍有风险 | cgo 从 C 声明生成桥接；跨平台类型仍需注意 |
-| 原始指针生命周期 | `CPointer` 不追踪生命周期 | `*const/*mut` 不受 borrow checker 自动保护 | `UnsafePointer` 不追踪生命周期 | `unsafe.Pointer` 不追踪生命周期，另有 cgo 指针规则 |
-| 可空性 | null `CPointer` + `isNull()`；可在包装层转 Option | raw pointer 可 null；常在包装层用 `Option<NonNull<T>>` | imported C pointer 常呈 Optional；解包后仍是 unsafe pointer | nil pointer 可表达；仍需主动检查 |
-| 越界/长度 | `CPointer` 不带长度；`VArray` 或 pointer+len | raw pointer 不带长度；安全层可构造 slice | raw pointer 不带长度；可用 BufferPointer 包装 | raw pointer 不带长度；Go slice 只在 Go 侧带 len/cap |
-| 堆借用 | acquire/release 均为 unsafe，handle 固定数组 | 暴露 raw pointer 进入 unsafe；需保证底层不移动与不释放 | `withUnsafe*` 限定词法作用域；C 仍可能错误保存 | cgo 规则限制 C 保留 Go 指针；常复制到 C 内存 |
-| 栈地址 | `inout` 仅调用期间有效 | 借用转 raw pointer 后，FFI 合同仍需 C 遵守 | `withUnsafe*` 闭包期间有效 | 调用期规则与运行时检查更强，但 C 仍需遵约 |
-| unsafe 标记 | 调用、指针操作、数组 acquire/release 均显式 | FFI 调用/解引用依具体版本和声明进入 unsafe | 类型名/操作体现 Unsafe，但无 Rust 式 unsafe 块体系 | `unsafe` 包使转换显式，调用 C 函数本身不等于静态证明 |
-| 绑定生成 | 官方 HLE `cj-c2cj`；社区 cjbind 可处理 C/C++ 包装 | bindgen/cbindgen 生态成熟 | Clang importer 为主 | cgo 由 preamble/头文件生成桥接 |
+| C 布局 | `CType` + `@C struct`；需核对头文件 | `#[repr(C)]`；需核对头文件 | Clang importer 降低手写漂移 | cgo 从 C 声明生成桥接 |
+| 原始指针 | `CPointer` 无生命周期/长度/所有权 | raw pointer 同样不受 borrow checker 自动保护 | `UnsafePointer` 本身不追踪生命周期 | `unsafe.Pointer` 本身不追踪生命周期 |
+| 可空性 | null + `isNull()`；包装层可用 Option | raw pointer 可 null；安全层常用 `NonNull`/Option | importer 常呈 Optional | nil 可表达，仍需主动检查 |
+| 堆借用 | acquire/release handle + unsafe | raw pointer + unsafe 契约 | `withUnsafe*` 词法作用域 | cgo 指针保留规则与复制策略 |
+| 栈地址 | `inout` 仅调用期有效 | 引用转 raw 后仍依赖 C 契约 | `withUnsafe*` 期间有效 | C 不应在调用后保留 Go 指针 |
+| 长度 | `VArray` 或 pointer+len | raw pointer+len，安全层可构造 slice | BufferPointer 可组合地址与 count | C 指针无长度，Go slice 仅在 Go 侧有长度 |
+| 绑定工具 | HLE `cj-c2cj`、社区 cjbind | bindgen 等生态 | Clang importer | cgo |
 
-### 六项质疑的直接回答
+可借鉴的重点不是把 `CPointer` 换成另一种 raw pointer，而是：
 
-1. **`#[repr(C)]` 与 `@C`**：二者都约束本语言结构的 C 兼容布局；都不会校验它是否匹配某个外部头文件。仓颉还通过 `CType` 限定可用字段类型；Rust 可配合 bindgen/layout tests，生态更成熟不等于 raw ABI 自动安全。
-2. **`CPointer` 与 `UnsafePointer`**：二者都是不带生命周期的原始指针抽象；Swift 的优势主要来自 importer、Optional 呈现和 `withUnsafe*` 作用域 API，不能据此称 `UnsafePointer` 本身更安全。
-3. **Option/Optional**：Swift importer 常把 nullable C pointer 映射为 Optional；Rust `Option<NonNull<T>>` 常用于包装且有 niche 优化，但 `Option<*mut T>` 不应被无条件当作 C ABI 指针；仓颉 raw 边界使用可为 null 的 `CPointer` 与 `isNull()`，可在安全包装层转 Option。
-4. **堆内存暴露与 unsafe**：仓颉 acquire/release 和 Rust raw-pointer 路径都显式 unsafe；unsafe 只标记责任。Swift/Go 的作用域或运行时规则更强，但 C 若越界或保存借用地址仍可破坏安全。
-5. **栈地址**：仓颉 `inout`、Swift `withUnsafeMutablePointer`、Rust 临时借用转 `*mut` 都能把地址交给 C；共同底线是不得逃逸约定的有效期。
-6. **自动绑定**：仓颉并非只有手写声明，官方文档包含 HLE `cj-c2cj`，社区有 cjbind。与成熟竞品的主要差距是覆盖面、稳定性、布局回归和 CI 生态，而不是“完全没有工具”。
+- Swift 的作用域借用 API；
+- Rust 生态中的所有权包装、bindgen 和 layout tests；
+- Go/cgo 的指针保留规则、运行时检查和复制优先策略；
+- 三者更成熟的绑定生成与持续验证工具链。
 
-## 六、机会与落地顺序
+## 七、更安全的 C-FFI 机会
 
-1. **先做可执行契约**：生成绑定、layout tests、符号/调用约定检查、真实 C DLL E2E。
-2. **建立安全包装层**：raw `foreign` 仅在内部；外部使用 `Resource`、Option、复制型数组/字符串和 pointer+len。
-3. **作用域借用 API**：为数组提供类似 `withArrayRawData` 的闭包封装，在 `finally` 自动 release，减少遗漏并表达“不逃逸”。
-4. **所有权元数据**：在绑定描述中记录 borrowed/owned、nullable、length-of、allocator/deallocator，并据此生成包装。
-5. **检测工具**：Linux/OpenHarmony 启用 GWP-Asan；各平台结合 C ASan、模糊测试、并发和异常路径测试。
-6. **文档模板**：每个 FFI 函数必须写清 ABI、可空性、长度单位、线程、有效期、释放者和错误契约。
+### P0：让声明可生成、可核验
 
-## 七、最终判断
+- 扩大头文件到仓颉绑定的覆盖范围；
+- 生成 `sizeof`/`alignof`/字段偏移断言；
+- 在 CI 检测头文件与生成绑定漂移；
+- 对调用约定、目标平台和编译选项形成显式清单。
 
-仓颉 C-FFI 不是“毫无保护的裸 C”：它已有类型资格约束、unsafe 边界、判空、调用约定、调用期 `inout` 规则、数组 acquire/release 协议和检测设施。其核心缺口也不是单一语法，而是**手写声明无法自动对应头文件，原始指针不携带长度/生命周期/所有权，安全包装和验证工具链尚需系统化**。竞品在原始指针边界有相同根本限制；可借鉴之处集中在导入器、作用域 API、所有权注解和持续验证，而非简单照搬红绿优劣结论。
+### P0：为绑定增加契约元数据
+
+为参数和返回值记录：
+
+- `nullable` / `nonnull`；
+- `borrowed` / `owned` / `transferred`；
+- `length-of` / `capacity-of` / 长度单位；
+- allocator / deallocator；
+- valid-until / callback scope；
+- thread / reentrant / blocking；
+- error-code 与部分初始化规则。
+
+生成器据此生成判空、长度检查、释放和错误转换代码。
+
+### P1：提供作用域借用封装
+
+为数组提供类似以下形态的安全封装：
+
+```cangjie
+withArrayRawData(values) { pointer, length =>
+    unsafe { consume(pointer, length) }
+}
+```
+
+封装内部 acquire，在 `finally` 中 release；类型和文档明确指针不得逃逸闭包。相同模式可用于 `inout`、CString 临时分配和回调注册。
+
+### P1：将 raw 层与业务层隔离
+
+- `foreign` 声明和裸指针仅存在于内部模块；
+- 对外返回 Option、`Resource`、复制后的 `String`/`Array` 或带长度视图；
+- 创建和销毁函数成对生成；
+- 关闭后的资源拒绝访问；
+- 同一套包装集中处理线程与错误契约。
+
+### P2：组合动态检测
+
+- Linux/OpenHarmony 启用仓颉 GWP-Asan；
+- C/C++ 侧启用 ASan/UBSan；
+- 对长度、null、异常返回、重复关闭和并发销毁做模糊测试；
+- 所有绑定在真实 C 库上执行编译、链接、运行 E2E，而非只验证仓颉语法。
+
+## 八、最终判断
+
+仓颉调用 C 已具备 C 兼容类型、unsafe 标记、判空、调用约定、数组借用和 `inout` 调用期限制等基础设施。风险的核心不在于缺少一个“安全”关键字，而在于 **C ABI 与语义契约分散在头文件、文档和人工约定中，尚未完整进入类型、生成器和验证链路**。
+
+安全增强的优先路线应是：先减少手写 ABI，再把可空性、长度、所有权、释放器和有效期变成可生成元数据；随后以作用域 API 和 `Resource` 包装收窄 raw pointer 暴露面；最后用跨语言 E2E 和动态检测持续验证。这样才能同时降低 ABI 漂移、越界、泄漏、悬垂和并发误用，而不是只修补单一案例。
