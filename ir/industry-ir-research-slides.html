@@ -168,60 +168,81 @@
 <body>
 <main class="deck" id="deck">
   <section class="slide title-slide active" data-kicker="Industry IR Research">
-    <p class="eyebrow">2026 · 编译器 / 程序分析 / AI 与异构计算</p>
-    <h1>业界中间表示<br>不是一种格式，而是一套取舍</h1>
+    <p class="eyebrow">2026 · 业界中间表示目录</p>
+    <h1>业界中间表示<br>分类与公开用途</h1>
     <div class="rule"></div>
-    <p class="lead">从源码语义到机器约束：代表性 IR 图谱、用途边界、开源生态与选型判断</p>
+    <p class="lead">所属项目 · 表示层级 · 语言覆盖 · 公开用途 · 托管仓库</p>
     <div class="stamp">IR<br>调研</div>
     <p class="source">依据官方规范、项目文档与 GitHub / GitLab / Gitee / GitCode 专项检索 · 2026-07</p>
   </section>
 
-  <section class="slide" data-kicker="Executive Summary">
-    <h2>六个结论，先建立共同坐标</h2>
-    <div class="grid-2">
-      <div>
-        <div class="thesis"><strong>01</strong><p><b>层级是相对位置。</b>LLVM IR 被称为低层，但仍远高于真实机器指令。</p></div>
-        <div class="thesis"><strong>02</strong><p><b>多层 IR 是主流。</b>高层保语义，中层做分析，低层映射硬件。</p></div>
-        <div class="thesis"><strong>03</strong><p><b>“多语言”有三种模式。</b>多前端、稳定运行时格式、多方言基础设施不能混为一谈。</p></div>
-      </div>
-      <div>
-        <div class="thesis"><strong>04</strong><p><b>语义决定能力上限。</b>所有权、对象模型、张量等信息丢失后很难可靠恢复。</p></div>
-        <div class="thesis"><strong>05</strong><p><b>交换格式重兼容，内部 IR 重演进。</b>StableHLO 与 XLA HLO 的目标并不相同。</p></div>
-        <div class="thesis"><strong>06</strong><p><b>主仓身份比搜索命中更重要。</b>GitHub 最集中，镜像平台主要解决分发与访问。</p></div>
-      </div>
+  <section class="slide" data-kicker="Classification">
+    <h2>八类记录对象</h2>
+    <div class="grid-4" style="flex:1">
+      <div class="panel"><h3>多语言编译基础设施</h3><p>LLVM IR、MLIR、GCC、Graal、Maple IR</p></div>
+      <div class="panel green"><h3>多语言运行时格式</h3><p>JVM bytecode、.NET CIL、WebAssembly</p></div>
+      <div class="panel amber"><h3>单语言多后端 IR</h3><p>Kotlin Backend IR</p></div>
+      <div class="panel red"><h3>语言专属 IR</h3><p>Swift SIL、Rust HIR/MIR、Kotlin FIR</p></div>
+      <div class="panel"><h3>分析与验证表示</h3><p>Jimple、P-code、CIL、CPG、Boogie、WhyML</p></div>
+      <div class="panel green"><h3>字节码与虚拟指令</h3><p>DEX、ARK bytecode、ELVM EIR</p></div>
+      <div class="panel amber"><h3>领域 IR</h3><p>StableHLO、Relax、TensorIR、SPIR-V、vISA</p></div>
+      <div class="panel red"><h3>历史与研究 IR</h3><p>WHIRL、SUIF、COINS、HSAIL、SPIR</p></div>
     </div>
-    <p class="source">完整论证见 report.spec.md §1</p>
+    <p class="source">SSA、CFG、Tree、DAG、栈式和寄存器式作为结构属性记录，不作为项目名称</p>
   </section>
 
-  <section class="slide" data-kicker="The Pipeline">
-    <h2>一条链路，五种不同的“中间”</h2>
-    <div class="pipeline">
-      <div class="stage"><h3>AST / HIR</h3><small>声明、作用域、对象、泛型、源位置</small></div>
-      <div class="stage"><h3>语言 / 领域 IR</h3><small>所有权、异常、协议、张量、显式调用</small></div>
-      <div class="stage"><h3>通用优化 IR</h3><small>SSA、CFG、def-use、数据流、内存操作</small></div>
-      <div class="stage"><h3>机器 / 虚拟 IR</h3><small>寄存器、寻址、指令约束、运行时契约</small></div>
-      <div class="stage"><h3>代码 / 字节码</h3><small>目标机器码，或供 VM / 驱动消费的稳定格式</small></div>
+  <section class="slide" data-kicker="Multi-language Forms">
+    <h2>多语言功能的四种公开形态</h2>
+    <div class="grid-2" style="flex:1">
+      <div class="panel"><h3>多个语言前端 → 同一 IR</h3><p>LLVM IR：Clang、Rust、Swift 等编译器可生成。</p><p>GCC：多个前端进入 GENERIC / GIMPLE / RTL。</p></div>
+      <div class="panel green"><h3>多个语言 → 同一运行时格式</h3><p>JVM bytecode：Java、Kotlin、Scala、Groovy 等。</p><p>.NET CIL：C#、F#、Visual Basic 等。</p></div>
+      <div class="panel amber"><h3>一种语言 → 多个后端</h3><p>Kotlin Backend IR 连接 JVM、JavaScript、Native 和 WebAssembly 后端。</p></div>
+      <div class="panel red"><h3>方言 → 多种语言或领域表示</h3><p>MLIR 通过 Dialect、Operation、Type 和 Conversion 定义不同抽象层表示。</p></div>
     </div>
-    <div class="spectrum"></div>
-    <div class="grid-3">
-      <div class="panel"><h3>高层优势</h3><p>能直接做对象、类型、模式和领域级变换。</p></div>
-      <div class="panel green"><h3>中层优势</h3><p>平衡语义与显式控制流，适合通用分析和优化。</p></div>
-      <div class="panel red"><h3>低层优势</h3><p>跨语言复用后端，精确控制内存、指令和硬件。</p></div>
-    </div>
+    <p class="source">LLVM LangRef · GCC Internals · JVMS · ECMA-335 · Kotlin IR Overview · MLIR LangRef</p>
   </section>
 
-  <section class="slide" data-kicker="General Infrastructure">
-    <h2>通用基础设施：三种代表路径</h2>
+  <section class="slide" data-kicker="Shared Compiler IR">
+    <h2>多前端共享的编译 IR</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>IR</th><th>结构</th><th>语言或输入</th><th>公开用途</th></tr></thead>
+        <tbody>
+          <tr><td><b>LLVM IR</b></td><td>类型化 SSA + CFG</td><td>Clang、Rust、Swift 等</td><td>优化、AOT/JIT、代码生成</td></tr>
+          <tr><td><b>GCC GENERIC</b></td><td>语言无关树</td><td>GCC 多语言前端</td><td>连接前端与 GIMPLE</td></tr>
+          <tr><td><b>GCC GIMPLE</b></td><td>三地址，可使用 SSA</td><td>GCC 多语言前端</td><td>目标无关优化、数据流分析</td></tr>
+          <tr><td><b>GCC RTL</b></td><td>机器相关节点</td><td>GCC 中端输出</td><td>指令选择、调度、寄存器分配</td></tr>
+          <tr><td><b>Graal Graph / LIR</b></td><td>节点图 → LIR</td><td>JVM bytecode；JavaScript、Python、Ruby 等</td><td>JIT 优化、机器码生成</td></tr>
+          <tr><td><b>Maple IR</b></td><td>多层文本 IR</td><td>C、C++、Java、JavaScript</td><td>优化、链接、代码生成</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="source">LLVM · GCC · GraalVM · MapleCompiler 官方文档</p>
+  </section>
+
+  <section class="slide" data-kicker="MLIR Ecosystem">
+    <h2>MLIR 与公开方言项目</h2>
+    <div class="grid-2" style="flex:1">
+      <div class="panel"><h3>MLIR</h3><p>核心对象：Dialect、Operation、Region、Block、Value、Type、Attribute。</p><p style="margin-top:10px">用途：定义多层表示、Pass、验证和方言转换。</p></div>
+      <div class="panel green"><h3>CIR</h3><p>Clang 的 MLIR 方言，位于 Clang AST 与 LLVM IR 之间，输入为 C/C++。</p></div>
+      <div class="panel amber"><h3>ONNX-MLIR</h3><p>使用 ONNX、Krnl 等方言导入 ONNX 模型并生成目标代码。</p></div>
+      <div class="panel red"><h3>Torch-MLIR</h3><p>使用 Torch、Linalg 等方言导入 PyTorch 图并向下层方言转换。</p></div>
+    </div>
+    <p class="source">mlir.llvm.org · llvm.github.io/clangir · onnx/onnx-mlir · llvm/torch-mlir</p>
+  </section>
+
+  <section class="slide" data-kicker="Multi-language Runtime">
+    <h2>多语言运行时格式</h2>
     <div class="grid-3" style="flex:1">
-      <div class="panel"><h3>LLVM IR</h3><p class="metric" style="margin:18px 0 12px">SSA</p><p>类型化、目标无关、接近机器操作。适合作为多语言通用优化与后端接口。</p><ul><li>生态成熟</li><li>对象与泛型语义通常已消解</li></ul></div>
-      <div class="panel green"><h3>MLIR</h3><p class="metric" style="margin:18px 0 12px;color:var(--green)">N 层</p><p>Operation / Region / 方言 / Conversion 构成可扩展多层 IR 基础设施。</p><ul><li>适合多领域渐进 lowering</li><li>不是固定层级单体 IR</li></ul></div>
-      <div class="panel red"><h3>GCC</h3><p class="metric" style="margin:18px 0 12px;color:var(--red)">3 级</p><p>GENERIC → GIMPLE → RTL 展示传统高、中、低层编译链。</p><ul><li>目标无关优化与机器相关后端分离</li><li>GIMPLE 也有 High / Low 形态</li></ul></div>
+      <div class="panel"><h3>JVM bytecode</h3><p class="metric" style="margin:16px 0 10px">JVM</p><p>有类型栈机、局部变量槽和类文件元数据。</p><p style="margin-top:10px">Java、Kotlin、Scala、Groovy 等 JVM 语言。</p></div>
+      <div class="panel green"><h3>.NET CIL / IL</h3><p class="metric" style="margin:16px 0 10px;color:var(--green)">CLI</p><p>栈式指令、CTS 类型系统和程序集元数据。</p><p style="margin-top:10px">C#、F#、Visual Basic 等 .NET 语言。</p></div>
+      <div class="panel red"><h3>WebAssembly</h3><p class="metric" style="margin:16px 0 10px;color:var(--red)">Wasm</p><p>低层抽象栈机、结构化控制流和线性内存。</p><p style="margin-top:10px">C/C++、Rust、Go 等工具链可生成。</p></div>
     </div>
-    <div class="callout" style="margin-top:18px">选择不是“谁最好”，而是你要复用成熟后端，还是建设可扩展的多层编译基础设施。</div>
+    <p class="source">Java Virtual Machine Specification · ECMA-335 · WebAssembly Core Specification</p>
   </section>
 
   <section class="slide" data-kicker="Language Semantics">
-    <h2>语言专属 IR：延迟丢失，才能做专属检查</h2>
+    <h2>语言专属 IR</h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th style="width:18%">IR</th><th style="width:25%">结构</th><th style="width:34%">保留语义</th><th>核心任务</th></tr></thead>
@@ -231,7 +252,6 @@
           <tr><td><b>Rust MIR</b></td><td>完全类型化 CFG</td><td>Place、move、borrow、drop</td><td>借用检查、数据流、优化</td></tr>
           <tr><td><b>Kotlin FIR</b></td><td>前端 IR</td><td>声明、解析与类型推断信息</td><td>K2 前端语义分析</td></tr>
           <tr><td><b>Kotlin Backend IR</b></td><td>符号化中层树</td><td>类、函数、表达式、Kotlin 类型</td><td>JVM / JS / Native / Wasm 多后端</td></tr>
-          <tr><td><b>Graal Graph / LIR</b></td><td>节点图 → 低层 LIR</td><td>Guard、profile、FrameState</td><td>JIT 优化与反优化</td></tr>
         </tbody>
       </table>
     </div>
@@ -239,31 +259,68 @@
   </section>
 
   <section class="slide" data-kicker="Analysis & Transformation">
-    <h2>分析与转换：所需语义决定 IR 高度</h2>
-    <div class="grid-3">
-      <div class="panel"><h3>设计模式 / 源码重构</h3><p class="metric" style="margin:14px 0 10px">HIR</p><p>需要类层次、声明关系、泛型、源位置和可再生成信息。</p><p style="margin-top:10px"><span class="tag">AST/HIR</span> <span class="tag">Clava</span></p></div>
-      <div class="panel green"><h3>调用 / 指针 / 污点</h3><p class="metric" style="margin:14px 0 10px;color:var(--green)">SSA</p><p>需要显式 CFG、局部值、def-use、对象和异常行为。</p><p style="margin-top:10px"><span class="tag">Jimple</span> <span class="tag">WALA</span></p></div>
-      <div class="panel red"><h3>内存 / 跨语言行为</h3><p class="metric" style="margin:14px 0 10px;color:var(--red)">LIR</p><p>需要低层内存、调用和控制流；源级设计意图通常不足。</p><p style="margin-top:10px"><span class="tag">LLVM IR</span></p></div>
+    <h2>源码与字节码分析、转换</h2>
+    <div class="grid-3" style="flex:1">
+      <div class="panel"><h3>Soot Jimple</h3><p>输入：JVM bytecode、Android DEX。</p><p>结构：有类型、无栈三地址码。</p><p>用途：调用图、数据流、指针分析、插桩和转换。</p></div>
+      <div class="panel green"><h3>WALA IR</h3><p>结构：方法级 SSA 寄存器传送表示。</p><p>用途：调用图、指针分析、切片和数据流分析。</p></div>
+      <div class="panel red"><h3>Clava 程序模型</h3><p>输入：C/C++ 源码。</p><p>结构：Clang AST 上的 joinpoint API。</p><p>用途：源码查询、变换和再生成。</p></div>
+      <div class="panel amber"><h3>Soot IR 家族</h3><p>Shimple：Jimple SSA 形式。</p><p>Baf：栈式表示。</p><p>Grimp：聚合表达式表示。</p></div>
+      <div class="panel"><h3>CompCert IR 家族</h3><p>Clight、Cminor、RTL、LTL、Mach 等多级表示。</p><p>用途：定义操作语义并验证编译转换。</p></div>
+      <div class="panel green"><h3>CIL</h3><p>输入：ANSI C 及多数 GNU C、Microsoft C 扩展。</p><p>将 C 归约为较少的核心构造，同时保留类型与源码关系。</p></div>
     </div>
-    <div class="callout" style="margin-top:20px">不要先选 IR 再找问题。先确定分析结论依赖哪些语义，再选择最晚丢失这些语义的层级。</div>
+    <p class="source">Soot/SootUp · WALA IR API · Clava · CompCert Documentation · CIL Documentation</p>
   </section>
 
-  <section class="slide" data-kicker="Portable Runtime Formats">
-    <h2>稳定字节码：IR 的消费者是运行时</h2>
+  <section class="slide" data-kicker="Binary Lifting">
+    <h2>二进制提升与机器码分析</h2>
+    <div class="grid-2" style="flex:1">
+      <div class="panel"><h3>Ghidra P-code</h3><p>由操作码与 varnode 构成的寄存器传送语言。</p><p>raw p-code 用于仿真；high p-code 带 SSA 信息。</p></div>
+      <div class="panel green"><h3>VEX IR</h3><p>类型化临时值、表达式、语句与 IRSB 基本块。</p><p>Valgrind 用于动态插桩，angr 用于跨体系结构机器码分析。</p></div>
+      <div class="panel amber"><h3>BAP IR / BIL</h3><p>架构无关程序表示及传统指令语言。</p><p>用于控制流恢复、符号执行和程序分析。</p></div>
+      <div class="panel red"><h3>REIL</h3><p>精简指令集形式的中间语言，用于 BinNavi 二进制分析。</p><p>BinNavi 仓库已归档并停止主动开发。</p></div>
+    </div>
+    <p class="source">Ghidra P-code Reference · Valgrind VEX · angr IR · BAP Handbook · BinNavi REIL Reference</p>
+  </section>
+
+  <section class="slide" data-kicker="Graph & Verification">
+    <h2>图式程序模型与验证表示</h2>
+    <div class="grid-3" style="flex:1">
+      <div class="panel"><h3>Code Property Graph</h3><p>带类型节点、带标签有向边和键值属性的有向多重图。</p><p>在同一结构中保存语法、控制流和过程内数据流。</p><p>用于图查询、程序模式检索和漏洞发现。</p></div>
+      <div class="panel green"><h3>Boogie IVL</h3><p>Dafny、VCC、SMACK、GPUVerify 等前端可生成。</p><p>Boogie 工具生成验证条件并交给 SMT 求解器。</p></div>
+      <div class="panel red"><h3>WhyML</h3><p>包含逻辑声明、程序类型、循环、异常、契约和不变式。</p><p>生成验证条件并调用 SMT 求解器或交互式证明器。</p></div>
+    </div>
+    <div class="callout" style="margin-top:16px">CPG 是图式程序模型；Boogie IVL 与 WhyML 是面向验证的语言和程序模型。</div>
+    <p class="source">Joern CPG Documentation · Boogie Documentation · Microsoft Research · Why3 Documentation</p>
+  </section>
+
+  <section class="slide" data-kicker="Academic Records">
+    <h2>代表性学术记录</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:16%">对象</th><th style="width:43%">论文</th><th style="width:25%">载体与年份</th><th>DOI</th></tr></thead>
+        <tbody>
+          <tr><td><b>CIL</b></td><td><i>CIL: Intermediate Language and Tools for Analysis and Transformation of C Programs</i></td><td>Compiler Construction，2002</td><td>10.1007/3-540-45937-5_16</td></tr>
+          <tr><td><b>CPG</b></td><td><i>Modeling and Discovering Vulnerabilities with Code Property Graphs</i></td><td>IEEE S&amp;P，2014</td><td>10.1109/SP.2014.44</td></tr>
+          <tr><td><b>Boogie</b></td><td><i>Boogie: A Modular Reusable Verifier for Object-Oriented Programs</i></td><td>FMCO，2006</td><td>10.1007/11804192_17</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="source">论文元数据：Crossref DOI records</p>
+  </section>
+
+  <section class="slide" data-kicker="Bytecode & Virtual ISA">
+    <h2>字节码与虚拟指令格式</h2>
     <div class="grid-4">
-      <div class="panel"><h3>JVM bytecode</h3><p>有类型栈机 + 类元数据</p><p style="margin-top:9px"><span class="tag">多 JVM 语言</span></p></div>
-      <div class="panel green"><h3>.NET CIL / IL</h3><p>栈式 CLI + CTS 类型系统</p><p style="margin-top:9px"><span class="tag">JIT / AOT</span></p></div>
-      <div class="panel amber"><h3>WebAssembly</h3><p>宿主无关低层栈机 + 结构化控制</p><p style="margin-top:9px"><span class="tag">Web / WASI</span></p></div>
-      <div class="panel red"><h3>DEX / ARK</h3><p>移动运行时的寄存器或专用字节码</p><p style="margin-top:9px"><span class="tag">ART / OpenHarmony</span></p></div>
+      <div class="panel"><h3>Android DEX</h3><p>寄存器式指令与 .dex 容器。</p><p>保存类、方法、字段、类型、异常和注解。</p></div>
+      <div class="panel green"><h3>ARK bytecode</h3><p>.pa 文本汇编与 .abc 二进制。</p><p>由 OpenHarmony Runtime Core 消费。</p></div>
+      <div class="panel amber"><h3>ELVM EIR</h3><p>六寄存器低层指令集。</p><p>连接 ELVM C 前端与实验性后端。</p></div>
+      <div class="panel red"><h3>名称边界</h3><p>DEX 是格式和指令载体；Dalvik 是早期运行时，ART 是当前 Android Runtime。</p></div>
     </div>
-    <div class="grid-2" style="margin-top:18px">
-      <div class="panel amber"><h3>纠偏：DEX ≠ Dalvik</h3><p>DEX 仍是 Android 现行格式；Dalvik runtime 已由 ART 取代。</p></div>
-      <div class="panel amber"><h3>纠偏：Wasm ≠ 浏览器专用</h3><p>核心规范与宿主无关，Web API 与 WASI 是不同嵌入。</p></div>
-    </div>
+    <p class="source">Android DEX Format · OpenHarmony Runtime Core · ELVM</p>
   </section>
 
   <section class="slide" data-kicker="AI & GPU Stack">
-    <h2>AI / GPU：单层 IR 无法承载全部优化</h2>
+    <h2>AI、GPU 与异构计算 IR</h2>
     <div class="pipeline">
       <div class="stage"><h3>交换</h3><small><b>StableHLO</b><br>稳定算子与版本兼容</small></div>
       <div class="stage"><h3>图级</h3><small><b>Relax / XLA HLO</b><br>融合、形状、模型优化</small></div>
@@ -272,87 +329,48 @@
       <div class="stage"><h3>设备接口</h3><small><b>SPIR-V / vISA</b><br>驱动或 finalizer 契约</small></div>
     </div>
     <div class="grid-3" style="margin-top:20px">
-      <div class="panel"><h3>StableHLO ≠ 全部 HLO</h3><p>前者强调稳定交换，后者是 XLA 内部优化表示。</p></div>
-      <div class="panel green"><h3>Relax 是 TVM 当前主线</h3><p>Relay 具有历史价值，当前图级架构重点转向 Relax。</p></div>
-      <div class="panel red"><h3>SPIR ≠ SPIR-V</h3><p>OpenCL SPIR 依赖旧 LLVM bitcode；SPIR-V 是活跃标准。</p></div>
+      <div class="panel"><h3>StableHLO / XLA HLO</h3><p>StableHLO 是版本化交换表示；XLA HLO 是 XLA 内部表示。</p></div>
+      <div class="panel green"><h3>TVM</h3><p>当前架构以 Relax 表示图级程序，以 TensorIR 表示循环、buffer 和调度；Relay 是 TVM 早期图级 IR。</p></div>
+      <div class="panel red"><h3>SPIR / SPIR-V</h3><p>SPIR 基于特定 LLVM bitcode 版本；SPIR-V 是 Khronos 二进制中间语言标准。</p></div>
     </div>
+    <p class="source">OpenXLA · Apache TVM · Khronos SPIR-V · NVIDIA CUDA Tile · Intel vISA</p>
   </section>
 
-  <section class="slide" data-kicker="Seven Jobs">
-    <h2>IR 的七种主要工作</h2>
-    <div class="use-list">
-      <div class="use" style="--h:64%"><b>通用优化</b><small>SSA / CFG / 数据流</small></div>
-      <div class="use" style="--h:84%"><b>语义检查</b><small>所有权 / 类型 / 异常</small></div>
-      <div class="use" style="--h:72%"><b>静态分析</b><small>调用 / 指针 / 污点</small></div>
-      <div class="use" style="--h:91%"><b>代码转换</b><small>lowering / 重写 / 多后端</small></div>
-      <div class="use" style="--h:76%"><b>运行时执行</b><small>验证 / JIT / AOT</small></div>
-      <div class="use" style="--h:68%"><b>形式化验证</b><small>操作语义 / 正确性证明</small></div>
-      <div class="use" style="--h:96%"><b>硬件映射</b><small>图 / 循环 / tile / ISA</small></div>
-    </div>
-    <p class="source">柱高仅用于视觉分组，不表示市场规模或重要性排名</p>
-  </section>
-
-  <section class="slide" data-kicker="Open Source Platforms">
-    <h2>专项检索：主开发平台与镜像平台分工明显</h2>
-    <div style="margin-top:4px">
-      <div class="platform"><div class="platform-name">GitHub</div><div class="bar"><span style="--w:94%"></span></div><div class="platform-type">官方主仓最集中</div></div>
-      <div class="platform"><div class="platform-name">GitLab</div><div class="bar"><span style="--w:45%"></span></div><div class="platform-type">主仓与 CI 镜像并存</div></div>
-      <div class="platform"><div class="platform-name">Gitee</div><div class="bar"><span style="--w:30%"></span></div><div class="platform-type">镜像 + 国内官方项目</div></div>
-      <div class="platform"><div class="platform-name">GitCode</div><div class="bar"><span style="--w:26%"></span></div><div class="platform-type">实时加速镜像为主</div></div>
-    </div>
-    <div class="grid-3" style="margin-top:22px">
-      <div class="panel"><h3>身份核验</h3><p>官网反向链接 + 组织 owner + 上游声明 + issue / release 入口。</p></div>
-      <div class="panel amber"><h3>镜像边界</h3><p>适合下载和访问，不用于判断治理、社区响应和版本可信度。</p></div>
-      <div class="panel red"><h3>搜索限制</h3><p>动态页面、索引延迟与镜像占比会造成误报或漏报。</p></div>
-    </div>
-    <p class="source">专项样本：LLVM/MLIR、MOPSA、Free Pascal、OpenArkCompiler、ONNX-MLIR、Torch-MLIR 等</p>
-  </section>
-
-  <section class="slide" data-kicker="Corrections">
-    <h2>初步清单中，最值得修正的八项</h2>
+  <section class="slide" data-kicker="Historical IR">
+    <h2>历史与研究型 IR</h2>
     <div class="grid-2">
-      <div class="panel"><h3>MLIR</h3><p>多层 IR 基础设施，不是固定抽象层的单体 IR。</p></div>
-      <div class="panel"><h3>Kotlin</h3><p>FIR 与 Backend IR 分属前端语义分析和多后端生成。</p></div>
-      <div class="panel green"><h3>Soot</h3><p>Shimple 是 Jimple SSA 形式；Grimp 是聚合表示。</p></div>
-      <div class="panel green"><h3>TVM</h3><p>当前图级主线是 Relax；Relay 具有历史定位。</p></div>
-      <div class="panel amber"><h3>OpenCL</h3><p>历史 SPIR、活跃 SPIR-V 与转换器是三个概念。</p></div>
-      <div class="panel amber"><h3>COINS / LARA</h3><p>COINS MIR、LARA Virtual AST 缺少足够官方命名依据。</p></div>
-      <div class="panel red"><h3>Android</h3><p>现行条目应写 DEX；Dalvik 是已被 ART 取代的运行时。</p></div>
-      <div class="panel red"><h3>OpenHarmony</h3><p>Maple IR、ARK bytecode、Runtime Core 内部 SSA IR 不可互换。</p></div>
+      <div class="panel"><h3>WHIRL</h3><p>Open64 的多层树形 IR；公开前端包括 C、C++、Fortran。</p></div>
+      <div class="panel green"><h3>SUIF1 / SUIF2</h3><p>Stanford SUIF 的研究表示，用于循环、并行化和依赖分析。</p></div>
+      <div class="panel amber"><h3>COINS HIR / LIR</h3><p>COINS 的高层与低层表示，公开输入包括 C、Fortran。</p></div>
+      <div class="panel red"><h3>HSAIL / BRIG</h3><p>HSAIL 文本格式及其二进制表示 BRIG；HSA Foundation 官方归档仓仍可访问。</p></div>
+      <div class="panel"><h3>OpenCL SPIR</h3><p>OpenCL C 到特定 LLVM bitcode 版本的标准映射。</p></div>
     </div>
+    <p class="source">Open64 · Stanford SUIF · COINS · HSA Foundation · Khronos SPIR</p>
   </section>
 
-  <section class="slide" data-kicker="Decision Guide">
-    <h2>选型：从消费者与语义出发</h2>
-    <div class="decision">
-      <div class="q">谁消费这个 IR？<br>必须保留什么语义？</div>
-      <div class="choice"><b>通用后端</b><p>LLVM IR：成熟优化、代码生成和工具生态。</p></div>
-      <div class="choice"><b>多层基础设施</b><p>MLIR：方言、Pass 与 Conversion 组织渐进下降。</p></div>
-      <div class="choice"><b>语言安全与专属优化</b><p>SIL / MIR / Kotlin IR 模式：延迟丢失语言语义。</p></div>
-      <div class="choice"><b>分析与重构</b><p>AST/HIR、Jimple、WALA：按结论所需语义选择层级。</p></div>
+  <section class="slide" data-kicker="Repository Records">
+    <h2>开源托管平台仓库记录</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>平台</th><th>项目</th><th>页面身份</th></tr></thead>
+        <tbody>
+          <tr><td><b>GitHub</b></td><td>LLVM、Swift、Rust、Kotlin、Graal、Soot、WALA、TVM、StableHLO、CUDA Tile</td><td>项目官网或官方组织指向的主仓</td></tr>
+          <tr><td><b>GitLab</b></td><td>MOPSA Analyzer、Free Pascal Compiler</td><td>项目官网或开发页指向的源码仓</td></tr>
+          <tr><td><b>GitLab</b></td><td>Clash Compiler</td><td>页面声明为 GitHub 主仓的 CI 镜像</td></tr>
+          <tr><td><b>Gitee</b></td><td>OpenArkCompiler</td><td>OpenArkCompiler 组织仓</td></tr>
+          <tr><td><b>Gitee</b></td><td>LLVM Project</td><td>mirrors 名空间镜像</td></tr>
+          <tr><td><b>GitCode</b></td><td>LLVM、ONNX-MLIR、Torch-MLIR</td><td>页面标注 GitHub 上游或镜像加速</td></tr>
+        </tbody>
+      </table>
     </div>
-    <div class="callout" style="margin-top:18px">自建 IR 前再确认：内部实现还是稳定交换？合法性如何验证？扩展单位是指令、方言、Pass 还是独立层级？</div>
-  </section>
-
-  <section class="slide title-slide" data-kicker="Final Takeaway">
-    <p class="eyebrow">最终判断</p>
-    <h1>IR 的价值，取决于它在正确的时刻<br>保留正确的信息</h1>
-    <div class="rule"></div>
-    <p class="lead">高层支撑语义与领域创新，低层释放通用优化与硬件效率；稳定交换格式连接组织和生态。真正可持续的设计，是让每一层只承担它最擅长的职责。</p>
-    <div class="metric-row" style="margin-top:34px;max-width:880px">
-      <div><div class="metric">5</div><div class="metric-label">类 IR 图谱</div></div>
-      <div><div class="metric">7</div><div class="metric-label">类主要用途</div></div>
-      <div><div class="metric">4</div><div class="metric-label">托管平台专项检索</div></div>
-      <div><div class="metric">54</div><div class="metric-label">报告可追溯链接</div></div>
-    </div>
-    <p class="source">完整报告：ir/report.spec.md</p>
+    <p class="source">来源：项目官网、官方组织仓库与对应托管平台页面</p>
   </section>
 </main>
 
 <nav class="controls" aria-label="幻灯片导航">
   <button id="prev" type="button" title="上一页" aria-label="上一页">←</button>
   <div class="dots" id="dots" aria-hidden="true"></div>
-  <span id="counter">1 / 13</span>
+  <span id="counter">1 / 15</span>
   <button id="next" type="button" title="下一页" aria-label="下一页">→</button>
 </nav>
 
