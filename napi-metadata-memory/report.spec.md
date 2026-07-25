@@ -55,15 +55,30 @@ TaggedArray 带 1 个 native pointer entry: **~24 B**
 
 48-bit bitfield + value 指针: **~14 B**
 
-### SemiSpace ─ ecma_param_configuration.h:90 / mem.h:71
+### SemiSpace ─ 增长模式 (linear_space.cpp, heap.cpp)
 
-| 参数 | 值 | 来源行号 |
-|------|-----|---------|
-| minSemiSpaceSize | **2 MB** | Line 90/119/148 |
-| maxSemiSpaceSize | 4/8/16 MB | Line 91/120/149 |
-| REGION_SIZE_LOG2 | 18 | mem.h:64 |
-| DEFAULT_REGION_SIZE | **256 KB** | mem.h:71 |
+**逐级增长，非一次性分配 2 MB。**
 
+| 阶段 | 行为 | 来源 |
+|------|------|------|
+| 初始化 | `AllocateAlignedRegion(256 KB)` → 1 region | `linear_space.cpp:467` |
+| 分配满 | `Expand()` → +1 region (256 KB) | `linear_space.cpp:147` |
+| 继续分配 | 每次填满加 1 region，重复 | 同上 |
+| 达到上限 | `committedSize_ >= initialCapacity_` (= 2 MB) 停止 | `linear_space.cpp:149` |
+| GC 后 | `SetInitialCapacity(2 MB)` 重置上限 | `heap.cpp:2296` |
+
+| 参数 | 值 | 来源 |
+|------|-----|------|
+| 初始 region | **256 KB** | `mem.h:71` → `1<<18` |
+| 增长率 | **256 KB / step** | `DEFAULT_REGION_SIZE` |
+| 扩容上限 | **2 MB** (minSemiSpaceSize) | `ecma_param_configuration.h:90` |
+| GC 后预留 | **2 MB** (从全局堆扣减) | `heap.cpp:1193` |
+| 绝对上限 | 4/8/16 MB (maxSemiSpaceSize) | 同文件 |
+
+对于单次 `NapiDefineClass` 调用：
+- 结构体 ~30 KB 分配在 bump pointer 中
+- 若 1 个 region (256 KB) 足够 → 实际 SemiSpace 开销 **256 KB**
+- 若需要第 2 个 region → **512 KB**
 ## 3. 80 method class 实际开销 (源码推导)
 
 | 组成 | 单例 | × 数量 | 合计 |
@@ -73,10 +88,10 @@ TaggedArray 带 1 个 native pointer entry: **~24 B**
 | JSFunction (每个 method) | 80 B | 80 | 6.4 KB |
 | JSNativePointer (每个 method) | 24 B | 80 | 1.9 KB |
 | PropertyAttribute | 14 B | 160 | 2.2 KB |
-| SemiSpace 最小分配 | **2 MB** | 1 | **2 MB** |
-| **合计** | | | **~2.03 MB** |
+| SemiSpace (1 region) | **256 KB** | 1 | **256 KB** |
+| **合计** | | | **~286 KB** |
 
-SemiSpace 最小分配 (2 MB) 占总开销的 **98%**。实际结构体分配仅 ~30 KB。
+SemiSpace 初始 256 KB (1 region) 占总开销的 ~90%。若需第 2 个 region 则为 512 KB。结构体分配仅 ~30 KB。
 
 ## 4. 竞品同场景对比 (80 method class)
 
@@ -85,8 +100,8 @@ SemiSpace 最小分配 (2 MB) 占总开销的 **98%**。实际结构体分配仅
 |------|------|------|
 | Map (Hidden Class) | ~40 B | `src/objects/map.h` |
 | JSFunction (API) | ~64 B | `src/objects/js-function.h` |
-| SemiSpace 初始 | **1 MB** | `src/heap/new-spaces.h` |
-| **合计** | | **~1.01 MB** |
+| NewSpace 初始 | 1 MB (惰性提交) | `src/heap/new-spaces.h` |
+| **合计** | | **~1.01 MB** (取决于惰性提交) |
 
 ### JSC
 | 组成 | 单例 | 来源 |
@@ -101,19 +116,22 @@ SemiSpace 最小分配 (2 MB) 占总开销的 **98%**。实际结构体分配仅
 |------|------|------|
 | HiddenClass | 32-64 B | `include/hermes/VM/HiddenClass.h` |
 | NativeFunction | ~40 B | `lib/VM/Callable.h` |
-| YoungGen | **512 KB** | `lib/VM/GCBase.cpp` |
+| YoungGen 初始 | 512 KB (32 KB segments) | `lib/VM/GCBase.cpp` |
 | **合计** | | **~530 KB** |
 
 ### ArkVM vs 竞品
 
-| 引擎 | 单 class | vs ArkVM |
-|------|---------|----------|
-| Hermes | ~530 KB | 2 MB 额外 |
-| V8 | ~1.01 MB | 1 MB 额外 |
-| JSC | ~1 MB | 1 MB 额外 |
-| ArkVM | **~2.03 MB** | 基准 |
+| 引擎 | 单 class | 说明 |
+|------|---------|------|
+| Hermes | ~542 KB | 512 KB YoungGen + 30 KB 结构体 |
+| ArkVM | **~286-542 KB** | 256-512 KB SemiSpace + 30 KB 结构体 |
+| V8 | ~130 KB | 1 MB NewSpace (惰性提交，单 class 可能不触发) + 30 KB |
+| JSC | ~130 KB | 类似 V8 |
 
-**主要差距来源**：SemiSpace minSemiSpaceSize = 2 MB (ArkVM) vs 1 MB (V8) vs 512 KB (Hermes)。
+**差距主要取决于**：
+- ArkVM SemiSpace 以 256 KB region 步进，单 class 需 1-2 regions
+- V8/JSC NewSpace 惰性提交，单 class 可能不触发额外 OS 页面分配
+- 结构体大小差异仅 ~10 KB 级别
 
 ## 5. 关键常量 (均为源码定位)
 

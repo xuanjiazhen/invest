@@ -101,7 +101,7 @@
 <div class="slide title-slide active" data-kicker="内存调研">
   <h1>NapiDefineClass<br>metadata 内存分析</h1>
   <p class="lead">定位 N-API class 注册时的 metadata 膨胀根因，对照 V8 / JSC / Hermes 同级机制。</p>
-  <div class="stamp">2×<br>V8</div>
+  <div class="stamp">2-4×<br>V8</div>
   <p class="source">来源：OpenHarmony 源码 &nbsp;·&nbsp; 数据基于静态分析</p>
 </div>
 
@@ -135,7 +135,7 @@
       <tr><td>maxInlPropCount</td><td>~1009</td><td>jsnapi_class_creation_helper.cpp:28</td><td>1023 − (80/8) − 4</td></tr>
     </table>
   </div>
-  <div class="callout" style="margin-top:12px"><b>结论</b>: 80 method class 的结构体总分配仅 ~30 KB。SemiSpace 最小 2 MB 占总量 98%。</div>
+  <div class="callout" style="margin-top:12px"><b>结论</b>: 80 method class 结构体仅 ~30 KB。SemiSpace 以 256 KB region 逐级增长，初始 1 region = 256 KB，单 class 占总量 ~90%。GC 后 reserved 2 MB 做上限。</div>
 </div>
 
 <!-- ==== Slide 4: 实测数据 ==== -->
@@ -201,18 +201,36 @@
 
 <!-- ==== Slide 7: SemiSpace 对比 ==== -->
 <div class="slide" data-kicker="GC 对比">
-  <h2>SemiSpace GC 配置对比</h2>
-  <div class="table-wrap">
-    <table>
-      <tr><th style="width:18%">引擎</th><th style="width:22%">初始大小</th><th style="width:22%">扩容粒度</th><th>来源</th></tr>
-      <tr><td>V8</td><td>1 MB</td><td>OS page（惰性提交）</td><td>src/heap/new-spaces.h</td></tr>
-      <tr><td>JSC</td><td>1-2 MB</td><td>OS page</td><td>heap/Heap.cpp</td></tr>
-      <tr><td>Hermes</td><td>512 KB</td><td>Segment 32 KB</td><td>lib/VM/GCBase.cpp</td></tr>
-      <tr><td style="color:var(--red);font-weight:900">ArkVM</td><td style="color:var(--red)">256 KB→2 MB</td><td style="color:var(--red)">Region 256 KB</td><td>mem.h:71</td></tr>
-    </table>
-  </div>
-  <div style="margin-top:14px">
-    <p style="color:var(--muted);font-size:clamp(10px,.8vw,13px)">ArkVM SemiSpace: min 2 MB / max 4-16 MB，以 256 KB region 步进。小 class 可能触发 1-2 MB 的 region 分配。</p>
+  <h2>SemiSpace 逐级增长模式</h2>
+  <div class="two-col">
+    <div>
+      <h3>ArkVM SemiSpace</h3>
+      <div style="font-size:clamp(10px,.8vw,13px);color:var(--muted);line-height:1.5;margin:10px 0">
+        Init → <b>1 region (256 KB)</b><br>
+        Fill → Expand: +256 KB<br>
+        Fill → Expand: +256 KB<br>
+        ...连续扩张...<br>
+        Limit: committedSize ≥ 2 MB<br>
+        GC 后: 预留 2 MB
+      </div>
+      <div class="panel" style="margin-top:8px">
+        <p>单 class 需: 256-512 KB (1-2 regions)<br>
+        来源: linear_space.cpp:147/467<br>
+        上限: ecma_param_configuration.h:90</p>
+      </div>
+    </div>
+    <div>
+      <div class="table-wrap">
+        <table>
+          <tr><th>引擎</th><th>初始</th><th>粒度</th></tr>
+          <tr><td>V8</td><td>1 MB (惰性)</td><td>OS page</td></tr>
+          <tr><td>JSC</td><td>1-2 MB</td><td>OS page</td></tr>
+          <tr><td>Hermes</td><td>512 KB</td><td>32 KB</td></tr>
+          <tr><td style="color:var(--red)">ArkVM</td><td style="color:var(--red)">256 KB</td><td style="color:var(--red)">256 KB</td></tr>
+        </table>
+      </div>
+      <div class="callout" style="margin-top:10px"><b>对比</b>: ArkVM 初始最小 (256 KB)，但扩容粒度最粗 (256 KB/step)。Hermes 以 32 KB segment 为粒度最细。</div>
+    </div>
   </div>
 </div>
 
@@ -229,21 +247,22 @@
           <tr><td>JSFunction × 80</td><td style="text-align:right">6.4 KB</td></tr>
           <tr><td>JSNativePointer × 80</td><td style="text-align:right">1.9 KB</td></tr>
           <tr><td>PropertyAttribute × 160</td><td style="text-align:right">2.2 KB</td></tr>
-          <tr style="color:var(--red);font-weight:900"><td>SemiSpace minSize</td><td style="text-align:right">2 MB</td></tr>
-          <tr style="font-weight:900"><td>合计</td><td style="text-align:right;color:var(--red)">~2.03 MB</td></tr>
+          <tr style="color:var(--blue);font-weight:900"><td>SemiSpace 1 region</td><td style="text-align:right">256 KB</td></tr>
+          <tr style="font-weight:900"><td>合计 (1 region)</td><td style="text-align:right;color:var(--blue)">~286 KB</td></tr>
+          <tr><td colspan="2" style="color:var(--muted);font-size:10px">如需第 2 region: +256 KB → ~542 KB</td></tr>
         </table>
       </div>
     </div>
     <div>
       <h3 style="margin-bottom:10px">竞品同场景</h3>
-      <div class="bar-row"><span class="bar-name">Hermes</span><div class="bar"><span style="width:26%"></span></div><span class="bar-num">~530 KB</span></div>
-      <div class="bar-row"><span class="bar-name">JSC</span><div class="bar"><span style="width:49%"></span></div><span class="bar-num">~1.0 MB</span></div>
-      <div class="bar-row"><span class="bar-name">V8</span><div class="bar"><span style="width:50%"></span></div><span class="bar-num">~1.01 MB</span></div>
-      <div class="bar-row"><span class="bar-name" style="color:var(--red)">ArkVM</span><div class="bar"><span style="width:100%;background:var(--red)"></span></div><span class="bar-num" style="color:var(--red)">~2.03 MB</span></div>
-      <div class="callout" style="margin-top:14px"><b>差距约 2×</b> (vs V8)。根因: SemiSpace minSize 2 MB vs 1 MB。结构体大小 V8 Map ~40B vs JSHClass 120B 仅贡献 ~10 KB。</div>
+      <div class="bar-row"><span class="bar-name" style="color:var(--green)">V8</span><div class="bar"><span style="width:23%;background:var(--green)"></span></div><span class="bar-num">~130 KB</span></div>
+      <div class="bar-row"><span class="bar-name" style="color:var(--green)">JSC</span><div class="bar"><span style="width:23%;background:var(--green)"></span></div><span class="bar-num">~130 KB</span></div>
+      <div class="bar-row"><span class="bar-name">Hermes</span><div class="bar"><span style="width:95%"></span></div><span class="bar-num">~542 KB</span></div>
+      <div class="bar-row"><span class="bar-name" style="color:var(--red)">ArkVM</span><div class="bar"><span style="width:100%;background:var(--red)"></span></div><span class="bar-num" style="color:var(--red)">~542 KB</span></div>
+      <div class="callout" style="margin-top:14px"><b>差距约 2× (1 region) 到 4× (2 regions) vs V8</b>。根因: ArkVM region 粒度 256 KB，V8 惰性提交 OS page，单 class 不触发额外分配。Hermes 512 KB YoungGen 固定开销。</div>
     </div>
   </div>
-  <p class="source">来源: JSHClass 字段偏移量 → 88+32=120B (js_hclass.h:2214)。SemiSpace: ecma_param_configuration.h:90。</p>
+  <p class="source">来源: SemiSpace 1 region = 256 KB (mem.h:71)。SemiSpace 逐级扩容 (linear_space.cpp:147)。</p>
 </div>
 
 <!-- ==== Slide 9: ArkVM 独有特性 ==== -->
