@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>业界中间表示（IR）调研</title>
+<style>
+  :root {
+    --paper: #f3f0e8;
+    --sheet: #fffdf8;
+    --ink: #17212b;
+    --muted: #68727c;
+    --blue: #0b5cad;
+    --blue-2: #dbeeff;
+    --red: #d43b2f;
+    --amber: #e8a317;
+    --green: #167b62;
+    --line: #cbd2d8;
+    --grid: rgba(23, 33, 43, .055);
+    --display: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    --body: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--paper); color: var(--ink); font-family: var(--body); }
+  body { overflow: hidden; }
+  button { font: inherit; }
+  .deck { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 18px 18px 74px; }
+  .slide {
+    display: none;
+    position: relative;
+    width: min(1180px, calc((100vh - 108px) * 1.777));
+    width: min(1180px, calc((100dvh - 108px) * 1.777));
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background-color: var(--sheet);
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+    border: 1px solid #bbc4cb;
+    box-shadow: 0 16px 50px rgba(31, 43, 55, .16);
+    padding: clamp(24px, 3.2vw, 52px) clamp(28px, 4.5vw, 72px);
+  }
+  .slide.active { display: flex; flex-direction: column; animation: reveal .32s ease-out; }
+  @keyframes reveal { from { opacity: .35; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .slide::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 8px; background: var(--blue); }
+  .slide::after { content: attr(data-kicker); position: absolute; right: 34px; top: 22px; color: var(--blue); font: 700 12px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; }
+  h1, h2, h3, p { margin: 0; }
+  h1 { max-width: 900px; font: 900 clamp(40px, 5vw, 76px)/1.12 var(--display); }
+  h2 { margin-bottom: clamp(14px, 2vw, 28px); font: 900 clamp(26px, 3vw, 44px)/1.16 var(--display); }
+  h3 { font: 800 clamp(15px, 1.55vw, 23px)/1.25 var(--display); }
+  .lead { max-width: 930px; margin-top: 18px; color: #42505c; font-size: clamp(16px, 1.65vw, 24px); line-height: 1.55; }
+  .eyebrow { margin-bottom: 16px; color: var(--red); font-weight: 900; font-size: clamp(13px, 1.3vw, 18px); letter-spacing: .08em; }
+  .rule { width: 94px; height: 7px; margin: 24px 0; background: var(--red); }
+  .source { position: absolute; left: clamp(28px, 4.5vw, 72px); bottom: 20px; color: var(--muted); font-size: clamp(9px, .84vw, 12px); }
+  .source a { color: inherit; }
+  .title-slide { justify-content: center; }
+  .title-slide .stamp { position: absolute; right: 8%; bottom: 13%; width: 150px; height: 150px; border: 8px solid var(--red); color: var(--red); display: grid; place-items: center; transform: rotate(-7deg); font-weight: 900; font-size: 24px; line-height: 1.2; text-align: center; opacity: .9; }
+  .metric-row, .grid-2, .grid-3, .grid-4 { display: grid; gap: clamp(10px, 1.5vw, 22px); min-height: 0; }
+  .metric-row, .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .panel { min-width: 0; padding: clamp(12px, 1.5vw, 22px); border: 1px solid var(--line); border-top: 5px solid var(--blue); background: rgba(255,255,255,.82); }
+  .panel.red { border-top-color: var(--red); }
+  .panel.amber { border-top-color: var(--amber); }
+  .panel.green { border-top-color: var(--green); }
+  .panel p, .panel li { color: #46535e; font-size: clamp(11px, 1.05vw, 16px); line-height: 1.45; }
+  .panel ul { margin: 10px 0 0; padding-left: 18px; }
+  .metric { font: 900 clamp(29px, 3.3vw, 52px)/1 var(--display); color: var(--blue); }
+  .metric-label { margin-top: 7px; color: var(--muted); font-size: clamp(10px, 1vw, 15px); }
+  .thesis { display: grid; grid-template-columns: 74px 1fr; gap: 16px; align-items: start; padding: clamp(10px, 1.1vw, 16px) 0; border-top: 1px solid var(--line); }
+  .thesis:first-child { border-top: 0; }
+  .thesis strong { color: var(--blue); font: 900 clamp(22px, 2.2vw, 34px)/1 var(--display); }
+  .thesis p { font-size: clamp(12px, 1.16vw, 18px); line-height: 1.45; }
+  .pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; align-items: stretch; margin-top: 14px; }
+  .stage { position: relative; padding: 18px 14px; min-height: 150px; background: #fff; border: 1px solid var(--line); border-top: 7px solid var(--blue); }
+  .stage:nth-child(2) { border-top-color: #2079be; }
+  .stage:nth-child(3) { border-top-color: var(--green); }
+  .stage:nth-child(4) { border-top-color: var(--amber); }
+  .stage:nth-child(5) { border-top-color: var(--red); }
+  .stage:not(:last-child)::after { content: "→"; position: absolute; right: -17px; top: 52px; z-index: 2; color: var(--ink); font-size: 22px; font-weight: 900; }
+  .stage small { display: block; margin-top: 8px; color: var(--muted); line-height: 1.45; }
+  .spectrum { position: relative; margin: 22px 0 10px; height: 68px; background: linear-gradient(90deg, var(--blue-2), #e7f5ee 48%, #fff0d2 75%, #ffe1dc); border: 1px solid var(--line); }
+  .spectrum::before { content: "语义密度高"; position: absolute; left: 14px; top: 10px; color: var(--blue); font-weight: 900; }
+  .spectrum::after { content: "硬件约束强"; position: absolute; right: 14px; bottom: 10px; color: var(--red); font-weight: 900; }
+  .table-wrap { min-height: 0; overflow: hidden; border: 1px solid var(--line); background: rgba(255,255,255,.86); }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: clamp(9px, .86vw, 13px); }
+  th { padding: 8px 10px; background: var(--ink); color: #fff; text-align: left; }
+  td { padding: 7px 10px; border-top: 1px solid var(--line); vertical-align: top; line-height: 1.35; }
+  tr:nth-child(even) td { background: rgba(219,238,255,.32); }
+  .tag { display: inline-block; padding: 2px 7px; border: 1px solid currentColor; color: var(--blue); font-size: .86em; font-weight: 800; white-space: nowrap; }
+  .tag.legacy { color: #8a5a00; }
+  .use-list { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; min-height: 280px; }
+  .use { display: flex; flex-direction: column; justify-content: end; min-height: var(--h); padding: 12px 9px; color: #fff; background: var(--blue); }
+  .use:nth-child(2n) { background: var(--green); }
+  .use:nth-child(3n) { background: var(--red); }
+  .use b { font-size: clamp(12px, 1.05vw, 16px); }
+  .use small { margin-top: 8px; opacity: .84; font-size: clamp(9px, .72vw, 11px); line-height: 1.3; }
+  .platform { display: grid; grid-template-columns: 120px 1fr 150px; gap: 16px; align-items: center; padding: 13px 0; border-top: 1px solid var(--line); }
+  .platform:first-child { border-top: 0; }
+  .platform-name { font-weight: 900; font-size: clamp(16px, 1.7vw, 25px); }
+  .bar { height: 18px; background: #e5e8ea; overflow: hidden; }
+  .bar span { display: block; height: 100%; width: var(--w); background: var(--blue); }
+  .platform:nth-child(2) .bar span { background: var(--green); }
+  .platform:nth-child(3) .bar span, .platform:nth-child(4) .bar span { background: var(--amber); }
+  .platform-type { color: var(--muted); font-size: clamp(10px, .9vw, 13px); }
+  .decision { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 10px; margin-top: 8px; }
+  .decision .q { grid-row: span 2; display: grid; place-items: center; padding: 24px; background: var(--ink); color: #fff; font: 900 clamp(19px, 2vw, 31px)/1.35 var(--display); }
+  .choice { min-height: 112px; padding: 14px; border: 1px solid var(--line); background: #fff; }
+  .choice b { color: var(--blue); }
+  .choice p { margin-top: 7px; color: var(--muted); font-size: clamp(10px, .9vw, 14px); line-height: 1.35; }
+  .callout { padding: 20px 24px; border-left: 8px solid var(--red); background: #fff1ee; font-size: clamp(15px, 1.5vw, 23px); font-weight: 800; line-height: 1.5; }
+  .controls { position: fixed; z-index: 10; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; padding: 7px 10px; background: rgba(23,33,43,.94); color: #fff; box-shadow: 0 7px 20px rgba(0,0,0,.2); }
+  .controls button { width: 38px; height: 34px; border: 1px solid #59636c; background: transparent; color: #fff; cursor: pointer; font-size: 18px; }
+  .controls button:hover, .controls button:focus-visible { background: var(--blue); outline: 2px solid #fff; outline-offset: 1px; }
+  #counter { min-width: 58px; text-align: center; font-size: 12px; }
+  .dots { display: flex; gap: 4px; max-width: 210px; overflow: hidden; }
+  .dot { width: 8px !important; height: 8px !important; padding: 0; border: 0 !important; border-radius: 50%; background: #69737c !important; }
+  .dot.active { background: #fff !important; }
+  @media (max-width: 760px) and (orientation: portrait) {
+    .deck { padding: 8px 8px 60px; }
+    .slide { width: calc(100vw - 16px); height: calc(100dvh - 76px); aspect-ratio: auto; padding: 28px 25px 24px 30px; }
+    .slide::after { right: 18px; top: 12px; font-size: 8px; }
+    .source { left: 30px; bottom: 10px; font-size: 7px; }
+    h1 { font-size: clamp(28px, 9vw, 38px); }
+    h2 { margin-bottom: 14px; font-size: clamp(22px, 6.8vw, 29px); }
+    h3 { font-size: clamp(12px, 3.7vw, 16px); }
+    .lead { margin-top: 12px; font-size: 14px; }
+    .eyebrow { margin-bottom: 10px; font-size: 11px; }
+    .rule { margin: 15px 0; height: 5px; }
+    .title-slide .stamp { right: 8%; bottom: 8%; width: 90px; height: 90px; border-width: 5px; font-size: 16px; }
+    .grid-2, .grid-3 { gap: 8px; }
+    .grid-4 { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .panel { padding: 8px; }
+    .panel p, .panel li { font-size: 10px; line-height: 1.32; }
+    .panel ul { margin-top: 5px; padding-left: 14px; }
+    .metric { font-size: 25px; }
+    .metric-label { font-size: 8px; }
+    .thesis { grid-template-columns: 36px 1fr; gap: 7px; padding: 7px 0; }
+    .thesis strong { font-size: 20px; }
+    .thesis p { font-size: 10px; line-height: 1.34; }
+    .pipeline { gap: 4px; }
+    .stage { min-width: 0; min-height: 105px; padding: 8px 5px; overflow-wrap: anywhere; }
+    .stage small { margin-top: 5px; font-size: 8px; line-height: 1.28; }
+    .stage:not(:last-child)::after { right: -11px; top: 34px; font-size: 14px; }
+    .spectrum { margin: 10px 0 8px; height: 46px; font-size: 9px; }
+    table { font-size: 8px; }
+    th, td { padding: 5px 6px; }
+    .use-list { min-height: 240px; gap: 4px; }
+    .use { padding: 8px 4px; }
+    .use b { font-size: 9px; }
+    .use small { font-size: 7px; }
+    .platform { grid-template-columns: 72px 1fr 92px; gap: 8px; padding: 9px 0; }
+    .platform-name { font-size: 13px; }
+    .platform-type { font-size: 8px; }
+    .decision { gap: 6px; }
+    .decision .q { padding: 12px; font-size: 15px; }
+    .choice { min-height: 96px; padding: 9px; font-size: 10px; }
+    .choice p { font-size: 8px; }
+    .callout { padding: 11px 13px; border-left-width: 5px; font-size: 11px; }
+    .controls { bottom: 8px; }
+  }
+  @media (max-height: 620px) and (orientation: landscape) {
+    .deck { padding: 8px 8px 56px; }
+    .slide { width: min(calc(100vw - 16px), calc((100dvh - 68px) * 1.777)); padding: 22px 34px; }
+    .controls { bottom: 7px; }
+  }
+</style>
+</head>
+<body>
+<main class="deck" id="deck">
+  <section class="slide title-slide active" data-kicker="Industry IR Research">
+    <p class="eyebrow">2026 · 编译器 / 程序分析 / AI 与异构计算</p>
+    <h1>业界中间表示<br>不是一种格式，而是一套取舍</h1>
+    <div class="rule"></div>
+    <p class="lead">从源码语义到机器约束：代表性 IR 图谱、用途边界、开源生态与选型判断</p>
+    <div class="stamp">IR<br>调研</div>
+    <p class="source">依据官方规范、项目文档与 GitHub / GitLab / Gitee / GitCode 专项检索 · 2026-07</p>
+  </section>
+
+  <section class="slide" data-kicker="Executive Summary">
+    <h2>六个结论，先建立共同坐标</h2>
+    <div class="grid-2">
+      <div>
+        <div class="thesis"><strong>01</strong><p><b>层级是相对位置。</b>LLVM IR 被称为低层，但仍远高于真实机器指令。</p></div>
+        <div class="thesis"><strong>02</strong><p><b>多层 IR 是主流。</b>高层保语义，中层做分析，低层映射硬件。</p></div>
+        <div class="thesis"><strong>03</strong><p><b>“多语言”有三种模式。</b>多前端、稳定运行时格式、多方言基础设施不能混为一谈。</p></div>
+      </div>
+      <div>
+        <div class="thesis"><strong>04</strong><p><b>语义决定能力上限。</b>所有权、对象模型、张量等信息丢失后很难可靠恢复。</p></div>
+        <div class="thesis"><strong>05</strong><p><b>交换格式重兼容，内部 IR 重演进。</b>StableHLO 与 XLA HLO 的目标并不相同。</p></div>
+        <div class="thesis"><strong>06</strong><p><b>主仓身份比搜索命中更重要。</b>GitHub 最集中，镜像平台主要解决分发与访问。</p></div>
+      </div>
+    </div>
+    <p class="source">完整论证见 report.spec.md §1</p>
+  </section>
+
+  <section class="slide" data-kicker="The Pipeline">
+    <h2>一条链路，五种不同的“中间”</h2>
+    <div class="pipeline">
+      <div class="stage"><h3>AST / HIR</h3><small>声明、作用域、对象、泛型、源位置</small></div>
+      <div class="stage"><h3>语言 / 领域 IR</h3><small>所有权、异常、协议、张量、显式调用</small></div>
+      <div class="stage"><h3>通用优化 IR</h3><small>SSA、CFG、def-use、数据流、内存操作</small></div>
+      <div class="stage"><h3>机器 / 虚拟 IR</h3><small>寄存器、寻址、指令约束、运行时契约</small></div>
+      <div class="stage"><h3>代码 / 字节码</h3><small>目标机器码，或供 VM / 驱动消费的稳定格式</small></div>
+    </div>
+    <div class="spectrum"></div>
+    <div class="grid-3">
+      <div class="panel"><h3>高层优势</h3><p>能直接做对象、类型、模式和领域级变换。</p></div>
+      <div class="panel green"><h3>中层优势</h3><p>平衡语义与显式控制流，适合通用分析和优化。</p></div>
+      <div class="panel red"><h3>低层优势</h3><p>跨语言复用后端，精确控制内存、指令和硬件。</p></div>
+    </div>
+  </section>
+
+  <section class="slide" data-kicker="General Infrastructure">
+    <h2>通用基础设施：三种代表路径</h2>
+    <div class="grid-3" style="flex:1">
+      <div class="panel"><h3>LLVM IR</h3><p class="metric" style="margin:18px 0 12px">SSA</p><p>类型化、目标无关、接近机器操作。适合作为多语言通用优化与后端接口。</p><ul><li>生态成熟</li><li>对象与泛型语义通常已消解</li></ul></div>
+      <div class="panel green"><h3>MLIR</h3><p class="metric" style="margin:18px 0 12px;color:var(--green)">N 层</p><p>Operation / Region / 方言 / Conversion 构成可扩展多层 IR 基础设施。</p><ul><li>适合多领域渐进 lowering</li><li>不是固定层级单体 IR</li></ul></div>
+      <div class="panel red"><h3>GCC</h3><p class="metric" style="margin:18px 0 12px;color:var(--red)">3 级</p><p>GENERIC → GIMPLE → RTL 展示传统高、中、低层编译链。</p><ul><li>目标无关优化与机器相关后端分离</li><li>GIMPLE 也有 High / Low 形态</li></ul></div>
+    </div>
+    <div class="callout" style="margin-top:18px">选择不是“谁最好”，而是你要复用成熟后端，还是建设可扩展的多层编译基础设施。</div>
+  </section>
+
+  <section class="slide" data-kicker="Language Semantics">
+    <h2>语言专属 IR：延迟丢失，才能做专属检查</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:18%">IR</th><th style="width:25%">结构</th><th style="width:34%">保留语义</th><th>核心任务</th></tr></thead>
+        <tbody>
+          <tr><td><b>Swift SIL</b></td><td>SSA + CFG</td><td>所有权、泛型、witness/vtable、调用约定</td><td>初始化检查、ARC、去虚化</td></tr>
+          <tr><td><b>Rust HIR</b></td><td>高层树形</td><td>声明、泛型、大量源码结构</td><td>类型/trait 分析、生成 THIR/MIR</td></tr>
+          <tr><td><b>Rust MIR</b></td><td>完全类型化 CFG</td><td>Place、move、borrow、drop</td><td>借用检查、数据流、优化</td></tr>
+          <tr><td><b>Kotlin FIR</b></td><td>前端 IR</td><td>声明、解析与类型推断信息</td><td>K2 前端语义分析</td></tr>
+          <tr><td><b>Kotlin Backend IR</b></td><td>符号化中层树</td><td>类、函数、表达式、Kotlin 类型</td><td>JVM / JS / Native / Wasm 多后端</td></tr>
+          <tr><td><b>Graal Graph / LIR</b></td><td>节点图 → 低层 LIR</td><td>Guard、profile、FrameState</td><td>JIT 优化与反优化</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="source">Swift SIL · Rust Compiler Development Guide · Kotlin compiler/ir · Graal compiler docs</p>
+  </section>
+
+  <section class="slide" data-kicker="Analysis & Transformation">
+    <h2>分析与转换：所需语义决定 IR 高度</h2>
+    <div class="grid-3">
+      <div class="panel"><h3>设计模式 / 源码重构</h3><p class="metric" style="margin:14px 0 10px">HIR</p><p>需要类层次、声明关系、泛型、源位置和可再生成信息。</p><p style="margin-top:10px"><span class="tag">AST/HIR</span> <span class="tag">Clava</span></p></div>
+      <div class="panel green"><h3>调用 / 指针 / 污点</h3><p class="metric" style="margin:14px 0 10px;color:var(--green)">SSA</p><p>需要显式 CFG、局部值、def-use、对象和异常行为。</p><p style="margin-top:10px"><span class="tag">Jimple</span> <span class="tag">WALA</span></p></div>
+      <div class="panel red"><h3>内存 / 跨语言行为</h3><p class="metric" style="margin:14px 0 10px;color:var(--red)">LIR</p><p>需要低层内存、调用和控制流；源级设计意图通常不足。</p><p style="margin-top:10px"><span class="tag">LLVM IR</span></p></div>
+    </div>
+    <div class="callout" style="margin-top:20px">不要先选 IR 再找问题。先确定分析结论依赖哪些语义，再选择最晚丢失这些语义的层级。</div>
+  </section>
+
+  <section class="slide" data-kicker="Portable Runtime Formats">
+    <h2>稳定字节码：IR 的消费者是运行时</h2>
+    <div class="grid-4">
+      <div class="panel"><h3>JVM bytecode</h3><p>有类型栈机 + 类元数据</p><p style="margin-top:9px"><span class="tag">多 JVM 语言</span></p></div>
+      <div class="panel green"><h3>.NET CIL / IL</h3><p>栈式 CLI + CTS 类型系统</p><p style="margin-top:9px"><span class="tag">JIT / AOT</span></p></div>
+      <div class="panel amber"><h3>WebAssembly</h3><p>宿主无关低层栈机 + 结构化控制</p><p style="margin-top:9px"><span class="tag">Web / WASI</span></p></div>
+      <div class="panel red"><h3>DEX / ARK</h3><p>移动运行时的寄存器或专用字节码</p><p style="margin-top:9px"><span class="tag">ART / OpenHarmony</span></p></div>
+    </div>
+    <div class="grid-2" style="margin-top:18px">
+      <div class="panel amber"><h3>纠偏：DEX ≠ Dalvik</h3><p>DEX 仍是 Android 现行格式；Dalvik runtime 已由 ART 取代。</p></div>
+      <div class="panel amber"><h3>纠偏：Wasm ≠ 浏览器专用</h3><p>核心规范与宿主无关，Web API 与 WASI 是不同嵌入。</p></div>
+    </div>
+  </section>
+
+  <section class="slide" data-kicker="AI & GPU Stack">
+    <h2>AI / GPU：单层 IR 无法承载全部优化</h2>
+    <div class="pipeline">
+      <div class="stage"><h3>交换</h3><small><b>StableHLO</b><br>稳定算子与版本兼容</small></div>
+      <div class="stage"><h3>图级</h3><small><b>Relax / XLA HLO</b><br>融合、形状、模型优化</small></div>
+      <div class="stage"><h3>张量程序</h3><small><b>TensorIR</b><br>循环、buffer、调度</small></div>
+      <div class="stage"><h3>Tile / 并行</h3><small><b>CUDA Tile IR</b><br>线程、内存、Tensor Core</small></div>
+      <div class="stage"><h3>设备接口</h3><small><b>SPIR-V / vISA</b><br>驱动或 finalizer 契约</small></div>
+    </div>
+    <div class="grid-3" style="margin-top:20px">
+      <div class="panel"><h3>StableHLO ≠ 全部 HLO</h3><p>前者强调稳定交换，后者是 XLA 内部优化表示。</p></div>
+      <div class="panel green"><h3>Relax 是 TVM 当前主线</h3><p>Relay 具有历史价值，当前图级架构重点转向 Relax。</p></div>
+      <div class="panel red"><h3>SPIR ≠ SPIR-V</h3><p>OpenCL SPIR 依赖旧 LLVM bitcode；SPIR-V 是活跃标准。</p></div>
+    </div>
+  </section>
+
+  <section class="slide" data-kicker="Seven Jobs">
+    <h2>IR 的七种主要工作</h2>
+    <div class="use-list">
+      <div class="use" style="--h:64%"><b>通用优化</b><small>SSA / CFG / 数据流</small></div>
+      <div class="use" style="--h:84%"><b>语义检查</b><small>所有权 / 类型 / 异常</small></div>
+      <div class="use" style="--h:72%"><b>静态分析</b><small>调用 / 指针 / 污点</small></div>
+      <div class="use" style="--h:91%"><b>代码转换</b><small>lowering / 重写 / 多后端</small></div>
+      <div class="use" style="--h:76%"><b>运行时执行</b><small>验证 / JIT / AOT</small></div>
+      <div class="use" style="--h:68%"><b>形式化验证</b><small>操作语义 / 正确性证明</small></div>
+      <div class="use" style="--h:96%"><b>硬件映射</b><small>图 / 循环 / tile / ISA</small></div>
+    </div>
+    <p class="source">柱高仅用于视觉分组，不表示市场规模或重要性排名</p>
+  </section>
+
+  <section class="slide" data-kicker="Open Source Platforms">
+    <h2>专项检索：主开发平台与镜像平台分工明显</h2>
+    <div style="margin-top:4px">
+      <div class="platform"><div class="platform-name">GitHub</div><div class="bar"><span style="--w:94%"></span></div><div class="platform-type">官方主仓最集中</div></div>
+      <div class="platform"><div class="platform-name">GitLab</div><div class="bar"><span style="--w:45%"></span></div><div class="platform-type">主仓与 CI 镜像并存</div></div>
+      <div class="platform"><div class="platform-name">Gitee</div><div class="bar"><span style="--w:30%"></span></div><div class="platform-type">镜像 + 国内官方项目</div></div>
+      <div class="platform"><div class="platform-name">GitCode</div><div class="bar"><span style="--w:26%"></span></div><div class="platform-type">实时加速镜像为主</div></div>
+    </div>
+    <div class="grid-3" style="margin-top:22px">
+      <div class="panel"><h3>身份核验</h3><p>官网反向链接 + 组织 owner + 上游声明 + issue / release 入口。</p></div>
+      <div class="panel amber"><h3>镜像边界</h3><p>适合下载和访问，不用于判断治理、社区响应和版本可信度。</p></div>
+      <div class="panel red"><h3>搜索限制</h3><p>动态页面、索引延迟与镜像占比会造成误报或漏报。</p></div>
+    </div>
+    <p class="source">专项样本：LLVM/MLIR、MOPSA、Free Pascal、OpenArkCompiler、ONNX-MLIR、Torch-MLIR 等</p>
+  </section>
+
+  <section class="slide" data-kicker="Corrections">
+    <h2>初步清单中，最值得修正的八项</h2>
+    <div class="grid-2">
+      <div class="panel"><h3>MLIR</h3><p>多层 IR 基础设施，不是固定抽象层的单体 IR。</p></div>
+      <div class="panel"><h3>Kotlin</h3><p>FIR 与 Backend IR 分属前端语义分析和多后端生成。</p></div>
+      <div class="panel green"><h3>Soot</h3><p>Shimple 是 Jimple SSA 形式；Grimp 是聚合表示。</p></div>
+      <div class="panel green"><h3>TVM</h3><p>当前图级主线是 Relax；Relay 具有历史定位。</p></div>
+      <div class="panel amber"><h3>OpenCL</h3><p>历史 SPIR、活跃 SPIR-V 与转换器是三个概念。</p></div>
+      <div class="panel amber"><h3>COINS / LARA</h3><p>COINS MIR、LARA Virtual AST 缺少足够官方命名依据。</p></div>
+      <div class="panel red"><h3>Android</h3><p>现行条目应写 DEX；Dalvik 是已被 ART 取代的运行时。</p></div>
+      <div class="panel red"><h3>OpenHarmony</h3><p>Maple IR、ARK bytecode、Runtime Core 内部 SSA IR 不可互换。</p></div>
+    </div>
+  </section>
+
+  <section class="slide" data-kicker="Decision Guide">
+    <h2>选型：从消费者与语义出发</h2>
+    <div class="decision">
+      <div class="q">谁消费这个 IR？<br>必须保留什么语义？</div>
+      <div class="choice"><b>通用后端</b><p>LLVM IR：成熟优化、代码生成和工具生态。</p></div>
+      <div class="choice"><b>多层基础设施</b><p>MLIR：方言、Pass 与 Conversion 组织渐进下降。</p></div>
+      <div class="choice"><b>语言安全与专属优化</b><p>SIL / MIR / Kotlin IR 模式：延迟丢失语言语义。</p></div>
+      <div class="choice"><b>分析与重构</b><p>AST/HIR、Jimple、WALA：按结论所需语义选择层级。</p></div>
+    </div>
+    <div class="callout" style="margin-top:18px">自建 IR 前再确认：内部实现还是稳定交换？合法性如何验证？扩展单位是指令、方言、Pass 还是独立层级？</div>
+  </section>
+
+  <section class="slide title-slide" data-kicker="Final Takeaway">
+    <p class="eyebrow">最终判断</p>
+    <h1>IR 的价值，取决于它在正确的时刻<br>保留正确的信息</h1>
+    <div class="rule"></div>
+    <p class="lead">高层支撑语义与领域创新，低层释放通用优化与硬件效率；稳定交换格式连接组织和生态。真正可持续的设计，是让每一层只承担它最擅长的职责。</p>
+    <div class="metric-row" style="margin-top:34px;max-width:880px">
+      <div><div class="metric">5</div><div class="metric-label">类 IR 图谱</div></div>
+      <div><div class="metric">7</div><div class="metric-label">类主要用途</div></div>
+      <div><div class="metric">4</div><div class="metric-label">托管平台专项检索</div></div>
+      <div><div class="metric">54</div><div class="metric-label">报告可追溯链接</div></div>
+    </div>
+    <p class="source">完整报告：ir/report.spec.md</p>
+  </section>
+</main>
+
+<nav class="controls" aria-label="幻灯片导航">
+  <button id="prev" type="button" title="上一页" aria-label="上一页">←</button>
+  <div class="dots" id="dots" aria-hidden="true"></div>
+  <span id="counter">1 / 13</span>
+  <button id="next" type="button" title="下一页" aria-label="下一页">→</button>
+</nav>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  const counter = document.getElementById('counter');
+  const dots = document.getElementById('dots');
+  let current = 0;
+  let touchStartX = 0;
+
+  slides.forEach((_, index) => {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = 'dot';
+    dot.tabIndex = -1;
+    dot.addEventListener('click', () => show(index));
+    dots.appendChild(dot);
+  });
+
+  function show(index) {
+    current = (index + slides.length) % slides.length;
+    slides.forEach((slide, slideIndex) => {
+      const isActive = slideIndex === current;
+      slide.classList.toggle('active', isActive);
+      slide.setAttribute('aria-hidden', String(!isActive));
+    });
+    [...dots.children].forEach((dot, dotIndex) => dot.classList.toggle('active', dotIndex === current));
+    counter.textContent = `${current + 1} / ${slides.length}`;
+    history.replaceState(null, '', `#${current + 1}`);
+  }
+
+  document.getElementById('prev').addEventListener('click', () => show(current - 1));
+  document.getElementById('next').addEventListener('click', () => show(current + 1));
+  document.addEventListener('keydown', event => {
+    if (['ArrowRight', 'PageDown', ' '].includes(event.key)) { event.preventDefault(); show(current + 1); }
+    if (['ArrowLeft', 'PageUp'].includes(event.key)) { event.preventDefault(); show(current - 1); }
+    if (event.key === 'Home') show(0);
+    if (event.key === 'End') show(slides.length - 1);
+  });
+  document.addEventListener('touchstart', event => { touchStartX = event.changedTouches[0].screenX; }, { passive: true });
+  document.addEventListener('touchend', event => {
+    const delta = event.changedTouches[0].screenX - touchStartX;
+    if (Math.abs(delta) > 45) show(current + (delta < 0 ? 1 : -1));
+  }, { passive: true });
+  const hashIndex = Number(location.hash.slice(1)) - 1;
+  show(Number.isInteger(hashIndex) && hashIndex >= 0 ? hashIndex : 0);
+</script>
+</body>
+</html>
