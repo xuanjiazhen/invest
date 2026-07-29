@@ -84,7 +84,7 @@
   <h2>JSHClass vs Map — 逐字段布局</h2>
   <div class="grid-2">
     <div>
-      <h3>ArkVM JSHClass (120B)</h3>
+      <h3>ArkVM JSHClass (88B)</h3>
       <div style="font-family:monospace;font-size:7px;line-height:1.4;color:#46535e;margin:8px 0">
         0:  TaggedObjHdr (8B)<br>
         8:  BitField u32 (4B)<br>
@@ -159,7 +159,7 @@
         &nbsp;&nbsp;└─Transition→ HClass₂ (添加 "y")<br>
         &nbsp;&nbsp;&nbsp;&nbsp;└─Transition→ HClass₃ (添加 "z")<br>
         <br>
-        每次 add property: Clone 全部 HClass (~120B)<br>
+        每次 add property: Clone JSHClass（88B）<br>
         查找: O(n) 线性遍历<br>
         不共享 Layout
       </p>
@@ -197,7 +197,7 @@ obj->SetClass(newJsHClass);                 // shared DescriptorArray
     <div class="panel">
       <h3>差距 2.5×</h3>
       <p>80 properties × 2 HClass trees (ctor + proto)</p>
-      <p>ArkVM: 160 × 120B = 19.2 KB</p>
+      <p>ArkVM: 160 × 88B = 14.08 KB</p>
       <p>V8: 160 × 50B = 8.0 KB</p>
       <p style="margin-top:8px;color:var(--muted);font-size:9px">Pointer compression + 冗余字段 = 11 KB diff</p>
     </div>
@@ -250,5 +250,7 @@ obj->SetClass(newJsHClass);                 // shared DescriptorArray
   document.addEventListener('touchend',e=>{const d=e.changedTouches[0].screenX-touchStartX;if(Math.abs(d)>45)show(current+(d<0?1:-1))},{passive:!0});
   show(Number.isInteger(+location.hash.slice(1)-1)?+location.hash.slice(1)-1:0);
 </script>
+
+<!-- 京东场景：80,000 个 JSHClass 下界。88B/个合计 6.71MiB；A/B/C 字段方案毛节省分别为 1.22/0.61/0.61MiB，A+B+C 为 2.44MiB。Side table 占用需另行扣除。 -->
 </body>
 </html>

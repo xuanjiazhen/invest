@@ -9,9 +9,9 @@
 
 ### 1.1 整体结构
 
-JSHClass 是 ArkVM 中每个对象「形状」的描述符。当开发者在 ArkTS 中写 `class MyButton { title: string; onClick(): void {} }` 时，VM 内部会创建一个 JSHClass 来记录：这个形状有几个属性、每个属性在对象内存中的偏移是多少、这些属性是否可枚举/可写。
+JSHClass 是 ArkVM 中每个对象“属性布局”的描述符。当开发者在 ArkTS 中写 `class MyButton { title: string; onClick(): void {} }` 时，VM 内部会创建 JSHClass，记录这种对象有几个属性、属性在对象实例中的偏移，以及属性是否可枚举、可写。
 
-每个 JSHClass 实例占 120 字节 (含 4 个默认 inline slot)。它由以下字段组成：
+当前 64 位源码中，每个 JSHClass 实例占 **88 字节**。Heap Snapshot 显示的 **0.09 KB** 与该大小一致：`88 / 1024 = 0.0859375 KiB`，界面保留两位小数后为 `0.09 KB`。Snapshot 中该列来自节点的 `self_size`（浅层大小），不包含 JSHClass 指向的 Layout、Transitions、EnumCache 等独立堆对象。
 
 ```
 偏移   大小   字段                  
@@ -29,9 +29,21 @@ JSHClass 是 ArkVM 中每个对象「形状」的描述符。当开发者在 Ark
 72      8B   DependentInfos    
 80      8B   BitField2         
 ── 88B (DEFINE_ALIGN_SIZE)
-+ 4×8B inlined slots (DEFAULT_CAPACITY_OF_IN_OBJECTS = 4)
-── 120B
 ```
+
+`DEFAULT_CAPACITY_OF_IN_OBJECTS = 4` **不属于 JSHClass 自身布局**。它是创建普通对象的 JSHClass 时使用的默认参数，表示“这个 JSHClass 所描述的对象实例默认预留 4 个对象内属性槽”。这些槽位计入被描述对象实例的 `ObjectSize`，不计入 JSHClass 的 `JSHClass::SIZE`。`ObjectFactory::NewEcmaHClass` 分配 JSHClass 时明确使用 `classSize = JSHClass::SIZE`。
+
+```text
+JSHClass 描述符（固定 88B）
+  ├─ ObjectSizeInWords：记录被描述对象实例的大小
+  └─ InlinedPropsStart：记录实例内属性槽从哪里开始
+
+被描述的对象实例（大小随对象类型和对象内属性数变化）
+  ├─ 对象自身固定字段
+  └─ 默认最多 4 个 in-object property slots（适用时）
+```
+
+Heap Snapshot 的取值链路为：`GenerateNode` → `TaggedObject::GetSize()` → 元类 JSHClass 的 `SizeFromJSHClass()` → `GetObjectSize()`。JSHClass 对象的元类记录的对象大小为 `JSHClass::SIZE`。序列化器把该值原样写入 `nodes[].self_size`，单位是字节。
 
 ### 1.2 逐字段详解
 
@@ -100,7 +112,7 @@ d.toString(); // 继续沿 Proto 链 → Object.prototype HClass
 
 #### Transitions (32-40B)
 
-- **产生阶段**: 每次 `AddProperty` → `AddPropertyToNewHClass` → 生成新的 HClass Clone (120B) → 插入 transition 链表头
+- **产生阶段**: 每次 `AddProperty` → `AddPropertyToNewHClass` → 生成新的 HClass Clone（当前为 88B） → 插入 transition 链表头
 - **消费场景**: 后续代码对**另一个对象**执行相同的属性添加序列时，VM 沿 Transitions 链表查找是否已存在匹配的 shape。若存在则复用，否则创建新 HClass
 - **用户可感知**: 
 
@@ -135,11 +147,22 @@ let f2 = new Foo(); for (let k in f2) { /* EnumCache 失效, 重新构建 */ }
 
 #### EnumCache (64-72B)
 
-- **产生阶段**: `GetOrCreateEnumCacheFromHClass` — for-in 首次在特定 shape 上执行时，创建 EnumCache 对象并填入缓存键列表
+- **产生阶段**: `GetOrCreateEnumCacheFromHClass` — `for...in` 首次在具有同一种属性布局的对象上执行时，创建 EnumCache 对象并填入缓存键列表。“同一种属性布局”是指属性名、添加顺序和属性特征相同；VM 内部通常称为相同 shape 或相同 JSHClass
 - **内容已惰性**: `JSHClass::Initialize` 时设为 `Null()`。仅在首次 for-in 时才真正分配
-- **消费场景**: 后续 for-in 直接读 `GetEnumCacheOwn` → O(1) 获取缓存的键列表, 无需遍历 Layout。JSON.stringify 也走此路径
-- **用户可感知**: 同一个 shape 的对象做 for-in → 第一次慢, 后续快。缓存失效 (ProtoChange) 后需要重新构建
+- **消费场景**: `for...in` 是 ArkTS/JavaScript 中枚举对象可枚举属性名的语法。后续对相同属性布局的对象执行 `for...in` 时，VM 可直接通过 `GetEnumCacheOwn` 取得已缓存的键列表，无需重新遍历 Layout。JSON 序列化路径也会检查该缓存
+- **用户可感知**: 同一种属性布局的对象第一次枚举属性时需要生成键列表，后续枚举可以复用；修改原型后，缓存失效并重新生成
 - **字段槽不惰性**: 虽然内容惰性，但 **8B 的指针槽始终在 JSHClass 中**。这就是优化空间——如果移到 side table，不常做 for-in 的 HClass 可以节省这 8B
+```typescript
+const a = { id: 1, name: 'A' };
+const b = { id: 2, name: 'B' }; // 属性名和添加顺序与 a 相同，可复用同一属性布局
+
+for (const key in a) {          // 首次为该布局生成可枚举键列表：id、name
+  console.info(key);
+}
+for (const key in b) {          // 可复用缓存的键列表
+  console.info(key);
+}
+```
 
 #### DependentInfos (72-80B)
 
@@ -172,15 +195,14 @@ let f2 = new Foo(); for (let k in f2) { /* EnumCache 失效, 重新构建 */ }
 ```
                  V8 Map    JSC Structure   Hermes HC    ArkVM JSHClass
 ─────────────────────────────────────────────────────────────────────
-不含 inline:      ~42B         ~64B           ~32B          88B
-含 inline:        ~54B         ~72B           ~40B         120B
+描述符自身:       ~42B         ~64B           ~32B          88B
+对象内属性槽:     不计入 Map    不计入 Structure 不计入 HC     不计入 JSHClass
 指针宽度:         4B (cmp)     8B             0B (ID)       8B
-Transition:       树 O(1)     链表+PropTable  无            链表 O(n)
 ProtoChange*:     0B (cell)   0B              0B           16B
 EnumCache:        内联 4B      无             无            内联 8B
 DependentInfos:   内联 4B      内联 8B         无            内联 8B
 ─────────────────────────────────────────────────────────────────────
-vs ArkVM:         2.2× 小     1.7× 小         3.0× 小       基准
+说明:              各引擎数值必须在相同版本、架构和编译配置下实测后再计算比例
 ```
 
 ### 2.3 V8 Map 详解
@@ -235,7 +257,7 @@ V8 (散列树):
 
 **维护方**: Apple (WebKit 项目)。用于 Safari、WKWebView (iOS/macOS 上所有第三方浏览器的内核)。
 
-**核心差异**: JSC 的 Structure (~64B) 比 ArkVM JSHClass (120B) 小 47%，主要因为：
+**核心差异**: 在当前文档引用的结构边界下，JSC Structure 记为约 64B，ArkVM JSHClass 源码值为 88B；该近似值不能替代同配置实测，主要因为：
 - 无 ProtoChangeMarker/Details (用 1 bit 标志 + transition watchpoint 机制)
 - 无 EnumCache 内联 (for-in 走 PropertyTable)
 - 无 DependentInfos (JIT watchpoint 在 Structure 外部)
@@ -261,7 +283,7 @@ V8 (散列树):
 
 ### 方案 A: ProtoChange 字段合并 (−16B)
 
-- **预估效果**: 每个 JSHClass 节省 16B (13%)。ProtoChangeMarker 合并为 BitField2 中 1 bit 标志。ProtoChangeDetails 移到全局 Hash map (仅在原型变更时写入)
+- **预估效果**: 每个 JSHClass 的内联大小减少 16B，即 88B → 72B，降幅为 18.2%。按京东场景观测到的 **80,000+ 个 JSHClass** 计算，80,000 个对象的内联字段毛节省为 `80,000 × 16B = 1,280,000B = 1.22MiB`；对象数超过 80,000 时按每增加 10,000 个 JSHClass 再减少约 0.153MiB 线性增加。ProtoChangeDetails side table 的表项和哈希桶占用需从毛节省中扣除，因此 1.22MiB 是内联字段减少量，不是进程内存净下降量。ProtoChangeMarker 合并为 BitField2 中 1 bit 标志，ProtoChangeDetails 仅在发生原型变化时进入 side table
 - **改动工作量**: 约 3-5 人天。涉及 `js_hclass.h` (移除 2 字段), `js_hclass.cpp` (访问路径改为 BitField2 flag + hash map), `js_hclass-inl.h` (MarkProtoChanged 路径)
 - **兼容性分析** (用户视角):
   - **新旧镜像**: 不涉及字节码格式变更。老版本镜像中的 JSHClass 访问路径通过函数调用抽象 → 无需镜像升级
@@ -271,7 +293,7 @@ V8 (散列树):
 
 ### 方案 B: DependentInfos 外移 (−8B)
 
-- **预估效果**: 每个 JSHClass 节省 8B。仅被 JIT 优化过的 HClass 才在 side table 中有 entry
+- **预估效果**: 每个 JSHClass 的内联大小减少 8B，即 88B → 80B，降幅为 9.1%。按 80,000 个 JSHClass 计算，内联字段毛节省为 `640,000B = 0.61MiB`；每增加 10,000 个 JSHClass 再减少约 0.076MiB。仅被 JIT 优化过的 JSHClass 在 side table 中产生 entry，净节省量等于 0.61MiB 减去 side table、弱引用和同步结构的实际占用，需通过改动后的 Heap Snapshot 与进程内存数据测量
 - **改动工作量**: 约 5-8 人天。涉及 JSHClass 字段移除 + JIT deoptimization 通知路径 + GC 对 side table 的弱引用管理
 - **兼容性分析** (用户视角):
   - **新旧镜像**: JIT 代码本身绑定到特定 HClass。老镜像上不启用 JIT → DependentInfos 为空 → 移除后无影响。新镜像使用 side table 查找 → 功能等价
@@ -281,7 +303,7 @@ V8 (散列树):
 
 ### 方案 C: EnumCache Side Table (−8B)
 
-- **预估效果**: 每个 JSHClass 节省 8B。仅实际执行过 for-in 的 HClass 在 side table 中有 entry
+- **预估效果**: 每个 JSHClass 的内联大小减少 8B，即 88B → 80B，降幅为 9.1%。按 80,000 个 JSHClass 计算，内联字段毛节省为 `640,000B = 0.61MiB`；每增加 10,000 个 JSHClass 再减少约 0.076MiB。仅实际执行过 `for...in` 或相关枚举路径的 JSHClass 在 side table 中产生 entry，净节省量取决于命中该路径的 JSHClass 比例以及 side table 每项开销
 - **改动工作量**: 约 8-12 人天。需修改 Baseline JIT stub (`builtins_object_stub_builder.cpp`) 中的 `GetOrCreateEnumCacheFromHClass` → 从直接偏移访问改为 runtime call
 - **兼容性分析** (用户视角):
   - **新旧镜像**: 不涉及字节码变更。老镜像中 for-in 仍走内联字段路径。新镜像中首次 for-in 触发 side table 创建 → 后续访问快
@@ -291,14 +313,14 @@ V8 (散列树):
 
 ### 方案 D: Transition 树替代链表 (性能优化)
 
-- **预估效果**: Transition 查找 O(n)→O(1)。新增 `TransitionArray` 数据结构 + DescriptorArray 共享机制
+- **预估效果**: 目标是把多分支 Transition 查找从链式遍历改为按属性键索引，并通过描述符共享减少重复 Layout。该方案不删除 JSHClass 的 8B Transitions 指针，不能直接按 `80,000 × 字段大小`计算收益；需要采集京东场景的 Transition 节点数、链长、Layout 节点数和共享率后，分别测量查找耗时及附属节点内存
 - **改动工作量**: 约 2-3 人月 (核心数据结构变更 + GC 适配 + JIT stub 适配)
 - **兼容性分析**: 核心数据结构变更 → 需全量回归测试
 - **稳定性影响**: 高。Transition 是 VM 最核心的数据结构之一
 
 ### 方案 E: Pointer Compression (长线)
 
-- **预估效果**: 每个 JSHClass 节省 36B (9 ptrs × 4B)。全 VM 对象受益
+- **预估效果**: 若对象头中的类指针及 JSHClass 的 8 个 Tagged 指针都由 8B 压缩为 4B，JSHClass 理论字段宽度减少 36B，即 88B → 52B。按 80,000 个 JSHClass 计算，JSHClass 部分的理论毛节省为 `2,880,000B = 2.75MiB`。该数值未计对齐、压缩指针基址、解码辅助结构和全 VM 布局约束，只能作为完成具体设计前的字段宽度上限；全 VM 其他对象的收益不在这里估算
 - **改动工作量**: 团队级项目 (类似 V8 2019 年的 ptr-compr 改造)。涉及 GC 标记/压缩、interpreter 指针解引用、JIT codegen、跨进程通信中的所有 64-bit 指针 → 32-bit 偏移量转换
 - **兼容性分析**:
   - **新旧镜像**: 需要镜像升级。Pointer compression 改变了对象内存布局，老镜像中的 64-bit 指针不能被新 VM 直接解析
@@ -308,7 +330,7 @@ V8 (散列树):
 
 ### 方案 F: JSApiFunction 裁剪 (已实现)
 
-- **预估效果**: API 函数对象从 ~112B → ~80B (每个 −32B)
+- **预估效果**: API 函数对象按当前分析边界每个减少约 32B。该方案优化的是 JSApiFunction，不减少 JSHClass 的 88B；京东场景只有 JSHClass 数量，不能据此推导该方案收益。若 Snapshot 中 API 函数对象数量为 `N`，对应毛节省计算式为 `N × 32B`
 - **当前状态**: ✅ 已在 `ENABLE_API_FUNCTION_OPTIMIZATION` + `ENABLE_MEMORY_OPTIMIZATION` 双宏路径下实现
 - **覆盖范围**: `New`, `NewConcurrent`, `NewClassFunction` — 所有 N-API 函数创建路径
 
@@ -330,11 +352,20 @@ V8 (散列树):
   └─ 方案 F: JSApiFunction 裁剪     −32B/函数 [已合入主线]
 ```
 
-### 各阶段效果预估
+### 京东场景（80,000+ JSHClass）效果汇总
 
-| 阶段 | JSHClass 大小 | 与 V8 差距 | 10,000 HClass 场景内存 |
-|------|-------------|-----------|----------------------|
-| 当前 | 120B | 2.2× | 1.14 MB |
-| 第1批后 | 96B (−24B) | 1.8× | 0.92 MB |
-| 第2批后 | 88B (−32B) | 1.6× | 0.84 MB |
-| Pointer Comp | ~52B (−68B) | ~1.0× | 0.50 MB |
+以下计算以 80,000 个 JSHClass 为下界。当前 JSHClass 自身浅层内存为 `80,000 × 88B = 7,040,000B = 6.71MiB`。表中的“毛节省”只计算从每个 JSHClass 内联布局中删除的字节；使用 side table 的方案还需扣除表项、哈希桶、弱引用和同步结构占用。
+
+| 方案/阶段 | 单个 JSHClass | 80,000 个合计 | 相对当前毛节省 | 是否可由现有数据计算净收益 |
+|---|---:|---:|---:|---|
+| 当前 | 88B | 6.71MiB | — | Snapshot 已显示单个约 0.09KB |
+| 方案 A：ProtoChange 外移 | 72B | 5.49MiB | **1.22MiB** | 否；需扣除仅在原型变化时产生的 side table 项 |
+| 方案 B：DependentInfos 外移 | 80B | 6.10MiB | **0.61MiB** | 否；需统计被 JIT 优化的 JSHClass 比例和 side table 项 |
+| 方案 C：EnumCache 外移 | 80B | 6.10MiB | **0.61MiB** | 否；需统计执行过属性枚举的 JSHClass 比例和 side table 项 |
+| 方案 A+B | 64B | 4.88MiB | **1.83MiB** | 否；需扣除两类 side table 开销 |
+| 方案 A+B+C | 56B | 4.27MiB | **2.44MiB** | 否；需扣除三类 side table 开销 |
+| 方案 D：Transition 数据结构 | JSHClass 指针槽不变 | 不能只由 JSHClass 数量计算 | 待测 | 需 Transition/Layout 节点数量、链长和共享率 |
+| 方案 E：Pointer Compression | 理论 52B | 理论 3.97MiB | 理论上限 **2.75MiB** | 否；需完成布局、对齐和辅助结构设计 |
+| 方案 F：JSApiFunction 裁剪 | JSHClass 仍为 88B | 不能由 JSHClass 数量计算 | `API函数数 × 32B` | 需 API 函数对象数量 |
+
+当 JSHClass 实际数量高于 80,000 时，方案 A 每增加 10,000 个对象增加约 0.153MiB 毛节省，方案 B 或 C 各增加约 0.076MiB，方案 A+B+C 增加约 0.305MiB。

@@ -45,7 +45,7 @@ for-in 首次 → GetOrCreateEnumCacheFromHClass() → 创建 EnumCache 对象 �
 
 ```
 优化前:
-  JSHClass (120B)
+  JSHClass (88B)
     ...
     64: EnumCache ptr (8B)  ← 始终占用
     ...
@@ -113,15 +113,15 @@ if (enumCache.IsEnumCache()) {
 ### 3.1 内存节省
 
 ```
-场景: 活跃 10,000 个 JSHClass (典型中型应用)
+场景: 京东场景 80,000+ 个 JSHClass（以下按 80,000 下界计算）
 
-优化前: 10,000 × 120B = 1,200,000 B = 1.14 MB
-优化后: 10,000 × 112B = 1,120,000 B = 1.07 MB
+优化前: 80,000 × 88B = 7,040,000 B = 6.71 MiB
+优化后: 80,000 × 80B = 6,400,000 B = 6.10 MiB
 
-节省: 80,000 B = 78 KB
+内联字段毛节省: 640,000 B = 0.61 MiB
 ```
 
-**但注意**: EnumCache 字段占 JSHClass 的 8/120 = 6.7%。对于 80 method class 场景（160 个过渡 JSHClass），节省 160 × 8B = **1.3 KB**。
+EnumCache 字段占 JSHClass 的 `8/88 = 9.1%`。0.61 MiB 是移除内联字段后的毛节省；净节省需扣除实际属性枚举后产生的 side table 表项和哈希桶占用。对于 80 method class 场景（160 个过渡 JSHClass），内联字段毛节省为 `160 × 8B = 1,280B = 1.25KiB`。
 
 ### 3.2 实际收益有限的原因
 
@@ -147,7 +147,7 @@ EnumCache 只是 JSHClass 中 9 个 TaggedPtr 字段的 1 个。更大的冗余�
 2. **再做 DependentInfos / ProtoChangeDetails 外移** (低风险, −16B)
 3. **最后做 EnumCache side table** (中等风险, −8B)
 
-仅前两步即可节省 24B/JSHClass，使 JSHClass 从 120B 降至 96B，接近 V8 Map 的 ~54B 的 1.8× (vs 当前的 2.2×)。
+前两步按字段删除量可减少 24B/JSHClass，使 JSHClass 从 88B 降至 64B；按 80,000 个 JSHClass 计算，内联字段毛节省为 1.83 MiB。跨引擎比例需在相同版本、架构、编译配置和统计边界下测量。
 
 ## 5. 不推荐的替代方案
 
