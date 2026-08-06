@@ -18,3 +18,6 @@ _site/
 .sass-cache/
 .jekyll-cache/
 .jekyll-metadata
+
+# Standalone local repository; do not track it as a gitlink.
+/cangjie_cpp/
