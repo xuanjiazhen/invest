@@ -251,6 +251,17 @@ obj->SetClass(newJsHClass);                 // shared DescriptorArray
   show(Number.isInteger(+location.hash.slice(1)-1)?+location.hash.slice(1)-1:0);
 </script>
 
-<!-- 京东场景：80,000 个 JSHClass 下界。88B/个合计 6.71MiB；A/B/C 字段方案毛节省分别为 1.22/0.61/0.61MiB，A+B+C 为 2.44MiB。Side table 占用需另行扣除。 -->
+<!-- 京东场景：140,000 个 JSHClass 下界。88B/个合计 12.32MiB；A/B/C 字段方案毛节省分别为 2.24/1.12/1.12MiB，A+B+C 为 4.48MiB。Side table 占用需另行扣除。 -->
 </body>
 </html>
+
+<!-- BEGIN HERMES REVIEW APPENDIX 2026-08-12 -->
+<!--
+复核意见（2026-08-12）
+
+- 结论（P0）：不宜对外展示；页面集中传播 120B HClass、32B 冗余、V8 字段外置、线性 transition、Clone 不共享 Layout 和未验证收益，且优化表内部尺寸互相冲突。
+- 数据/源码事实：JSHClass 固定 88B，32B inline slots 属于业务实例；TransitionsDictionary 已是 TaggedHashTable（transitions_dictionary.h:25-97），Clone 明确复用 Layout（js_hclass.cpp:227-248）。页面 hidden-class-comparison-slides.html:87-127,135-177,194-228 的相关对比错误；底部仍按过期 140,000，而 Top13 为 819,497。
+- 风险或反例：pointer compression 84B/−36B、EnumCache 112B/−8B 等尺寸不可能同时成立；V8 数值未绑定 revision、配置和 generated layout。由 120B 推导的倍数、每属性链和 23%/42% 全部失效；side table 也未扣真实 capacity、GC 和 compiled-offset 成本。
+- 放行条件：与修订后的正文建立单一数据源；以 88B 与独立实例尺寸重做全图；冻结双方 commit/config，修正基数；只展示同配置实测，所有估算明确标毛收益并给净成本。
+-->
+<!-- END HERMES REVIEW APPENDIX 2026-08-12 -->
