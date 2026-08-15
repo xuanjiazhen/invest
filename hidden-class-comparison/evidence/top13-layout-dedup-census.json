@@ -1,0 +1,102 @@
+{
+ "total": {
+  "hclasses": 819497,
+  "layouts": 735734,
+  "layout_bytes": 114555552,
+  "cp_strings": 685129,
+  "cp_string_bytes": 16127137
+ },
+ "apps": {
+  "alipay": {
+   "hclasses": 58508,
+   "layouts": 53781,
+   "layout_bytes": 7973392,
+   "cp_strings": 43633,
+   "cp_string_bytes": 1540963
+  },
+  "bilibili": {
+   "hclasses": 23340,
+   "layouts": 21249,
+   "layout_bytes": 3005808,
+   "cp_strings": 24571,
+   "cp_string_bytes": 471602
+  },
+  "douyin": {
+   "hclasses": 133401,
+   "layouts": 118367,
+   "layout_bytes": 17229904,
+   "cp_strings": 130973,
+   "cp_string_bytes": 2563449
+  },
+  "gaodeditu": {
+   "hclasses": 27083,
+   "layouts": 22322,
+   "layout_bytes": 3473408,
+   "cp_strings": 37155,
+   "cp_string_bytes": 714683
+  },
+  "jingdong": {
+   "hclasses": 83345,
+   "layouts": 74235,
+   "layout_bytes": 11662880,
+   "cp_strings": 56071,
+   "cp_string_bytes": 1006511
+  },
+  "jrtt": {
+   "hclasses": 68103,
+   "layouts": 58842,
+   "layout_bytes": 8515904,
+   "cp_strings": 55152,
+   "cp_string_bytes": 3264748
+  },
+  "kuaishou": {
+   "hclasses": 76848,
+   "layouts": 69744,
+   "layout_bytes": 13593296,
+   "cp_strings": 60644,
+   "cp_string_bytes": 1422892
+  },
+  "meituan": {
+   "hclasses": 61146,
+   "layouts": 55571,
+   "layout_bytes": 8497968,
+   "cp_strings": 52639,
+   "cp_string_bytes": 948416
+  },
+  "meituanzhongbao": {
+   "hclasses": 43415,
+   "layouts": 39494,
+   "layout_bytes": 6090304,
+   "cp_strings": 29274,
+   "cp_string_bytes": 512769
+  },
+  "pinduoduo": {
+   "hclasses": 63222,
+   "layouts": 56242,
+   "layout_bytes": 8418128,
+   "cp_strings": 28613,
+   "cp_string_bytes": 751281
+  },
+  "taobao": {
+   "hclasses": 32373,
+   "layouts": 28365,
+   "layout_bytes": 4115568,
+   "cp_strings": 41815,
+   "cp_string_bytes": 760784
+  },
+  "wechat": {
+   "hclasses": 40753,
+   "layouts": 38555,
+   "layout_bytes": 5465200,
+   "cp_strings": 70210,
+   "cp_string_bytes": 1228401
+  },
+  "weibo": {
+   "hclasses": 107960,
+   "layouts": 98967,
+   "layout_bytes": 16513792,
+   "cp_strings": 54379,
+   "cp_string_bytes": 940638
+  }
+ }
+}

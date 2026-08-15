@@ -1,0 +1,275 @@
+{
+  "scope": {
+    "node_name": "constant_pool",
+    "translator_semantics": "V1-like physical element indexes",
+    "missing_edge_interpretation": "unknown; not classified as Hole",
+    "shared_unshared_classification": "not available from these snapshots",
+    "ets_runtime_commit": "4ad6583a30981259b857579c61b5cc83b3530381",
+    "runtime_core_commit": "ed8cec5810e2ae37d4972f501ff189c82d1db6a8"
+  },
+  "inputs": [
+    {
+      "file": "alipay.heapsnapshot",
+      "bytes": 142060096,
+      "sha256": "0450fa10b1da40d1931fc050807c3df68f535120adeda5984055cf0f2834a37d"
+    },
+    {
+      "file": "bilibili.heapsnapshot",
+      "bytes": 63414140,
+      "sha256": "e12c91f0e306aa0833525e32eecd509b945c3c6eb2ce0525f88874348cf86ad6"
+    },
+    {
+      "file": "douyin.heapsnapshot",
+      "bytes": 448771108,
+      "sha256": "4ce1d111b0f1fc6c734c17a6c7724a969d1d58475670527a8572da4068645ea5"
+    },
+    {
+      "file": "gaodeditu.heapsnapshot",
+      "bytes": 64146199,
+      "sha256": "7b2c4eb5f40e3f94c146458aedcc6b8974f132ba0288448cddf072bd8e3a0e05"
+    },
+    {
+      "file": "jingdong.heapsnapshot",
+      "bytes": 194749088,
+      "sha256": "b9d419f45ec5921e464d52fa8e8051d9ea6769a62a43bbb4a3dcde696be276cc"
+    },
+    {
+      "file": "jrtt.heapsnapshot",
+      "bytes": 166776198,
+      "sha256": "7de3931ceab5893208a01d76491a810442f0d05b8a4b741cfe912bc65a105543"
+    },
+    {
+      "file": "kuaishou.heapsnapshot",
+      "bytes": 226568531,
+      "sha256": "1e79e0b2d78c46df54cbc741fadbc820ca6849c1bf3e738aaf6fed909d20e9cc"
+    },
+    {
+      "file": "meituan.heapsnapshot",
+      "bytes": 163024059,
+      "sha256": "f4fb7d936b1cdcb283be3581950909605291c2a86b74015125f67696657d6829"
+    },
+    {
+      "file": "meituanzhongbao.heapsnapshot",
+      "bytes": 92445077,
+      "sha256": "bc9a19ed587a9c8e118ea6be5e134acd3994156da1eb6b5b1f5baa0ab4c26277"
+    },
+    {
+      "file": "pinduoduo.heapsnapshot",
+      "bytes": 119330012,
+      "sha256": "07f6bd3ba2147bf795c2aa2092a718c93d3fe4f0fa78122f8275ff6bd1330c69"
+    },
+    {
+      "file": "taobao.heapsnapshot",
+      "bytes": 92430862,
+      "sha256": "dc2447eb2fcf81bbe6ffa649145972a228e1abf19cea5beda35122c4e128001c"
+    },
+    {
+      "file": "wechat.heapsnapshot",
+      "bytes": 134531677,
+      "sha256": "946e768be0f7e8b8951a130b821a69bf800f68c2d8e68ce8cc3a7d1c85252a5c"
+    },
+    {
+      "file": "weibo.heapsnapshot",
+      "bytes": 280851104,
+      "sha256": "75dd99e6fd3292cc99e200facfa89e55e9f7bcfd6bb87ad2ec0a194ac716f68c"
+    }
+  ],
+  "apps": {
+    "alipay": {
+      "pool_count": 411,
+      "self_size_bytes": 57021008,
+      "physical_slots": 7126804,
+      "user_slots": 7123105,
+      "visible_user_object_edges": 114825,
+      "visible_tail_object_edges": 1644,
+      "other_element_edges": 0,
+      "property_edges": 411,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 56984840,
+      "visible_user_object_edge_rate": 0.016120076848509184
+    },
+    "bilibili": {
+      "pool_count": 169,
+      "self_size_bytes": 4709672,
+      "physical_slots": 588371,
+      "user_slots": 586850,
+      "visible_user_object_edges": 61252,
+      "visible_tail_object_edges": 676,
+      "other_element_edges": 0,
+      "property_edges": 169,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 4694800,
+      "visible_user_object_edge_rate": 0.10437420124392946
+    },
+    "douyin": {
+      "pool_count": 456,
+      "self_size_bytes": 52874472,
+      "physical_slots": 6608397,
+      "user_slots": 6604293,
+      "visible_user_object_edges": 363715,
+      "visible_tail_object_edges": 1824,
+      "other_element_edges": 0,
+      "property_edges": 456,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 52834344,
+      "visible_user_object_edge_rate": 0.05507251116811444
+    },
+    "gaodeditu": {
+      "pool_count": 178,
+      "self_size_bytes": 3464696,
+      "physical_slots": 432731,
+      "user_slots": 431129,
+      "visible_user_object_edges": 75151,
+      "visible_tail_object_edges": 712,
+      "other_element_edges": 0,
+      "property_edges": 178,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 3449032,
+      "visible_user_object_edge_rate": 0.17431209684340418
+    },
+    "jingdong": {
+      "pool_count": 516,
+      "self_size_bytes": 56389064,
+      "physical_slots": 7047601,
+      "user_slots": 7042957,
+      "visible_user_object_edges": 140959,
+      "visible_tail_object_edges": 2064,
+      "other_element_edges": 0,
+      "property_edges": 516,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 56343656,
+      "visible_user_object_edge_rate": 0.02001417870363258
+    },
+    "jrtt": {
+      "pool_count": 305,
+      "self_size_bytes": 25995728,
+      "physical_slots": 3248856,
+      "user_slots": 3246111,
+      "visible_user_object_edges": 148649,
+      "visible_tail_object_edges": 1220,
+      "other_element_edges": 0,
+      "property_edges": 305,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 25968888,
+      "visible_user_object_edge_rate": 0.04579295039510355
+    },
+    "kuaishou": {
+      "pool_count": 243,
+      "self_size_bytes": 16692104,
+      "physical_slots": 2086027,
+      "user_slots": 2083840,
+      "visible_user_object_edges": 148016,
+      "visible_tail_object_edges": 972,
+      "other_element_edges": 0,
+      "property_edges": 243,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 16670720,
+      "visible_user_object_edge_rate": 0.07103040540540541
+    },
+    "meituan": {
+      "pool_count": 319,
+      "self_size_bytes": 20400088,
+      "physical_slots": 2549373,
+      "user_slots": 2546502,
+      "visible_user_object_edges": 142709,
+      "visible_tail_object_edges": 1276,
+      "other_element_edges": 0,
+      "property_edges": 319,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 20372016,
+      "visible_user_object_edge_rate": 0.05604118905070563
+    },
+    "meituanzhongbao": {
+      "pool_count": 267,
+      "self_size_bytes": 8063312,
+      "physical_slots": 1007380,
+      "user_slots": 1004977,
+      "visible_user_object_edges": 74633,
+      "visible_tail_object_edges": 1068,
+      "other_element_edges": 0,
+      "property_edges": 267,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 8039816,
+      "visible_user_object_edge_rate": 0.07426339110248294
+    },
+    "pinduoduo": {
+      "pool_count": 383,
+      "self_size_bytes": 23414480,
+      "physical_slots": 2926044,
+      "user_slots": 2922597,
+      "visible_user_object_edges": 75246,
+      "visible_tail_object_edges": 1532,
+      "other_element_edges": 0,
+      "property_edges": 383,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 23380776,
+      "visible_user_object_edge_rate": 0.025746279764196023
+    },
+    "taobao": {
+      "pool_count": 205,
+      "self_size_bytes": 8265912,
+      "physical_slots": 1032829,
+      "user_slots": 1030984,
+      "visible_user_object_edges": 92383,
+      "visible_tail_object_edges": 820,
+      "other_element_edges": 0,
+      "property_edges": 205,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 8247872,
+      "visible_user_object_edge_rate": 0.08960662823089398
+    },
+    "wechat": {
+      "pool_count": 179,
+      "self_size_bytes": 13311424,
+      "physical_slots": 1663570,
+      "user_slots": 1661959,
+      "visible_user_object_edges": 194827,
+      "visible_tail_object_edges": 716,
+      "other_element_edges": 0,
+      "property_edges": 179,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 13295672,
+      "visible_user_object_edge_rate": 0.11722732028888799
+    },
+    "weibo": {
+      "pool_count": 418,
+      "self_size_bytes": 30573544,
+      "physical_slots": 3820857,
+      "user_slots": 3817095,
+      "visible_user_object_edges": 171405,
+      "visible_tail_object_edges": 1672,
+      "other_element_edges": 0,
+      "property_edges": 418,
+      "pools_with_invalid_size": 0,
+      "pools_with_out_of_range_element_index": 0,
+      "user_bytes": 30536760,
+      "visible_user_object_edge_rate": 0.04490456747867161
+    }
+  },
+  "total": {
+    "pool_count": 4049,
+    "self_size_bytes": 321175504,
+    "physical_slots": 40138840,
+    "user_slots": 40102399,
+    "visible_user_object_edges": 1803770,
+    "visible_tail_object_edges": 16196,
+    "other_element_edges": 0,
+    "property_edges": 4049,
+    "pools_with_invalid_size": 0,
+    "pools_with_out_of_range_element_index": 0,
+    "user_bytes": 320819192,
+    "visible_user_object_edge_rate": 0.044979104616658966
+  }
+}
