@@ -1,0 +1,67 @@
+<mxfile host="app.diagrams.net"><diagram id="7yrqrfpc-i2eh" name="JSHClass布局外提前后对比"><mxGraphModel dx="1500" dy="900" grid="1" gridSize="10" page="1" pageScale="1" pageWidth="1400" pageHeight="820" background="#ffffff">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+    <mxCell id="bg" value="" style="rounded=0;fillColor=#ffffff;strokeColor=none;fontSize=1;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="1400" height="820" as="geometry" /></mxCell>
+    <mxCell id="title" value="JSHClass 内存布局对象外提：修改前后对比" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#1f2937;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="250" y="30" width="900" height="40" as="geometry" /></mxCell>
+    <mxCell id="subtitle" value="四个稀疏强引用槽收敛为按需分配的统一 AuxData sidecar" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontColor=#4b5563;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="300" y="72" width="800" height="28" as="geometry" /></mxCell>
+
+    <mxCell id="before-panel" value="修改前｜JSHClass 固定 88 B" style="swimlane;horizontal=1;startSize=42;rounded=1;arcSize=8;fillColor=#f9fafb;swimlaneFillColor=#ffffff;strokeColor=#9ca3af;strokeWidth=2;fontSize=16;fontStyle=1;fontColor=#374151;verticalAlign=top;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="120" width="600" height="590" as="geometry" /></mxCell>
+    <mxCell id="after-panel" value="修改后｜统一 64 B 主对象 + 按需 sidecar" style="swimlane;horizontal=1;startSize=42;rounded=1;arcSize=8;fillColor=#eef8f1;swimlaneFillColor=#ffffff;strokeColor=#27864a;strokeWidth=2;fontSize=16;fontStyle=1;fontColor=#166534;verticalAlign=top;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="760" y="120" width="600" height="590" as="geometry" /></mxCell>
+
+    <mxCell id="before-object" value="JSHClass" style="swimlane;horizontal=1;startSize=34;rounded=1;arcSize=6;fillColor=#e5e7eb;swimlaneFillColor=#ffffff;strokeColor=#6b7280;fontSize=14;fontStyle=1;fontColor=#1f2937;verticalAlign=top;whiteSpace=wrap;" vertex="1" parent="before-panel"><mxGeometry x="40" y="65" width="300" height="450" as="geometry" /></mxCell>
+    <mxCell id="b-header" value="0–7　TaggedObject header　8 B" style="rounded=0;fillColor=#e5e7eb;strokeColor=#9ca3af;fontSize=11;align=left;spacingLeft=12;whiteSpace=wrap;" vertex="1" parent="before-object"><mxGeometry x="20" y="48" width="260" height="34" as="geometry" /></mxCell>
+    <mxCell id="b-bf" value="8–15　BitField + BitField1　8 B" style="rounded=0;fillColor=#e5e7eb;strokeColor=#9ca3af;fontSize=11;align=left;spacingLeft=12;whiteSpace=wrap;" vertex="1" parent="before-object"><mxGeometry x="20" y="82" width="260" height="34" as="geometry" /></mxCell>
+    <mxCell id="b-core" value="16–47　Proto / Layout / Transitions / Parent　32 B" style="rounded=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;align=left;spacingLeft=12;whiteSpace=wrap;" vertex="1" parent="before-object"><mxGeometry x="20" y="116" width="260" height="54" as="geometry" /></mxCell>
+    <mxCell id="b-marker" value="48–55　ProtoChangeMarker　8 B" style="rounded=0;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;align=left;spacingLeft=12;whiteSpace=wrap;" vertex="1" parent="before-object"><mxGeometry x="20" y="170" width="260" height="42" as="geometry" /></mxCell>
+    <mxCell id="b-details" value="56–63　ProtoChangeDetails　8 B" style="rounded=0;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;align=left;spacingLeft=12;whiteSpace=wrap;" vertex="1" parent="before-object"><mxGeometry x="20" y="212" width="260" height="42" as="geometry" /></mxCell>
+    <mxCell id="b-enum" value="64–71　EnumCache　8 B" style="rounded=0;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;align=left;spacingLeft=12;whiteSpace=wrap;" vertex="1" parent="before-object"><mxGeometry x="20" y="254" width="260" height="42" as="geometry" /></mxCell>
+    <mxCell id="b-deps" value="72–79　DependentInfos　8 B" style="rounded=0;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;align=left;spacingLeft=12;whiteSpace=wrap;" vertex="1" parent="before-object"><mxGeometry x="20" y="296" width="260" height="42" as="geometry" /></mxCell>
+    <mxCell id="b-bf2" value="80–87　BitField2　8 B" style="rounded=0;fillColor=#e5e7eb;strokeColor=#9ca3af;fontSize=11;align=left;spacingLeft=12;whiteSpace=wrap;" vertex="1" parent="before-object"><mxGeometry x="20" y="338" width="260" height="34" as="geometry" /></mxCell>
+    <mxCell id="b-size" value="主对象固定占用：88 B" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="before-object"><mxGeometry x="55" y="390" width="190" height="38" as="geometry" /></mxCell>
+
+    <mxCell id="before-note" value="每个 JSHClass 都预留 4 × 8 B 槽
+即使四字段全部为默认值，32 B 仍在主对象内" style="rounded=1;fillColor=#fff7ed;strokeColor=#d79b00;fontSize=12;fontColor=#7c2d12;whiteSpace=wrap;align=left;spacing=12;" vertex="1" parent="before-panel"><mxGeometry x="375" y="145" width="185" height="100" as="geometry" /></mxCell>
+    <mxCell id="before-default" value="Top13 默认态
+796,928 / 819,497
+四槽仍占位" style="rounded=1;fillColor=#f3f4f6;strokeColor=#9ca3af;fontSize=12;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="before-panel"><mxGeometry x="380" y="285" width="175" height="86" as="geometry" /></mxCell>
+    <mxCell id="before-scan" value="主对象 Tagged body
+扫描槽：8 个" style="rounded=1;fillColor=#f3f4f6;strokeColor=#9ca3af;fontSize=12;whiteSpace=wrap;" vertex="1" parent="before-panel"><mxGeometry x="380" y="405" width="175" height="70" as="geometry" /></mxCell>
+
+    <mxCell id="after-object" value="JSHClass" style="swimlane;horizontal=1;startSize=34;rounded=1;arcSize=6;fillColor=#d5e8d4;swimlaneFillColor=#ffffff;strokeColor=#82b366;fontSize=14;fontStyle=1;fontColor=#166534;verticalAlign=top;whiteSpace=wrap;" vertex="1" parent="after-panel"><mxGeometry x="35" y="65" width="265" height="365" as="geometry" /></mxCell>
+    <mxCell id="a-header" value="0–7　TaggedObject header　8 B" style="rounded=0;fillColor=#e5e7eb;strokeColor=#9ca3af;fontSize=11;align=left;spacingLeft=10;whiteSpace=wrap;" vertex="1" parent="after-object"><mxGeometry x="18" y="48" width="229" height="34" as="geometry" /></mxCell>
+    <mxCell id="a-bf" value="8–15　BitField + BitField1　8 B" style="rounded=0;fillColor=#e5e7eb;strokeColor=#9ca3af;fontSize=11;align=left;spacingLeft=10;whiteSpace=wrap;" vertex="1" parent="after-object"><mxGeometry x="18" y="82" width="229" height="34" as="geometry" /></mxCell>
+    <mxCell id="a-core" value="16–47　Proto / Layout /
+Transitions / Parent　32 B" style="rounded=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;align=left;spacingLeft=10;whiteSpace=wrap;" vertex="1" parent="after-object"><mxGeometry x="18" y="116" width="229" height="54" as="geometry" /></mxCell>
+    <mxCell id="a-aux" value="48–55　AuxData　8 B
+Null 或 TaggedArray(4)" style="rounded=0;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=11;fontStyle=1;align=left;spacingLeft=10;whiteSpace=wrap;" vertex="1" parent="after-object"><mxGeometry x="18" y="170" width="229" height="58" as="geometry" /></mxCell>
+    <mxCell id="a-bf2" value="56–63　BitField2　8 B" style="rounded=0;fillColor=#e5e7eb;strokeColor=#9ca3af;fontSize=11;align=left;spacingLeft=10;whiteSpace=wrap;" vertex="1" parent="after-object"><mxGeometry x="18" y="228" width="229" height="34" as="geometry" /></mxCell>
+    <mxCell id="a-size" value="主对象固定占用：64 B" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;whiteSpace=wrap;" vertex="1" parent="after-object"><mxGeometry x="42" y="285" width="180" height="38" as="geometry" /></mxCell>
+
+    <mxCell id="sidecar" value="TaggedArray(4) sidecar｜48 B" style="swimlane;horizontal=1;startSize=34;rounded=1;arcSize=6;fillColor=#fff2cc;swimlaneFillColor=#ffffff;strokeColor=#d6b656;fontSize=13;fontStyle=1;fontColor=#7c5a00;verticalAlign=top;whiteSpace=wrap;" vertex="1" parent="after-panel"><mxGeometry x="345" y="65" width="220" height="305" as="geometry" /></mxCell>
+    <mxCell id="s-head" value="对象头 + 长度　16 B" style="rounded=0;fillColor=#e5e7eb;strokeColor=#9ca3af;fontSize=11;whiteSpace=wrap;" vertex="1" parent="sidecar"><mxGeometry x="15" y="48" width="190" height="34" as="geometry" /></mxCell>
+    <mxCell id="s-marker" value="[0] ProtoChangeMarker
+初始值 Null" style="rounded=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;whiteSpace=wrap;" vertex="1" parent="sidecar"><mxGeometry x="15" y="82" width="190" height="42" as="geometry" /></mxCell>
+    <mxCell id="s-details" value="[1] ProtoChangeDetails
+初始值 Null" style="rounded=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;whiteSpace=wrap;" vertex="1" parent="sidecar"><mxGeometry x="15" y="124" width="190" height="42" as="geometry" /></mxCell>
+    <mxCell id="s-enum" value="[2] EnumCache
+初始值 Null" style="rounded=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;whiteSpace=wrap;" vertex="1" parent="sidecar"><mxGeometry x="15" y="166" width="190" height="42" as="geometry" /></mxCell>
+    <mxCell id="s-deps" value="[3] DependentInfos
+初始值 Undefined" style="rounded=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;whiteSpace=wrap;" vertex="1" parent="sidecar"><mxGeometry x="15" y="208" width="190" height="42" as="geometry" /></mxCell>
+
+    <mxCell id="after-default" value="默认态：AuxData = Null
+不分配 sidecar
+getter 直接返回字段默认值" style="rounded=1;fillColor=#f0fdf4;strokeColor=#82b366;fontSize=12;fontColor=#166534;whiteSpace=wrap;align=left;spacing=10;" vertex="1" parent="after-panel"><mxGeometry x="35" y="465" width="250" height="82" as="geometry" /></mxCell>
+    <mxCell id="after-nondefault" value="首次写入非默认值
+分配并初始化 TaggedArray(4)
+release-publish 至 AuxData" style="rounded=1;fillColor=#fffbeb;strokeColor=#d6b656;fontSize=12;fontColor=#7c5a00;whiteSpace=wrap;align=left;spacing=10;" vertex="1" parent="after-panel"><mxGeometry x="315" y="465" width="250" height="82" as="geometry" /></mxCell>
+
+    <mxCell id="edge-aux" value="强引用｜按需分配" style="endArrow=block;endFill=1;strokeColor=#27864a;strokeWidth=2;fontSize=11;fontStyle=1;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="a-aux" target="sidecar" parent="after-panel"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="edge-null" value="Null" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6b7280;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.45;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="a-aux" target="after-default" parent="after-panel"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="edge-create" value="非默认写入" style="dashed=1;endArrow=open;endFill=0;strokeColor=#d4a017;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.55;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="sidecar" target="after-nondefault" parent="after-panel"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+    <mxCell id="arrow-change" value="外提" style="shape=singleArrow;direction=east;fillColor=#27864a;strokeColor=#166534;fontColor=#ffffff;fontStyle=1;fontSize=13;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="660" y="370" width="80" height="50" as="geometry" /></mxCell>
+
+    <mxCell id="footer" value="对象布局事实：主对象 88 B → 64 B（每个 JSHClass 净缩减 24 B）　｜　Top13 sidecar 覆盖 22,569 / 819,497（2.754%）　｜　sidecar 单体 48 B" style="rounded=1;fillColor=#f3f4f6;strokeColor=#9ca3af;fontSize=12;fontStyle=1;fontColor=#374151;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="160" y="740" width="1080" height="46" as="geometry" /></mxCell>
+  </root>
+</mxGraphModel></diagram></mxfile>

@@ -369,3 +369,12 @@ V8 (散列树):
 | 方案 F：JSApiFunction 裁剪 | JSHClass 仍为 88B | 不能由 JSHClass 数量计算 | `API函数数 × 32B` | 需 API 函数对象数量 |
 
 当 JSHClass 实际数量高于 80,000 时，方案 A 每增加 10,000 个对象增加约 0.153MiB 毛节省，方案 B 或 C 各增加约 0.076MiB，方案 A+B+C 增加约 0.305MiB。
+
+<!-- BEGIN HERMES REVIEW APPENDIX 2026-08-12 -->
+## 复核意见（2026-08-12）
+
+- **结论（P0）**：88B/self_size 可保留；正文仍使用过期 80,000 基数，并错误描述 transition、Parent、Proto、Layout sharing 和竞品尺寸，不能支撑实施或对外比较。
+- **数据/源码事实**：Top13 当前有 819,497 个 hclass，而正文 `jshclass-layout-analysis.md:286-371` 仍按 80,000 汇总。`TransitionsDictionary` 是哈希表（`transitions_dictionary.h:25-97`），Clone 明确复用 Layout（`js_hclass.cpp:227-248`）；正文 `:93,115-124,240-254` 的“Proto 指向原型 HClass、线性链、独立 Layout”均不成立。
+- **风险或反例**：Parent“仅 GC”、属性阈值、V8/JSC/Hermes 精确尺寸、`<10ns` side-table 和 3-5 人天缺一手证据。老镜像不会因 C++ accessor 抽象自动兼容；generated code、snapshot/serializer 仍绑定 offset。三个 side table 的净收益不能按字段宽度相加。
+- **放行条件**：按当前源码重写字段生产/消费和 transition/Layout；竞品绑定同 revision/架构/config 的 generated layout；统一使用 Top13 人口与真实容器 capacity，补 weak/ephemeron、local/shared、AOT/JIT direct-offset 和 clean 性能/PSS 证据。
+<!-- END HERMES REVIEW APPENDIX 2026-08-12 -->
