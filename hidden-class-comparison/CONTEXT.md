@@ -291,7 +291,7 @@ f650ae9 新增 Hidden Class 对比 (JSHClass vs V8 Map) -- 字段布局、Transi
 
 - **否决落地**：07（JSFunction 布局冻结硬约束）、08、09、10、12、13、共享单例 HClass 移入 `pending-review/rejected.md` §8–14；02/03 应用侧内容合并为 `feasible-proposals/02-app-side-consolidated/`（A1–A6 六项，含验证方法），框架侧不做。
 - **设计追问闭环**：auxdata §4.1 修改前后布局对比、§4.9 弱表路线评估（EphemeronHashTable 底座可复用、+22–30 人日、净增益上限 ~4.6 MiB、维持强 sidecar）；14 对齐精算 23.17 MiB/21.2%（全量逐数组，N≤1 组零收益）。
-- **插桩 patch 四份**：`detailed-proposals/native-interop-lazy-binding/05-插桩patch.md`（未读方法占比+descriptor 形态区分）、`detailed-proposals/constantpool-shared-literal/05-插桩patch.md`（worker 乘数+字面量归因）、`feasible-proposals/04-string-optimization/05-插桩patch.md`（dump 侧去重率+intern 命中率）、`feasible-proposals/11-functiontemplate-on-demand/05-插桩patch.md`（实例化率对账）。
+- **插桩 patch 四份**：`detailed-proposals/native-interop-lazy-binding/05-插桩patch.md`（未读方法占比+descriptor 形态区分）、`detailed-proposals/constantpool-shared-literal/05-插桩patch.md`（对象字面量 backing eligibility/clone/首次写）、`feasible-proposals/04-string-optimization/05-插桩patch.md`（dump 侧去重率+intern 命中率）、`feasible-proposals/11-functiontemplate-on-demand/05-插桩patch.md`（实例化率对账）。
 - **关键口径修正**：快照 string 节点 `self_size` = 字符长度而非对象尺寸（`rawheap_dump.cpp:651-653`）；真实字符串堆占用 ≈126 MiB（2,281,554 对象 + ~43 MiB 头部/对齐），len≤16 占 54.3% 仅装 10.75 MiB 数据——已记入 §8 口径差异与 04 方案。
 - **新方案 15**：ProfileTypeInfoCell 惰性分配——cell 在 DEFINEFUNC 即时分配（`interpreter-inl.cpp:1046,5106,5132` 等 7 处）而 99.9% 停留 cell_0；V8 lazy feedback vectors 迁移，Empty→cell 转换机制已存在（`js_function.cpp:1199-1205`），收益 = 消除率 × 28.5 MiB（当日稍后并入详细方案，见 §12）。
 - **竞品措施迁移排查**：`pending-review/competitor-memory-sweep.md`——已具备 5+1 项（SharedReadOnlySpace、abc 共享、transitions 弱引用、字面量数组 COW、ExternalString 机制、slack tracking 可选开关）；可迁移新增 1 项（惰性反馈向量 → 15）；受约束阻塞 2 项（指针压缩、JSFunction 布局类）；唯一待跟进调查点为 slack tracking 的产品档位默认值与 `(cap=4,used=0)` 成因。
@@ -301,5 +301,19 @@ f650ae9 新增 Hidden Class 对比 (JSHClass vs V8 Map) -- 字段布局、Transi
 
 - **14 升级为详细方案**：`detailed-proposals/layoutinfo-attr-packing/`（四件套按架构模板重组，精算 23.17 MiB/21.2%，49 人日；与 auxdata-sidecar 同批版本 bump 可省 6–8 人日）。
 - **15 并入 cell 详细方案**：`detailed-proposals/profile-type-info-cell-jitfree/` 重组为两阶段（阶段一惰性分配全档位通用、约 30 人日独立交付；阶段二三档裁槽），组合收益模型 `N×(32e+tier(1−e))`，合并工作量 84 人日。
+- **2026-08-18 当前归属修正**：上述合并已撤销。`detailed-proposals/profile-type-info-cell-jitfree/` 当前只保留两个编译期裁槽阶段（JIT-free 32→24 B、JIT-free+PGO-free 24→16 B，55 人日）；按需分配回迁 `feasible-proposals/15-profile-cell-lazy-allocation/`，不进入详细方案收益、排期和架构图。
 - **应用侧改造指导**：`feasible-proposals/02-app-side-consolidated/02-改造指导.md`——A1–A6 逐项「识别（脚本+源码模式）→ 风险评估 → 改造模板 → 验证」，附 AI agent 执行规程（静态扫描模式清单 + 三分类风险评估 + patch 生成 + 自检）。
 - **目录现状**：detailed = 5 方案（auxdata-sidecar / profile-cell 两阶段 / native-interop / constantpool / layoutinfo）；feasible = 02（含改造指导）/04/11。
+
+## 13. 2026-08-16 LayoutInfo Attr 位宽事实修正
+
+人工质询发现 layoutinfo-attr-packing 的「Attr=28 bit 可无损 4 B 化」前提错误：Attr 槽为裸位透传（`WrapUint64/UnwrapToUint64`，`js_tagged_value.h:832-840`），实际载荷最多 **41 bit**——28 bit 布局真值 + 10 bit SortedIndex（`SetSortedIndex` 整宽写回，`layout_info-inl.h:105-111`）+ 3 bit 标志（IsConstProps/IsNotHole/IsPGODumped）。方案已改两档：A 档 6 B 无损（精算 10.42 MiB/9.5%）；B 档 4 B（23.17 MiB/21.2%）以迁移 13 个运行时位（SortedIndex 推荐 Key 区 hash 有序化）为前提。详见该方案 04-review-log 第 3 轮。
+
+## 13. Kuaishou 前后台配对快照分析上下文
+
+- **后台原始文件**：`C:\Users\xuanj\AppData\Roaming\WeLink\appdata\IM\3pqd8bpcgv2w@d5cb51187d2\DownloadFiles\hidumper-jsheap-65479-65479-kuaishou-background.rawheap`，211,562,627 B（201.762 MiB；211.563 MB），SHA-256 `cc761126b3af8d77d25151161ea3192fde997003f276374e0bdd95d6dcecb8bb`，rawheap 协议 `1.0.0`。采集上下文：应用进入后台，用户确认执行全量 GC；translator 报告 1,788,325 个对象。
+- **配对前台原始文件**：`D:\docker\plan\top13\kuaishou_349MB\hidumper-jsheap-59267-59267-1785565963429.rawheap`，233,666,747 B，SHA-256 `5dcb432e261817d97a2e4f5636af268f24d0d2928bd8be32fe5b9deccd437ecb`，协议 `1.0.0`；translator 报告 1,894,993 个对象。前台与后台是两个独立采样点，禁止混合人口、按比例换算或并入 Top13 汇总。
+- **统一转换器**：`C:\Users\xuanj\AppData\Local\Programs\DevEco Studio\sdk\default\openharmony\toolchains\rawheap_translator.exe`，版本 2.0.0，SHA-256 `c5c9df2b5683c56b5b93dba26ed3aef3f376c9d2f37110f1ba01086e44406990`。前台/后台输出分别为 `D:\docker\invest\tmp-napi-scan\kuaishou-foreground-api26.heapsnapshot`（302,531,771 B，SHA-256 `f520a7b0f397a4f4f53189f918fe7b234011c3a3deced15516b77f2ee1da4d86`）和 `D:\docker\invest\tmp-napi-scan\kuaishou-background.heapsnapshot`（278,673,122 B，SHA-256 `9ace0e9983b45fd9fa263cc6c3aebd1cd5d3f9aa9261528a885d39d22085443e`）。
+- **快照 schema**：两份输出均为 8 字段 node schema（`type,name,id,self_size,edge_count,trace_node_id,detachedness,native_size`）与 3 字段 edge schema（`type,name_or_index,to_node`）；本次输出不含 `is_shared` 字段。收益只使用 `self_size` 浅层口径，`native_size`、堆外结构和对齐按方案单列。
+- **可复现证据**：`scripts/kuaishou_background_pair_census.py` 生成 `evidence/kuaishou-background-paired-census.json`（SHA-256 `fac8cfca601252642dbc1941eb4b6ecd886104df15b307573ef9b6ec24d81cc2`），冻结五个 detailed proposal 的前后台单应用人口、毛收益、结构成本、净收益、差异与置信度。ConstantPool 子方向 B 同时冻结 CP `element` 直连 JSObject/JSArray target、仅由这些 target 引出的去重 backing 和全堆通用驻留域；前两者是直接可见驻留集，后者是宽域边界，均不等同于可归因 COW 收益。后台结论只写入各方案 `04-review-log.md`，未修改 `01-背景.md`、`02-需求.md`、`03-方案设计.md`。
+- **解释边界**：full-GC 提高“后台采集时仍存活”的确定性，不保证绝对收益增加；快照不记录 ProfileCell 生命周期首写、Native 属性读取/调用、worker abc 重叠、字面量创建与写时复制历史。Region slack、allocator 碎片、GC pause 和 RSS/PSS 仍需实现 A/B。

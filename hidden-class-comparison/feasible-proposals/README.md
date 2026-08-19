@@ -58,10 +58,10 @@
 | 02 | [应用侧内存优化统一清单](./02-app-side-consolidated/) | 应用 | A1–A6 六项（详见清单，部分为上界） | 70–82%（逐项标注） |
 | 04 | [字符串优化](./04-string-optimization/) | VM | 短串 dedup 预估 6–15 MiB（真实口径 126 MiB，dupRatio 待插桩） | 75% |
 | 11 | [FunctionTemplate 按需创建](./11-functiontemplate-on-demand/) | VM | 上界 36.39 MiB，按 neverInstantiated% 折算（插桩 patch 已备） | 65% |
-| 14→detailed | [LayoutInfo 属性描述槽压缩](../detailed-proposals/layoutinfo-attr-packing/) | VM | 精算 23.17 MiB / 21.2%（含对齐，浅层） | 75% |
-| 15→detailed | [ProfileTypeInfoCell 惰性分配](../detailed-proposals/profile-type-info-cell-jitfree/) | VM | 组合上界 28.5 MiB（消除率 × 档位） | 80% |
+| 14→detailed | [LayoutInfo 属性描述槽压缩](../detailed-proposals/layoutinfo-attr-packing/) | VM | A 档 6B 无损 10.42 MiB；B 档 4B（需迁移 13 运行时位）23.17 MiB | 70% |
+| 15 | [ProfileTypeInfoCell 按需分配](./15-profile-cell-lazy-allocation/) | VM | `32eN-M`，消除率与延迟绑定成本待插桩 | 65% |
 
-> 方案 05/06/14/15 均已升级为详细方案：05/06 见 `../detailed-proposals/jshclass-auxdata-sidecar/`、`../detailed-proposals/native-interop-lazy-binding/`；14 于 2026-08-15 升级为 `../detailed-proposals/layoutinfo-attr-packing/`；15 同日并入 `../detailed-proposals/profile-type-info-cell-jitfree/`（两阶段：惰性分配 + JIT-free 裁剪）。
+> 方案 05/06/14 已升级为详细方案：05/06 见 `../detailed-proposals/jshclass-auxdata-sidecar/`、`../detailed-proposals/native-interop-lazy-binding/`；14 见 `../detailed-proposals/layoutinfo-attr-packing/`。方案 15 保留为待验证候选，与 `../detailed-proposals/profile-type-info-cell-jitfree/` 的编译期裁槽独立。
 > 原 01（JSHClass 零实例回收）机制已实现，无增量收益。
 > 人工审视否决（见 `../pending-review/rejected.md`）：07 JSFunction 代码槽移除（**JSFunction 布局冻结为硬约束**）、08 AccessorData 内联、09 TaggedArray trim、10 模块元数据压缩、12 ClassLiteral 惰性驻留、13 method_idx 缩减；02/03 的应用侧内容合并入 02 统一清单，框架侧改动不做。
 
