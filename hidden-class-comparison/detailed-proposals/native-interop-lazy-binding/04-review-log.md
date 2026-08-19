@@ -1,6 +1,6 @@
 # 审视日志（Native Interop 闭包惰性原型绑定）
 
-本文档独立保存 5 轮不同角色审视记录与闭环意见，不混入正式方案文档。审视对象：01-背景 / 02-需求 / 03-方案设计。
+本文档独立保存各轮不同角色审视记录与闭环意见，不混入正式方案文档。审视对象：01-背景 / 02-需求 / 03-方案设计 / 05-插桩patch。历史结论若被后续 7.0 Release 源码核查推翻，以最新更新为准。
 
 ## 第 1 轮：项目管理者（PM）
 
@@ -63,14 +63,76 @@
 5. **插桩点细化**：原插桩只统计「是否被读取」，未区分会强制 materialize 的 descriptor 形态读取（能力探测/序列化）——已补 §4.6「读取形态」单列，避免收益高估。
 6. 01-背景 §2 的尺寸事实（JSFunction 112/136/144 B、JSNativePointer 40 B、函数 hclass 每 context 一份 88 B）与快照 self_size 口径一致。
 
-**闭环结论**：01/02/03 已按本轮更新（§4.4 IC 失效机制、§4.5 descriptor 驻留量化、§4.6 插桩形态区分；需求 §4 新增两项风险）。插桩里程碑不变，仍是选型与立项前置。无遗留问题。
+**历史闭环结论（已被第 10 轮修正）**：01/02/03 曾按本轮更新（§4.4 IC 失效机制、§4.5 descriptor 驻留量化、§4.6 插桩形态区分；需求 §4 新增两项风险）落稿。该结论只说明当时文档内部闭环，不代表插桩已通过目标 Release 源码核查。
 
-## 第 7 轮：人工审视 TODO 闭环（插桩 patch）
+## 第 7 轮：人工审视项闭环（插桩 patch）
 
 **人工意见**：「给出插桩统计『从未被读取的方法占比』的 patch 改动，以便人工进行插桩统计。」
 
-**闭环结论**：新增 `05-插桩patch.md`——四个打点：创建侧登记（`NapiNativeCreateFunction`）、调用侧标记（native 回调 wrapper）、读取侧标记（`JSObject::GetProperty:1396` 慢路径，descriptor 形态经 `GetOwnPropertyDescriptor` 单列）、类实例化标记（`napi_new_instance:1512`）；输出含 `neverCalledNeverRead`（A2 折算）、`wholeClassUntouched`（A1 折算）、`bucketC_closures`（期望节省）与首用时序。01-背景 §6 已链接。
+**历史结论（已被第 10 轮修正）**：曾新增 `05-插桩patch.md`，提出创建侧登记、native 回调 wrapper、`JSObject::GetProperty:1396` 慢路径、`napi_new_instance:1512` 和逐项 TSV 输出。该版本未基于 7.0 Release 逐项核查，不能作为实施依据。
 
-## 审视结论汇总
+## 审视结论汇总（第 1–7 轮）
 
-前 5 轮 8 项意见全部闭环；第 6 轮独立复核 6 项（链路核验、机制核验、IC 失效具体化、descriptor 成本量化、插桩形态细化、尺寸口径确认），已同步落稿。无遗留问题。
+前 5 轮 8 项意见全部闭环；第 6 轮独立复核 6 项（链路核验、机制核验、IC 失效具体化、descriptor 成本量化、插桩形态细化、尺寸口径确认），已同步落稿。第 7 轮提出的插桩方案后来经第 10 轮 Release 源码复核修正，历史内容保留用于追溯，不再作为当前实施结论。
+
+## 第 8 轮：Kuaishou 后台 full-GC 快照复核
+
+**评估口径**：前台与后台 rawheap 使用同一 API 26 `rawheap_translator` 2.0.0 转换；后台为应用进入后台并执行全量 GC 后的独立存活堆。本轮只构造 A2 **结构候选上界**：HClass 无存活实例、prototype 直接持有非 `constructor` native-stub 方法、且闭包自身持有唯一 `JSNativePointer`。该条件不等价于“从未读取/调用”。冻结数据见 `evidence/kuaishou-background-paired-census.json`。
+
+| 指标 | 前台 Kuaishou | 后台 full-GC Kuaishou | 后台相对前台 |
+|---|---:|---:|---:|
+| 结构候选 prototype / 方法槽 | 70 / 463 | 75 / 576 | +5 / +113 |
+| 闭包 + JSNativePointer 浅层毛收益 | 84,648 B | 104,128 B | +19,480 B |
+| `NapiFunctionInfo` 堆外模型 | 14,816–18,520 B | 18,432–23,040 B | +3,616–4,520 B |
+| 毛收益合计 | 99,464–103,168 B（0.095–0.098 MiB） | 122,560–127,168 B（0.117–0.121 MiB） | +23,096–24,000 B |
+| descriptor 驻留成本 | 33,336–44,448 B（0.032–0.042 MiB） | 41,472–55,296 B（0.040–0.053 MiB） | +8,136–10,848 B |
+| 结构上界净收益 | 55,016–69,832 B（0.052–0.067 MiB） | 67,264–85,696 B（0.064–0.082 MiB） | +12,248–15,864 B |
+
+**结论**：后台结构候选上界比前台高，但这反映两个采样时点的存活结构差异，不能解释为 full-GC 使真实收益增加。full-GC 只确认这些 prototype/闭包在后台采集时仍存活；它不记录属性是否曾读取、方法是否曾调用、descriptor 形态读取，也不覆盖 A1 整类未触及率。**原结论不变：A1/A2 选型与立项仍必须以前置插桩为准；本轮 0.064–0.082 MiB 只作低置信结构上界，不作承诺净收益。**另需通过实现 A/B 量化 allocator 碎片、IC 失效与 GC/RSS/PSS。
+
+## 第 9 轮：Top13 61.47 MiB 应用归属与口径闭环
+
+使用 `scripts/measure_lazy_binding_targets.py` 1.1.0 对原 Top13 的 13 份 `.heapsnapshot` 重放，并将 Bucket C 拆成「prototype 方法闭包」和「类构造器闭包」。完整冻结结果见 [`top13-native-interop-method-census.json`](../../evidence/top13-native-interop-method-census.json)。
+
+| 排名 | 应用 | 方法闭包数 | 方法闭包本体 | 占 61.47 MiB 比例 |
+|---:|---|---:|---:|---:|
+| 1 | **kuaishou** | **175,025** | **24.035 MiB** | **39.10%** |
+| 2 | weibo | 41,973 | 5.763 MiB | 9.37% |
+| 3 | douyin | 40,814 | 5.604 MiB | 9.12% |
+| 4 | pinduoduo | 34,078 | 4.678 MiB | 7.61% |
+| 5 | jingdong | 31,827 | 4.369 MiB | 7.11% |
+| — | Top13 合计 | 447,707 | 61.474 MiB | 100.00% |
+
+**口径闭合**：方案中的 `447,707 / 61.47 MiB` 只统计零实例类 prototype 上的**方法闭包**。同批快照另有 57,737 个与类同名的构造器闭包（7.062 MiB）；加入构造器后是 505,444 个、68.536 MiB。因此历史文档中的 `61.47 MiB` 与应用侧分析中的 `68.54 MiB` 不是互相矛盾的两个测量值，而是前者排除、后者包含构造器。
+
+**对人工问题的回答**：原 Top13 的 61.47 MiB 中，贡献最多的仍是 **kuaishou**，为 24.035 MiB、占 39.10%，明显高于第二名 weibo 的 5.763 MiB。
+
+### Kuaishou 前后台方法闭包空间刷新
+
+按 `24.035 MiB` 的方法闭包语义口径刷新：共享 native stub、零存活实例类的 prototype 直接持有、排除 `constructor`，只累计唯一方法闭包的实际 `self_size`；不要求闭包具有可见且唯一的 `JSNativePointer`。前台使用 Top13 Kuaishou 同一份原 rawheap，前后台均由 API 26 `rawheap_translator` 2.0.0 转换。冻结数据见 [`kuaishou-background-paired-census.json`](../../evidence/kuaishou-background-paired-census.json) 的 `method_only_structural_upper_bound`。
+
+| 指标 | 前台 Kuaishou | 后台 full-GC Kuaishou | 后台相对前台 |
+|---|---:|---:|---:|
+| 候选 prototype | 336 | 172 | -164 |
+| 方法属性槽 | 1,389 | 1,038 | -351 |
+| **唯一方法闭包** | **1,378** | **1,034** | **-344** |
+| **方法闭包浅层大小** | **197,096 B（0.188 MiB）** | **146,696 B（0.140 MiB）** | **-50,400 B（-0.048 MiB）** |
+| 排除的构造器闭包 | 116 / 14,480 B | 116 / 14,144 B | 0 / -336 B |
+
+因此，在 API26 translator 的同口径前后台快照中，可观察到的方法闭包结构上界是：前台 **1,378 个、0.188 MiB**，后台 **1,034 个、0.140 MiB**。方法属性槽多于唯一闭包，是因为少量闭包由多个属性槽引用。
+
+该数值仍是**结构上界**：零存活实例不证明类名或方法从未被读取，也不证明闭包可全部消除；真实可优化量仍需读取/调用插桩和 clean A/B。历史 `24.035 MiB` 来自同一前台 rawheap 的旧 translator 输出；旧、新 translator 的 prototype/HClass 和属性边表达不同，不能将 `24.035 MiB` 与新前台 `0.188 MiB` 相减并解释为版本收益。
+
+第 8 轮 `0.064–0.082 MiB` 则是上述方法闭包结构上界进一步限制为“闭包具有唯一可见 `JSNativePointer`”后，再计入 pointer、堆外 `NapiFunctionInfo` 和 descriptor 成本得到的 strict A2 净收益模型，不是方法闭包本体大小；两套数字不混用。
+
+## 第 10 轮：7.0 Release 插桩可行性复核
+
+**核验基线**：manifest `OpenHarmony-7.0-Release@4ad97323baf64f52922c5dadcbbd11754732a057`；`arkcompiler_ets_runtime@f04900cf951c66c2ea18b2bab5b591d5336c34b9`；`foundation/arkui/napi@464170c9c1faba39f56549a13d232d51740a49d3`。
+
+**结论**：第 7 轮的 wrapper、`callbackPtr`、`JSObject::GetProperty` 单点读取、`napi_new_instance` 实例化标记和自定义 TSV 均不可作为 7.0 Release 实施 patch。`ArkNativeFunctionCallBack` 已通过 `runtimeInfo->GetData()` 获取真实 `NapiFunctionInfo`，应以 `NapiFunctionInfo *` 作为外置 registry entry 的活跃键，不修改其布局、不包装原 callback；属性读取必须覆盖解释器快路径、IC、compiler/AOT 和 descriptor/反射路径，未闭合前只能报告 Phase 1 callback 调用率下界与未读取率上界。
+
+**日志与开关**：复用现有 `persist.hiviewdfx.napiprofiler.enabled`、`ArkNativeEngine::napiProfilerEnabled` 及 NAPI 已链接的 `CountTraceEx`/`HITRACE_TAG_ACE`；固定名称的 HiTrace counters 承载检查点聚合，Hilog 只保留错误日志。不新增独立系统参数、HiSysEvent schema、日志文件、显示或 hidumper 命令。修正版见 `05-插桩patch.md`，并已同步 01/02/03 的交叉引用和统计口径。
+
+## 审视结论更新
+
+第 8、9、10 轮意见已闭环：后台 full-GC 样本只作低置信结构上界；Top13 61.47 MiB 已完成方法/构造器拆分和逐应用归属，最大贡献应用为 kuaishou；Kuaishou 已按 `24.035 MiB` 的方法闭包语义口径刷新 API26 前后台结构上界；第 7 轮插桩实现已由 7.0 Release 源码核查纠正为 Phase 1/Phase 2 方案；两种粒度及关键数据结构关系已落两份 DrawIO/SVG 架构图。当前插桩范围无遗留项，但 Phase 2 读取全路径覆盖仍是实施前置条件。

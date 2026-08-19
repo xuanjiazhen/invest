@@ -25,7 +25,7 @@ broad_categories 分布：
 |---|---|
 | 尺寸分布 | ≤24 B：20.28 MiB；25–64 B：12.47 MiB；65–256 B：14.21 MiB；257–1K：3.44 MiB；>1K：32.63 MiB |
 | 类型分布 | 全部为 `string`，**slicedstring / concatenated string 节点数为 0**——TreeString flatten 与 SlicedString 父串释放在 Top13 场景无存量可回收 |
-| 持有方（引用归因，共享字符串会重复计入） | constant_pool（去重后 15.38 MiB / 685,129 个，跨 VM 共享上界，→ detailed-proposals/constantpool-shared-literal）；其余为动态字符串 |
+| 持有方（引用归因，共享字符串会重复计入） | constant_pool（去重后 15.38 MiB / 685,129 个，跨 VM 共享上界）；其余为动态字符串。对象字面量 COW 方案不包含字符串共享 |
 | 推论 | 04 的收益主体集中在两段：短字符串内联（≤24 B 桶 20.28 MiB，header 占比高）与大字符串驻留（>1K 桶 32.63 MiB，需业务侧归因）；中段与 flatten 子项证据不足 |
 
 ### 2.2 tagged_array 承载（修正此前的归因口径）
@@ -41,7 +41,7 @@ broad_categories 分布：
 | JSSharedObject | 5.39 MiB（30,702 个，avg 179 B） | shared heap 的 sendable 对象，布局与共享策略未分析；量级小 |
 | PrototypeHandler | 3.55 MiB（77,646 个，avg 48 B） | Proxy handler 对象，数量大单体小，未分析；量级小 |
 | >1K 大字符串 | 32.63 MiB | 需按持有模块归因（业务缓存/日志），应用侧问题为主 |
-| js_object 中字面量占比 | 未归因 | detailed-proposals/constantpool-shared-literal 子方向 B 的前置项 |
+| js_object 中对象字面量 backing 占比 | 未归因 | detailed-proposals/constantpool-shared-literal 的 clone/首次写专项插桩前置项 |
 
 ## 4. 结论与下一步
 

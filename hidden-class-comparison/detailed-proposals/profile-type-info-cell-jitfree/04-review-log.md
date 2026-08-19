@@ -1,74 +1,99 @@
-# 审视日志（ProfileTypeInfoCell JIT-free 裁剪）
+# 审视日志（ProfileTypeInfoCell 编译期裁槽）
 
-本文档独立保存 5 轮不同角色审视记录与闭环意见，不混入正式方案文档。审视对象：01-背景 / 02-需求 / 03-方案设计。
+本文档保存当前两阶段裁槽方案的有效审视意见和闭环结论。审视对象：`01-背景.md`、`02-需求.md`、`03-方案设计.md`。
 
 ## 第 1 轮：项目管理者（PM）
 
 **审视意见**
-1. 7.13 MiB 浅层收益 vs 48 人日，且强依赖编译期分档能力落地——若分档能力延期，本方案是否有独立价值？
-2. cell_1/cell_n 数量未统计，收益是否偏保守？
+
+1. 阶段一收益是否依赖未验证的 cell 消除比例？
+2. `CELL_1/N` 是否纳入收益？
+3. 两阶段的工作量能否独立核算？
 
 **闭环结论**
-- 澄清：本方案是「编译期 JIT-free 变体」的组成项，分档能力是前置载体；若分档延期则方案同步后移，但设计不依赖分档具体实现，可先行冻结能力闭包定义。
-- 采纳：cell_1/cell_n 数量在新一轮基线快照后补充，当前收益按 cell_0 下界表述（需求 §2 已注明）。
+
+- 两阶段只缩小现存 cell，不减少对象数量，收益固定为 `8N/16N`；
+- 快手前后台按 `CELL_0 + CELL_1 + CELL_N` 全量计数；历史 Top13 仅有 `CELL_0` 数据，明确标为收益下界；
+- 当前两阶段合计 55 人日，其中阶段一 24 B 可独立交付，阶段二等待 PGO-free 产品决策。
 
 ## 第 2 轮：SE / 架构师
 
 **审视意见**
-1. 24 B/32 B 双布局的 feature fingerprint 与既有 AOT/snapshot 版本机制如何共存？
-2. 汇编解释器（x64/AArch64）读取 cell.Value 的路径是否受布局影响？
+
+1. 16/24/32 B 多档布局如何避免内部 ABI 混用？
+2. AOT-free 是否足以删除 `Handle`？
+3. 汇编解释器读取 `Value` 是否受影响？
 
 **闭环结论**
-- 澄清：`ARK_PROFILE_CELL_HAS_MACHINE_CODE` 独立纳入构建 fingerprint，与 AOT 版本并列校验；双布局是编译期确定的，同一镜像无混堆。
-- 采纳：asm interpreter `Value` 读取路径（`asm_interpreter_call.cpp`）纳入回归，AArch64 补充用例。
+
+- `ARK_PROFILE_CELL_HAS_MACHINE_CODE` 和 `ARK_PROFILE_CELL_HAS_HANDLE` 纳入构建 feature fingerprint；同一镜像只允许一种编译期尺寸，持久产物跨档双向稳定拒绝；
+- 不足。PGO 可在无 AOT 时独立初始化、采集并保存 `.ap`，阶段二必须以显式 PGO-free 能力闭包为前置；
+- `Value` 始终位于 offset 8，解释器和 IC 热路径不增加档位分支，x64/AArch64 路径纳入回归。
 
 ## 第 3 轮：测试工程师
 
 **审视意见**
-1. 24 B 对象边界是否用哨兵对象压力验证？
-2. PGO dump/merge 的 Handle 读写路径覆盖？
+
+1. 24/16 B 对象边界如何验证？
+2. PGO 的 `Handle` 读写是否完整覆盖？
+3. shallow bytes 如何映射到设备内存？
 
 **闭环结论**
-- 采纳：DT 用例含「24 B cell 后放哨兵对象 + 压力 GC」；构建矩阵含 JIT-free+PGO（Handle 读写、dump/merge 回归）。
+
+- 各目标尺寸后布置哨兵对象，覆盖 young/old/full/CMC/compaction 压力测试；同时核验 allocator 实际字节和 Region used；
+- 构建矩阵包含 JIT-free+PGO 的 24 B 档，并专门验证无 AOT情况下的 define-class 采集、dump 和 `.ap` merge；
+- snapshot `self_size` 只作为对象浅层收益，不设到 Region committed、RSS、PSS 或峰值的固定折算，正式结果采用 clean A/B。
 
 ## 第 4 轮：VM 开发者
 
 **审视意见**
-1. `UpdateProfileTypeInfoCellType` 换 HClass 时，CELL_0/1/N 的尺寸依赖是否一致？
-2. Empty cell（read-only/shared heap）的 24 B 分配与 visitor 是否覆盖？
+
+1. `UpdateProfileTypeInfoCellType` 更换 `CELL_0/1/N` HClass 时，尺寸是否一致？
+2. local/shared Empty cell 和 GC visitor 是否覆盖？
+3. 残留专用字段消费者如何暴露？
 
 **闭环结论**
-- 澄清：三类 HClass 在同一构建统一使用当前 `SIZE`，换 HClass 只改状态不改尺寸（方案设计 §4.2）；
-- 采纳：read-only/shared Empty cell 的 24 B 分配路径与 visitor 验证纳入 GC 矩阵。
+
+- 三类 HClass 在同一构建统一使用当前 `SIZE`，状态转级只换 HClass，不改变实例尺寸；
+- local/shared factory、Empty cell、xray visitor、weak processor、serializer 和 snapshot 全部纳入目标档位矩阵；
+- 目标档位不提供空 accessor：删除字段后对应 offset/accessor 不声明，残留引用必须构建失败，并辅以全仓静态扫描。
 
 ## 第 5 轮：发布 / 兼容性负责人
 
 **审视意见**
-1. JIT-free 与 JIT-enabled 双镜像是否造成维护双份代码路径的成本？
-2. 24 B runtime 误加载 32 B snapshot 的兜底？
+
+1. 多构建档位是否造成运行时双路径？
+2. 24/16 B runtime 误加载 32 B snapshot 或 AOT/AI 产物如何处理？
+3. OTA 是否允许只更新 runtime？
 
 **闭环结论**
-- 澄清：条件编译集中在头文件常量与少数接口（accessor/安装/诊断），双路径编译期确定、非运行期分支，维护成本可控；
-- 采纳：版本 feature fingerprint 双向稳定拒绝作为硬门槛，禁止 OTA 只更 runtime。
 
-## 第 6 轮：独立复核（源码重验证 + 分档需求对齐）
+- 条件编译集中于布局常量、accessor 和能力专用消费者，运行时不按开关切换对象尺寸；
+- feature fingerprint 和版本校验覆盖 snapshot、AOT/AI、AppSpawn 和 rawheap，跨档双向稳定拒绝；
+- 禁止只更新 runtime 而保留旧持久产物。
 
-**审视意见与核验结果**（本轮为对既有 01/02/03 的独立源码复核，基线 `ets_runtime`，全部结论附源码位置）：
+## 第 6 轮：源码复核
 
-1. **Handle 槽消费者核验**：仓库级运行时消费者仅 PGO 链路——profiler stub 写入（`compiler/profiler_stub_builder.cpp:155`，写 weak 构造函数引用）、PGOProfiler 读取（`pgo_profiler/pgo_profiler.cpp:1338`）、factory 初始化（`object_factory.cpp:5560`、`shared_object_factory.cpp:597`）。IC/AOT/解释器不读写该槽。**原方案把 Handle 视为不可裁剪是保守了**：≤6G 分档若 PGO 随 AOT 一并关闭，cell 可到 16 B，cell_0 收益从 7.13 MiB 提升到 14.27 MiB。
-2. **MachineCode 槽消费者核验**：安装（`jit/jit_task.cpp:388`）、deopt 清理（`deoptimizer/deoptimizer.cpp:684`）、诊断（`stubs/runtime_stubs.cpp:4878`）三类，全部在 JIT 能力闭包内，无 interpreter-only 消费者。原方案结论成立。
-3. **与产品分档对齐**：≤6G 手机宏编译关闭 AOT+JIT 为既定需求，本方案是该分档的直接受益项；24 B 档无新增依赖，16 B 档新增「AOT 关闭 ⇒ PGO 关闭」的产品决策依赖。
-4. **allocator 取整风险降级**：ArkVM tagged 对象经 `DEFINE_ALIGN_SIZE` 按 8 B 对齐、young/old 空间 bump 分配，无 32 B size class 取整机制；原「高」级风险降为「中」，但保留 Region 实测核验门槛。
-5. **shared Empty cell**：`shared_object_factory.cpp:593-597` 创建 shared Empty cell 并初始化 Handle——16 B 档的 shared 路径需同步裁剪（已补入涉及模块与 DT 矩阵）。
+1. **`MachineCode` 消费者**：JIT 安装（`jit/jit_task.cpp:388`）、deopt 清理（`deoptimizer/deoptimizer.cpp:684`）、诊断（`stubs/runtime_stubs.cpp:4878`），均纳入 JIT 能力闭包。
+2. **`Handle` 消费者**：profiler stub 直接写入（`compiler/profiler_stub_builder.cpp:155-160`）、`PGOProfiler` 直接读取（`pgo_profiler/pgo_profiler.cpp:1338-1393`）、local/shared factory 初始化；不是 AOT-only 字段。
+3. **PGO/AOT 关系**：AOT 可消费 PGO 产物，但 PGO 采集和保存不依赖 AOT；已有 AOT 产物时当前实现反而可能关闭 PGO profiler。因此“关闭 AOT即可删除 Handle”不成立。
+4. **allocator**：tagged 对象按 8 B 对齐并采用 bump 分配，24/16 B 具备兑现基础；仍保留 Region 实测门槛。
+5. **JSFunction 边界**：本方案只修改 cell，自有 `JSFunction::MachineCode` 和冻结的 112 B JSFunction 布局不变。
 
-**闭环结论**：01/02/03 已按本轮意见更新（三档布局、双层闭包、工作量 48→53 人日、风险表与 DT 矩阵）；16 B 档以产品冻结「AOT 关闭 ⇒ PGO 关闭」为放行前置，未冻结前构建矩阵不包含 16 B 档。
+## 第 7 轮：快手前后台 full-GC 快照复核
 
-## 第 8 轮：人工审视 TODO（2026-08-15，方案合并）
+前台与后台 rawheap 使用同一 API 26 `rawheap_translator` 2.0.0 转换；后台为应用进入后台并执行 full GC 后的独立存活堆。冻结数据见 `../../evidence/kuaishou-background-paired-census.json`。
 
-**人工意见**：将 feasible-proposals/15（ProfileTypeInfoCell 惰性分配）合并至本方案，并细化完善。
+| 指标 | 前台 Kuaishou | 后台 full-GC Kuaishou | 后台相对前台 |
+|---|---:|---:|---:|
+| 存活 cell 数 `N` | 67,940 | 57,714 | -10,226 |
+| `CELL_0 / CELL_1 / CELL_N` | 67,402 / 73 / 465 | 57,186 / 25 / 503 | -10,216 / -48 / +38 |
+| cell 浅层堆 | 2,174,080 B（2.073 MiB） | 1,846,848 B（1.761 MiB） | -327,232 B |
+| 阶段一 24 B 总收益 `8N` | 543,520 B（0.518 MiB） | 461,712 B（0.440 MiB） | -81,808 B |
+| 阶段二 16 B 累计收益 `16N` | 1,087,040 B（1.037 MiB） | 923,424 B（0.881 MiB） | -163,616 B |
 
-**闭环结论**：已合并为两阶段方案并全文细化——01-背景新增 §4「cell 的分配时机」（7 处 DEFINEFUNC 分配点、Empty→cell 既有机制、V8 先例、99.9% cell_0 事实）；02-需求改为两阶段目标、组合收益模型 `N×(32e+tier(1−e))`、工作量合并重估 84 人日（阶段一可独立交付约 30 人日）、风险与验收补阶段一条目、插桩消除率 e 为阶段一立项门槛；03-方案设计新增 §4.1 阶段一设计（分配点删除表、首触发路径、PGO 条件保留、共享计数等价、否决阈值触发的 ADR 理由）、利弊表与 DT 矩阵补阶段一用例；竞品对照补 V8 lazy feedback vectors。原 feasible/15 目录移除。
+`CELL_0/1/N` 只表示同 slot 的复用级别，不影响裁槽计算；三个类型的现存对象均按相同的 `8N/16N` 口径计入。Region 碎片、GC 扫描和 RSS/PSS 留待实现后 A/B。
 
 ## 审视结论汇总
 
-前 5 轮共 8 项意见全部闭环；第 6 轮独立复核新增 5 项（Handle 可裁剪、消费者清单固化、分档对齐、风险降级、shared 路径补充），已同步落稿。无遗留问题。
+当前方案只保留两个编译期裁槽阶段：阶段一删除 JIT-only `MachineCode`（32→24 B），阶段二在显式 PGO-free 构建中再删除 `Handle`（24→16 B）。字段消费者、能力闭包、布局、兼容、GC/工具、收益和 55 人日工作量已形成闭环；阶段二唯一产品前置是冻结 PGO-free 构建。

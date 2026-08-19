@@ -11,7 +11,7 @@
 | 措施 | V8 做法 | ArkTS 现状 / 判定 |
 |---|---|---|
 | 指针压缩（tagged 4B） | 64 位堆上全量 4B tagged | **受约束阻塞**：架构级改造（GC/编译器/快照全线），OpenHarmony 未启用；JSHClass 局部压缩已评估后放弃（见 pending-review 已放弃记录） |
-| 惰性反馈向量（lazy feedback vectors） | 反馈结构延迟到函数预热后分配，冷函数零反馈驻留 | **可迁移** → `detailed-proposals/profile-type-info-cell-jitfree/` 阶段一（Empty→cell 转换机制已存在） |
+| 惰性反馈向量（lazy feedback vectors） | 反馈结构延迟到函数预热后分配，冷函数零反馈驻留 | **待验证候选** → `../feasible-proposals/15-profile-cell-lazy-allocation/`；ArkVM 还需解决父 `ProfileTypeInfo + slotId` 定位与同 slot 共享 |
 | 字节码冲刷（bytecode flushing） | GC 多轮未执行后释放冷函数字节码+反馈 | **部分已具备**：ArkTS 字节码在共享 JSPandaFile（mmap，非堆内），Method 包装对象 64 B×1.65M 随 abc 常驻；Method 无入边仅 5.43 MiB，冲刷收益有限，**不立项** |
 | Map 去重 / slack tracking | 实例数固定后收缩 in-object 槽 | **已具备（可选开关）**：`--enable-inline-property-optimization`（附带 slack tracking，`js_runtime_options.cpp:232`）、`VisitTransitionAndUpdateObjSize`（`js_hclass-inl.h:358`）、`isStartSlackTracking`（`js_function.h:452`）。待判点收窄为：产品档位默认是否开启、快照观测到的 `(cap=4, used=0)` 高频形态是否因未开启/未固化（对应 pending-review needs-human-judgment §2，插桩前置） |
 | 共享只读堆 | ReadOnlyRoots 跨 isolate 共享 | **已具备**：`SharedReadOnlySpace`（`mem/heap.h:803-805,1157`）跨 VM 共享 |
@@ -24,9 +24,9 @@
 
 | 措施 | JSC 做法 | ArkTS 现状 / 判定 |
 |---|---|---|
-| Butterfly COW（数组存储写时复制） | 数组 backing 跨实例共享、写时复制 | **部分已具备**：字面量数组 COW（`ENABLE_COW_ARRAY`，≤10 元素 NON_MOVABLE 共享）；扩容后的数组 backing 不 COW → 对应 detailed `constantpool-shared-literal` 子方向 B（对象字面量 backing COW 化） |
+| Butterfly COW（数组存储写时复制） | 数组 backing 跨实例共享、写时复制 | **部分已具备**：字面量数组 COW（`ENABLE_COW_ARRAY`，≤10 元素 NON_MOVABLE 共享）；detailed `constantpool-shared-literal` 仅评估对象字面量外置 backing COW，不修改数组路径，也不计入既有数组 COW 收益 |
 | UnlinkedCodeBlock 共享 | 字节码元数据跨闭包共享 | **已具备等价**：JSPandaFile/abc 跨 VM 共享 + FunctionTemplate 共享 |
-| Structure 去重 / transition 压缩 | 形状元数据共享 | **已具备**：transition 链 + root HClass 缓存；增量见 `14-layoutinfo-attr-packing`（Attr 槽压缩 23.17 MiB）与 detailed auxdata-sidecar |
+| Structure 去重 / transition 压缩 | 形状元数据共享 | **已具备**：transition 链 + root HClass 缓存；增量见 `14-layoutinfo-attr-packing`（Attr 槽压缩）与 detailed auxdata-sidecar；**DescriptorArray 家族共享**已立项迁移评估 → `feasible-proposals/16-layoutinfo-sharing/`（内容去重上界 54.0 MiB + 链共享 2.35 MiB） |
 
 ### Hermes
 

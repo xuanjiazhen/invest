@@ -30,7 +30,7 @@
 - 否决依据：cell_0 由**解释器 IC 反馈路径**分配——`interpreter-inl.cpp:1046-1063` 的 `UpdateProfileTypeInfoCellToFunction` 在 profile slot 未建立时 `NewProfileTypeInfoCell`，与 JIT 无关；函数创建时默认 `RawProfileTypeInfo = EmptyProfileTypeInfoCell` 单例（`js_function.cpp:112`），非空 cell 都是运行时反馈产生的。
 - 结论：「JIT 未启用时该 32B 对象无实际用途」不成立；「无机器码 ⇒ 反馈对象无用途」是错误推理。方案 C（共享 cell_0 单例）也与 Empty 单例语义冲突（Empty 不能 transition 到 cell_1）。
 
-- 评审结论（人工提出）：ProfileTypeInfoCell 的「JIT-off 裁剪」与「共享 cell_0 单例」已被否决，但可另行审视是否存在其他优化空间（如按需/阈值分配）；toJSON 闭包与冗余函数绑定的优化空间已单列（cell 槽位裁剪与按需分配已合并为两阶段方案 `../detailed-proposals/profile-type-info-cell-jitfree/`）。
+- 评审结论（人工提出）：ProfileTypeInfoCell 的「JIT-off 整体删除」与「共享 cell_0 单例」已被否决；字段级编译期裁槽见 `../detailed-proposals/profile-type-info-cell-jitfree/`，按需分配候选独立见 `../feasible-proposals/15-profile-cell-lazy-allocation/`。
 
 
 ## 5. JIT 分档布局（56/88B 双档切换）

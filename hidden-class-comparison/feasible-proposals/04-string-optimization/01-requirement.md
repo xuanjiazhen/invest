@@ -30,4 +30,4 @@ Top13 快照 `broad_categories.string` = 83.03 MiB（5.04%），其中 65.09 MiB
 
 ## 关联与依赖
 - 依赖 VM 侧插桩（GetOrInternString 命中率）；
-- ConstantPool 持有的常量字符串（去重 15.38 MiB）与跨 VM 共享方案（`../../detailed-proposals/constantpool-shared-literal/`）分属不同存量，收益可叠加。
+- ConstantPool 持有的常量字符串（去重 15.38 MiB）不在对象字面量 COW 方案（`../../detailed-proposals/constantpool-shared-literal/`）范围内；跨 VM 字符串共享如继续评估，应独立立项和计量。

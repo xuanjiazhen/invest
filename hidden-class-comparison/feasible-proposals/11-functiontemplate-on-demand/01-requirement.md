@@ -1,6 +1,5 @@
 # 需求（Requirement）：FunctionTemplate 按需创建
 
-
 ## 背景与问题
 FunctionTemplate 954,059 个 = 36.39 MiB（40B，仅 Method/Module/RawProfileTypeInfo/Length 四字段），100% 由 cow_tagged_array 的 element 边持有。未实例化的函数声明也分配 template。
 

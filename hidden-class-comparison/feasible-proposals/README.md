@@ -59,6 +59,7 @@
 | 04 | [字符串优化](./04-string-optimization/) | VM | 短串 dedup 预估 6–15 MiB（真实口径 126 MiB，dupRatio 待插桩） | 75% |
 | 11 | [FunctionTemplate 按需创建](./11-functiontemplate-on-demand/) | VM | 上界 36.39 MiB，按 neverInstantiated% 折算（插桩 patch 已备） | 65% |
 | 14→detailed | [LayoutInfo 属性描述槽压缩](../detailed-proposals/layoutinfo-attr-packing/) | VM | A 档 6B 无损 10.42 MiB；B 档 4B（需迁移 13 运行时位）23.17 MiB | 70% |
+| 16 | [LayoutInfo 共享（内容去重 + 家族链）](./16-layoutinfo-sharing/) | VM | 键序列等价上界：去重 ≤54.0 MiB，+链共享 ≤56.35 MiB（attr 不可见，待全内容核验） | 65% |
 | 15 | [ProfileTypeInfoCell 按需分配](./15-profile-cell-lazy-allocation/) | VM | `32eN-M`，消除率与延迟绑定成本待插桩 | 65% |
 
 > 方案 05/06/14 已升级为详细方案：05/06 见 `../detailed-proposals/jshclass-auxdata-sidecar/`、`../detailed-proposals/native-interop-lazy-binding/`；14 见 `../detailed-proposals/layoutinfo-attr-packing/`。方案 15 保留为待验证候选，与 `../detailed-proposals/profile-type-info-cell-jitfree/` 的编译期裁槽独立。

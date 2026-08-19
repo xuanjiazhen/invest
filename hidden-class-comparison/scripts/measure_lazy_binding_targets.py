@@ -32,7 +32,7 @@ import os
 import argparse
 import collections
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 M = 1048576
 
 # class -> @ohos module specifier. Only used to name the import site in the
@@ -247,6 +247,24 @@ def analyze(path, wide=20, threshold=1000):
 
     tot_n = sum(len(v) for v in cproto.values())
     tot_b = sum(szf(c) for v in cproto.values() for c in v)
+    method_nodes = []
+    constructor_nodes = []
+    for proto, closures in cproto.items():
+        class_name = None
+        for label, holder in rev.get(proto, []):
+            if label in ("ProtoOrHClass", "HomeObject") and ty(holder) == "closure" and own(holder):
+                class_name = own(holder)
+                break
+        for closure in closures:
+            if class_name is not None and own(closure) == class_name:
+                constructor_nodes.append(closure)
+            else:
+                method_nodes.append(closure)
+
+    method_n = len(method_nodes)
+    method_b = sum(szf(c) for c in method_nodes)
+    constructor_n = len(constructor_nodes)
+    constructor_b = sum(szf(c) for c in constructor_nodes)
 
     # WIDE grouped by owning @ohos module, keeping only modules this app loaded
     bymod = collections.defaultdict(lambda: dict(n=0, b=0, classes=[]))
@@ -266,6 +284,8 @@ def analyze(path, wide=20, threshold=1000):
 
     return dict(
         app=app, c_protos=len(cproto), c_n=tot_n, c_mib=tot_b / M,
+        method_n=method_n, method_mib=method_b / M,
+        constructor_n=constructor_n, constructor_mib=constructor_b / M,
         wide_n=sum(e["n"] for e in WIDE.values()),
         wide_mib=sum(e["b"] for e in WIDE.values()) / M,
         wide_classes=len(WIDE),
@@ -290,6 +310,8 @@ def report(results):
     for r in results:
         print(f"=== {r['app']} === bucketC protos={r['c_protos']} n={r['c_n']} "
               f"{r['c_mib']:.3f} MiB   @ohos modules loaded={r['ohos_mods']}")
+        print(f"  METHODS n={r['method_n']:6d} {r['method_mib']:7.3f} MiB   "
+              f"CONSTRUCTORS n={r['constructor_n']:6d} {r['constructor_mib']:7.3f} MiB")
         print(f"  WIDE   classes={r['wide_classes']:4d} n={r['wide_n']:6d} "
               f"{r['wide_mib']:7.3f} MiB   <== lazy module accessor")
         print(f"  NARROW families={r['narrow_families']:4d} protos={r['narrow_protos']:5d} "
@@ -312,13 +334,15 @@ def report(results):
         sys.stdout.flush()
 
     print("\n=== SUMMARY ===")
-    tc = tw = tnr = tb = 0.0
+    tc = tm = tctor = tw = tnr = tb = 0.0
     for r in results:
-        tc += r["c_mib"]; tw += r["wide_mib"]; tnr += r["narrow_mib"]; tb += r["bare_mib"]
+        tc += r["c_mib"]; tm += r["method_mib"]; tctor += r["constructor_mib"]
+        tw += r["wide_mib"]; tnr += r["narrow_mib"]; tb += r["bare_mib"]
         print(f"  {r['app']:<18} C={r['c_mib']:7.3f}  WIDE={r['wide_mib']:7.3f}  "
               f"NARROW={r['narrow_mib']:7.3f}  BARE={r['bare_mib']:6.3f}  "
               f"protos={r['c_protos']:6d}")
     print(f"  {'TOTAL':<18} C={tc:7.3f}  WIDE={tw:7.3f}  NARROW={tnr:7.3f}  BARE={tb:6.3f}")
+    print(f"  {'SCOPE SPLIT':<18} METHODS={tm:7.3f}  CONSTRUCTORS={tctor:7.3f}")
 
 
 def main():

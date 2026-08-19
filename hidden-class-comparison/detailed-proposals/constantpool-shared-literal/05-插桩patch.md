@@ -1,86 +1,134 @@
-# 插桩 Patch：worker 场景调研与字面量占比归因
+# 插桩 Patch：对象字面量外置 Backing COW
 
-目的：补齐两个前置量化项——①子方向 A 的乘数（进程内并发 VM 数 × 每 VM 加载同 abc 的重合度）；②子方向 B 的基数（对象/数组字面量在 js_object/js_array 中的规模与归属 abc）。由系统参数 `persist.ark.propf.census`（示例名）开关。
+目的：只量化对象字面量 COW 的输入与结果，不统计 worker、跨 VM 字符串或数组字面量。插桩由 debug/实验构建开关控制，接口名为设计示意，落地时使用目标 revision 的现有 DFX 框架。
 
-## Patch 1：VM 生命周期与 abc 加载矩阵（子方向 A 乘数）
+## Patch 1：对象字面量模板 eligibility
 
-**文件**：`arkcompiler/ets_runtime/ecmascript/ecma_vm.cpp`、`jspandafile/js_pandafile_manager.cpp`
+**文件**：对象字面量模板 materialize 路径、`ecmascript/object_factory.cpp`
 
-**位置 1**：`EcmaVM::EcmaVM`（构造函数尾部）与 `EcmaVM::~EcmaVM`。
-
-```cpp
-// 构造：记录 VMId（进程内递增）、isWorker（由 RuntimeOption 的 worker 标志传入）、创建时刻
-Census::LogEvent("vm_create", vmId, isWorker, nowMs);
-// 析构：Census::LogEvent("vm_destroy", vmId, nowMs);
-```
-
-**位置 2**：`JSPandaFileManager` 的 abc 打开/缓存命中路径（`LoadPandaFile`/`OpenPandaFile` 系列，`js_pandafile_manager.cpp`）。
+对 `Properties` 和 `Elements` 独立记录：
 
 ```cpp
-// 首次加载与命中均记录：Census::LogEvent("abc_load", vmId, pandaFileHash64, isNew);
-// pandaFileHash64 取文件路径的 hash 或 IndexHeader 摘要，避免落盘明文路径
+// 示意：模板 backing 完成构建后执行一次
+Census::RecordObjectLiteralTemplate(
+    literalId,
+    backingKind,       // PROPERTIES / ELEMENTS
+    length,
+    alignedBytes,
+    eligibility,       // ELIGIBLE / FALLBACK
+    fallbackReason);   // EMPTY / DICTIONARY / OVERSIZE / FUNCTION / ACCESSOR / UNSUPPORTED_KIND
 ```
 
-**输出与换算**：进程存续期事件流汇成 `vm × abc` 关联矩阵；对每个 abc 计算**并发重叠窗口数** `k(abc)`（同时存活且加载了该 abc 的 VM 数最大值），则：
+`literalId` 使用 `(JSPandaFile hash, method/entity id, literal index)` 等稳定点位标识，不使用会被 GC 移动的对象地址作为跨事件主键。
+
+输出按 backing kind、长度桶和 fallback reason 聚合。该打点用于确定对象字面量专属阈值，不能复用数组字面量的 `MAX_READ_ONLY_ARRAY_LENGTH` 作为结论。
+
+## Patch 2：CloneObjectLiteral 命中
+
+**文件**：
+
+- `ecmascript/object_factory.cpp` 的两个 `CloneObjectLiteral`；
+- `ecmascript/compiler/new_object_stub_builder.cpp::CloneObjectLiteral`。
+
+census 开启时，compiler stub 可调用轻量 runtime hook，避免维护第二套统计逻辑。每次 clone 分别记录 `Properties` / `Elements`：
+
+```cpp
+Census::RecordObjectLiteralClone(
+    literalId,
+    backingKind,
+    isCowHit,
+    backingLength,
+    alignedBytes);
+```
+
+守恒要求：
 
 ```text
-子方向 A 上界收益 = Σ_abc (k(abc) − 1) × 该 abc 的 CP 字符串字节数
+cloneBackingCount = cowHitCount + deepCopyFallbackCount + emptyBackingCount
+avoidedCloneBytes = Σ(cowHit.alignedBytes)
 ```
 
-abc 级 CP 字符串字节数由 Patch 3 输出。`Σ(k−1)==0` 即撤项判据。
+函数/访问器 fallback 仍执行原 `CloneProperties(old, env, obj)`，并单独计数，不得记入 avoided bytes。
 
-## Patch 2：字面量创建计数（子方向 B 基数）
+## Patch 3：首次写脱离
 
-**文件**：`arkcompiler/ets_runtime/ecmascript/object_factory.cpp`
+**文件**：普通对象 owner-aware COW 脱离 helper 及其 runtime/stub 调用点。
 
-**位置**：`CloneObjectLiteral`（:517）与 `CloneArrayLiteral`（:539）入口。
+仅 backing 从 `COWTaggedArray` 转为普通 mutable backing 时记录一次：
 
 ```cpp
-JSHandle<JSObject> ObjectFactory::CloneObjectLiteral(JSHandle<JSObject> object)
-{
-    if (UNLIKELY(Census::Enabled())) {
-        // 当前解释帧函数 → Method → ConstantPool → JSPandaFile，取 abc 归属
-        Census::CountLiteral(vmId, thread_->GetInterpreterFrameMethod(), OBJ_LITERAL, object->GetJSHClass()->GetObjectSize());
-    }
-    ...
+Census::RecordObjectLiteralDetach(
+    backingKind,
+    writeKind,         // OVERWRITE / ADD / DELETE / DEFINE / GROW / TO_DICTIONARY / KIND_MIGRATION
+    oldLength,
+    copiedAlignedBytes);
 ```
 
-`GetInterpreterFrameMethod` 以目标 revision 实际接口为准（解释态从 InterpretedFrame 取 function→Method；非解释态跳过归因只计数）。输出：`(abc, literalKind) → {count, sumShallowSize, avgSize}`。
-
-**口径**：该计数度量的是**创建频次**（时间成本/COW 化收益上限），驻留存量（js_object 83.69 MiB 中字面量占比）需 Patch 4 的 dump 侧归因。
-
-## Patch 3：abc 级 ConstantPool 字符串字节
-
-**文件**：`arkcompiler/ets_runtime/ecmascript/jspandafile/program_object.cpp`
-
-**位置**：ConstantPool 字符串条目 resolve 路径（`GetConstantPool`/字符串条目 GetOrInternString 调用处）。
-
-```cpp
-// 首次 resolve 时：Census::CountCPString(vmId, cpOwnerPandaFileHash, stringBytes);
-```
-
-与 Patch 1 的 `k(abc)` 相乘即得子方向 A 收益；单独输出亦校验快照口径（Top13 单 VM 合计 15.38 MiB）。
-
-## Patch 4：dump 侧字面量驻留归因（可选，debug 构建限定）
-
-**文件**：`arkcompiler/ets_runtime/ecmascript/dfx/hprof/rawheap_dump.cpp`
-
-**位置**：`IterateMarkedObjects`（:650 一带，对象表遍历）。
-
-```cpp
-// 对 JSObject/JSArray：沿 hclass → root HClass 的 ObjectLiteralHClass 缓存命中判定是否字面量 root
-// （GetObjectLiteralRootHClass 产出的 root hclass 记录在 GlobalEnv 的缓存数组内，dump 时可比对）
-// 命中则记 (literalKind, selfSize)，并经 elements/properties 边归入其模板 abc（可选：经 Method 边）
-```
-
-输出：`字面量驻留 MiB / js_object+js_array 驻留 MiB = 占比`，直接回填子方向 B 的空间收益基数。
-
-## 汇总输出
+同一实例同一 backing 后续写入不重复计 detach。输出：
 
 ```text
-census: vms=<n> workers=<w> abcMatrixEntries=<m>
-dupPotentialMiB=<Σ(k−1)×cpString>          # 子方向 A 收益（0 则撤项）
-literalCreate=<obj:n,bytes|arr:n,bytes>     # 子方向 B 时间口径
-literalResidentMiB=<x> of <objArrMiB>       # 子方向 B 空间口径（Patch 4）
-cpStringTotalMiB=<y>                        # 校验 15.38 MiB 快照口径
+detachRate       = detachCount / cowHitCount
+detachCopyBytes  = Σ(copiedAlignedBytes)
+eventNetBytes    = avoidedCloneBytes - detachCopyBytes
 ```
+
+这是累计分配/复制口径，不等于 live heap、committed 或 RSS/PSS。
+
+## Patch 4：写路径完整性验证
+
+实验构建增加断言：任何 owner-aware 写入口准备修改 backing 时，如果 backing 仍是 `COWTaggedArray`，必须先经过脱离 helper。对无法建立 owner 的直接 `TaggedArray::Set` 路径，在 COW 来源标记开启时记录调用点或触发 debug fatal。
+
+专项覆盖：
+
+- 覆盖、添加、删除、`defineProperty`；
+- symbol key、数值 key、elements grow；
+- fast/dictionary 转换；
+- elements-kind migration；
+- IC/runtime stub/AOT store；
+- debugger/反射和内部 helper。
+
+验收要求：所有测试中 `cowDirectWriteViolation == 0`。
+
+## Patch 5：clean A/B
+
+同一应用、同一业务脚本、同一 GC 时点执行：
+
+- A：COW 开关关闭；
+- B：COW 开关开启；
+- 分别采集前台、后台 full-GC；
+- 每组至少重复 5 次，报告中位数与离散度。
+
+并列输出：
+
+```text
+cloneCount, cowHitCount, fallbackCount
+eligiblePropertiesBytes, eligibleElementsBytes
+avoidedCloneBytes, detachCount, detachCopyBytes, eventNetBytes
+young/old/nonMovable used bytes
+Region used / committed
+full-GC live shallow bytes
+peak and steady RSS/PSS
+clone-path time, first-write time
+```
+
+不得用 `js_object` 总量、ConstantPool 的 JSObject/JSArray 混合驻留域或单份快照替代 A/B 净收益。
+
+## 汇总输出示例
+
+```text
+objectLiteralCow:
+  templates=<n> eligible=<n> fallback=<n>
+  clone=<n> cowHit=<n> deepCopy=<n>
+  avoidedCloneBytes=<n>
+  detach=<n> detachCopyBytes=<n>
+  eventNetBytes=<n>
+  directWriteViolation=0
+  fallback={empty:n, dictionary:n, oversize:n, function:n, accessor:n, unsupported:n}
+```
+
+## 数据解释边界
+
+- `eventNetBytes > 0` 只说明累计 backing 分配/复制减少，不证明 RSS/PSS 下降；
+- COW backing 位于 NON_MOVABLE 空间，必须单列碎片和 Region commitment；
+- `detachRate` 应按 backing kind 与长度分桶，平均值不能用于选择统一阈值；
+- clean A/B 是默认开启的必要条件，插桩事件模型不是替代品。

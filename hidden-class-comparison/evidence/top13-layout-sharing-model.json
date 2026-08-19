@@ -1,0 +1,16 @@
+{
+ "current": {
+  "count": 723691,
+  "bytes": 90402832
+ },
+ "identical_dedup": {
+  "count": 189840,
+  "bytes": 33777952
+ },
+ "family_shared": {
+  "count": 176232,
+  "bytes": 31313744
+ },
+ "saving_dedup_only": 56624880,
+ "saving_family_total": 59089088
+}

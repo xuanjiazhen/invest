@@ -5,9 +5,9 @@
 | 方案 | 子文件夹 | 背景 | 需求 | 方案设计 | 插桩 patch |
 |---|---|---|---|---|---|
 | JSHClass 64B AuxData Sidecar | `jshclass-auxdata-sidecar/` | 01-背景.md | 02-需求.md | 03-方案设计.md | — |
-| ProfileTypeInfoCell 惰性分配与 JIT-free 裁剪 | `profile-type-info-cell-jitfree/` | 01-背景.md | 02-需求.md | 03-方案设计.md | — |
+| ProfileTypeInfoCell 编译期裁槽 | `profile-type-info-cell-jitfree/` | 01-背景.md | 02-需求.md | 03-方案设计.md | — |
 | Native Interop 闭包惰性原型绑定 | `native-interop-lazy-binding/` | 01-背景.md | 02-需求.md | 03-方案设计.md | 05-插桩patch.md |
-| ConstantPool 跨 VM 共享与字面量优化 | `constantpool-shared-literal/` | 01-背景.md | 02-需求.md | 03-方案设计.md | 05-插桩patch.md |
+| 对象字面量外置 Backing COW | `constantpool-shared-literal/` | 01-背景.md | 02-需求.md | 03-方案设计.md | 05-插桩patch.md |
 | LayoutInfo 属性描述槽压缩 | `layoutinfo-attr-packing/` | 01-背景.md | 02-需求.md | 03-方案设计.md | — |
 
 ## 归档结构说明

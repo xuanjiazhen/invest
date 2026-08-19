@@ -309,6 +309,8 @@ f650ae9 新增 Hidden Class 对比 (JSHClass vs V8 Map) -- 字段布局、Transi
 
 人工质询发现 layoutinfo-attr-packing 的「Attr=28 bit 可无损 4 B 化」前提错误：Attr 槽为裸位透传（`WrapUint64/UnwrapToUint64`，`js_tagged_value.h:832-840`），实际载荷最多 **41 bit**——28 bit 布局真值 + 10 bit SortedIndex（`SetSortedIndex` 整宽写回，`layout_info-inl.h:105-111`）+ 3 bit 标志（IsConstProps/IsNotHole/IsPGODumped）。方案已改两档：A 档 6 B 无损（精算 10.42 MiB/9.5%）；B 档 4 B（23.17 MiB/21.2%）以迁移 13 个运行时位（SortedIndex 推荐 Key 区 hash 有序化）为前提。详见该方案 04-review-log 第 3 轮。
 
+同日归档新方向 `feasible-proposals/16-layoutinfo-sharing/`：transition 全量复制（含内容不变的 proto/extensible 路径）造成大面积内容重复——快照按键序列重建等价组，去重上界 54.0 MiB（数组 -73.8%），V8 式前缀链共享仅再 +2.35 MiB；核心前置是就地变更隔离（与 41 bit 载荷中的运行时位直接相关），排期约束「先 16 后 14」。证据：`evidence/top13-layout-sharing-model.json`、`scripts/layout_family_sharing_model.py`。
+
 ## 13. Kuaishou 前后台配对快照分析上下文
 
 - **后台原始文件**：`C:\Users\xuanj\AppData\Roaming\WeLink\appdata\IM\3pqd8bpcgv2w@d5cb51187d2\DownloadFiles\hidumper-jsheap-65479-65479-kuaishou-background.rawheap`，211,562,627 B（201.762 MiB；211.563 MB），SHA-256 `cc761126b3af8d77d25151161ea3192fde997003f276374e0bdd95d6dcecb8bb`，rawheap 协议 `1.0.0`。采集上下文：应用进入后台，用户确认执行全量 GC；translator 报告 1,788,325 个对象。
