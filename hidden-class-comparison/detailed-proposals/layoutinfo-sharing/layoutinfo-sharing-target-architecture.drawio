@@ -1,0 +1,91 @@
+<mxfile host="app.diagrams.net" agent="Hermes Agent via @drawio/mcp 1.5.0">
+  <diagram id="layout-target" name="3.1 目标架构">
+    <mxGraphModel dx="2054" dy="1103" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="980" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#172B4D;" value="LayoutInfo immutable canonical sharing 目标架构" vertex="1">
+          <mxGeometry height="34" width="1100" x="50" y="28" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#5E6C84;" value="修改后：同 VM 完整内容相同的稳定 Layout 收敛为 immutable canonical；后续写入先 COW" vertex="1">
+          <mxGeometry height="24" width="1300" x="50" y="64" as="geometry" />
+        </mxCell>
+        <mxCell id="process" parent="1" style="swimlane;horizontal=1;startSize=36;rounded=1;html=1;fillColor=#F4F5F7;swimlaneFillColor=#EBECF0;strokeColor=#7A869A;strokeWidth=2;fontStyle=1;fontSize=15;fontColor=#172B4D;" value="&lt;font style=&quot;font-size: 24px;&quot;&gt;进程（Process）&lt;/font&gt;" vertex="1">
+          <mxGeometry height="746" width="1127" x="40" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="vm" parent="process" style="swimlane;horizontal=1;startSize=32;rounded=1;html=1;fillColor=#FAFBFC;swimlaneFillColor=#F4F5F7;strokeColor=#7A869A;strokeWidth=2;fontStyle=1;fontSize=14;fontColor=#172B4D;" value="&lt;font style=&quot;font-size: 24px;&quot;&gt;ArkVM A（LocalHeap）&lt;/font&gt;" vertex="1">
+          <mxGeometry height="650" width="1030" x="60" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="a" parent="vm" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fillColor=#DEEBFF;strokeColor=#0065FF;strokeWidth=2;fontColor=#0747A6;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;JSHClass A&lt;br&gt;proto=P1, layout={x,y}&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="45" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="b" parent="vm" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fillColor=#DEEBFF;strokeColor=#0065FF;strokeWidth=2;fontColor=#0747A6;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;JSHClass B&lt;br&gt;proto=P2, layout={x,y}&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="45" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="canon" parent="vm" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fontSize=12;fontStyle=1;fillColor=#E3FCEF;strokeColor=#36B37E;strokeWidth=3;fontColor=#006644;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;&lt;b&gt;canonical LayoutInfo&lt;/b&gt;&lt;br&gt;IMMUTABLE_LAYOUT_INFO&lt;br&gt;[x, attrX] [y, attrY]&lt;br&gt;完整物理槽只读&lt;/font&gt;" vertex="1">
+          <mxGeometry height="140" width="270" x="330" y="75" as="geometry" />
+        </mxCell>
+        <mxCell id="table" parent="vm" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fontSize=12;fillColor=#EAE6FF;strokeColor=#6554C0;strokeWidth=2;fontColor=#403294;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;&lt;b&gt;per-VM weak canonical table&lt;/b&gt;&lt;br&gt;Hash128 + weak LayoutInfo&lt;br&gt;hash 命中后逐槽比较&lt;br&gt;只在 publish 边界访问&lt;/font&gt;" vertex="1">
+          <mxGeometry height="145" width="275" x="700" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="write" parent="vm" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fontSize=12;fillColor=#FFF0B3;strokeColor=#FFAB00;strokeWidth=2;fontColor=#172B4D;" value="写入入口&lt;br&gt;AddKey / Attr / TrackType / PGO" vertex="1">
+          <mxGeometry height="85" width="230" x="45" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="guard" parent="vm" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fontSize=12;fillColor=#FFF0B3;strokeColor=#FFAB00;strokeWidth=2;fontColor=#172B4D;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;EnsureMutableLayout&lt;br&gt;immutable → 完整物理 COW&lt;br&gt;owner 切换后执行原写入&lt;/font&gt;" vertex="1">
+          <mxGeometry height="100" width="270" x="330" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="copy" parent="vm" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fontSize=12;fillColor=#FFEBE6;strokeColor=#DE350B;strokeWidth=2;fontColor=#BF2600;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;mutable LayoutInfo copy&lt;br&gt;保持原 canonical 不变&lt;/font&gt;" vertex="1">
+          <mxGeometry height="85" width="250" x="700" y="375" as="geometry" />
+        </mxCell>
+        <mxCell id="read" parent="vm" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fontSize=11;fillColor=#F4F5F7;strokeColor=#A5ADBA;strokeWidth=1.5;fontColor=#42526E;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;读取热路径&lt;br&gt;lookup / enum / serializer / compiler fixed offset&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="270" x="330" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="e_a" edge="1" parent="vm" source="a" style="rounded=0;html=1;strokeColor=#36B37E;strokeWidth=3;endArrow=block;endFill=1;fontSize=10;fontColor=#006644;" target="canon" value="strong LayoutInfo ref">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_b" edge="1" parent="vm" source="b" style="rounded=0;html=1;strokeColor=#36B37E;strokeWidth=3;endArrow=block;endFill=1;fontSize=10;fontColor=#006644;" target="canon" value="写前 strong ref">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_table" edge="1" parent="vm" source="table" style="rounded=0;html=1;strokeColor=#6554C0;strokeWidth=2;dashed=1;endArrow=block;endFill=1;fontSize=10;fontColor=#403294;" target="canon" value="weak value，不保活">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_write" edge="1" parent="vm" source="write" style="rounded=0;html=1;strokeColor=#FFAB00;strokeWidth=2;endArrow=block;endFill=1;fontSize=10;fontColor=#172B4D;" target="guard" value="统一写守卫">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_guard" edge="1" parent="vm" source="guard" style="rounded=0;html=1;strokeColor=#FFAB00;strokeWidth=2;endArrow=block;endFill=1;fontSize=10;fontColor=#172B4D;" target="copy" value="完整 COW">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_read" edge="1" parent="vm" source="read" style="rounded=0;html=1;strokeColor=#0065FF;strokeWidth=2;endArrow=block;endFill=1;fontSize=10;fontColor=#0747A6;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" target="canon" value="原固定偏移读取">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gc" parent="vm" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fontSize=11;fillColor=#F4F5F7;strokeColor=#A5ADBA;strokeWidth=1.5;fontColor=#42526E;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;GC weak processing&lt;br&gt;无 HClass owner 后清 weak entry / tombstone&lt;/font&gt;" vertex="1">
+          <mxGeometry height="80" width="275" x="700" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="e_gc" edge="1" parent="vm" source="gc" style="rounded=0;html=1;strokeColor=#6554C0;strokeWidth=2;dashed=1;endArrow=block;endFill=1;fontSize=10;fontColor=#403294;exitX=1;exitY=0.5;entryX=1;entryY=0.5;orthogonalLoop=1;jettySize=auto;" target="table" value="weak clear">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1000" y="550" />
+              <mxPoint x="1000" y="140" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_owner_switch" edge="1" parent="vm" source="b" style="rounded=0;html=1;strokeColor=#FFAB00;strokeWidth=2;dashed=1;endArrow=block;endFill=1;fontSize=12;fontColor=#172B4D;exitX=1;exitY=0.5;entryX=0;entryY=0.5;orthogonalLoop=1;jettySize=auto;" target="copy" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="290" y="215" />
+              <mxPoint x="290" y="500" />
+              <mxPoint x="650" y="500" />
+              <mxPoint x="650" y="417" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ownerSwitchLabel" parent="vm" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=11;fillColor=#FFFFFF;strokeColor=#FFAB00;strokeWidth=1;fontColor=#172B4D;" value="COW 后 owner ref 替换" vertex="1">
+          <mxGeometry height="24" width="190" x="380" y="474" as="geometry" />
+        </mxCell>
+        <mxCell id="footer" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fillColor=#E3FCEF;strokeColor=#36B37E;strokeWidth=2;fontColor=#006644;" value="边界：每 VM 独立 weak table；不跨 VM、进程或 SharedHeap 命中。读取热路径仍按原 TaggedArray 固定偏移直接访问，不经过 table 或 COW guard。" vertex="1">
+          <mxGeometry height="42" width="1360" x="120" y="915" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

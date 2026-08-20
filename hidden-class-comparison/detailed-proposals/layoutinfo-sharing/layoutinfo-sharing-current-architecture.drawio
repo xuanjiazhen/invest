@@ -1,0 +1,48 @@
+<mxfile host="app.diagrams.net" agent="Hermes Agent via @drawio/mcp 1.5.0">
+  <diagram id="layout-current" name="2.1 现有架构">
+    <mxGraphModel dx="2054" dy="1103" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="980" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#172B4D;" value="LayoutInfo Sharing 现有架构" vertex="1">
+          <mxGeometry height="34" width="1100" x="50" y="28" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#5E6C84;" value="修改前：防御性复制与跨 context 重建产生多个内容相同、对象 identity 不同的 LayoutInfo" vertex="1">
+          <mxGeometry height="24" width="1300" x="50" y="64" as="geometry" />
+        </mxCell>
+        <mxCell id="process" parent="1" style="swimlane;horizontal=1;startSize=36;rounded=1;html=1;fillColor=#F4F5F7;swimlaneFillColor=#EBECF0;strokeColor=#7A869A;strokeWidth=2;fontStyle=1;fontSize=15;fontColor=#172B4D;" value="&lt;font style=&quot;font-size: 24px;&quot;&gt;进程（Process）&lt;/font&gt;" vertex="1">
+          <mxGeometry height="665" width="760" x="40" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="mainVm" parent="process" style="swimlane;horizontal=1;startSize=32;rounded=1;html=1;fillColor=#FAFBFC;swimlaneFillColor=#F4F5F7;strokeColor=#7A869A;strokeWidth=2;fontStyle=1;fontSize=14;fontColor=#172B4D;" value="&lt;font style=&quot;font-size: 24px;&quot;&gt;主线程 VM（LocalHeap）&lt;/font&gt;" vertex="1">
+          <mxGeometry height="560" width="620" x="75" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="mainA" parent="mainVm" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fillColor=#DEEBFF;strokeColor=#0065FF;strokeWidth=2;fontColor=#0747A6;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;JSHClass A&lt;br&gt;shape {x, y}&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="180" x="45" y="75" as="geometry" />
+        </mxCell>
+        <mxCell id="mainB" parent="mainVm" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fillColor=#DEEBFF;strokeColor=#0065FF;strokeWidth=2;fontColor=#0747A6;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;JSHClass B&lt;br&gt;proto/extensible 变体&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="180" x="45" y="185" as="geometry" />
+        </mxCell>
+        <mxCell id="mainL1" parent="mainVm" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fontSize=12;fillColor=#FFEBE6;strokeColor=#DE350B;strokeWidth=2;fontColor=#BF2600;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;b&gt;LayoutInfo L1&lt;/b&gt;&lt;br&gt;[x, attrX] [y, attrY]&lt;br&gt;identity(L1) ≠ identity(L2)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="100" width="230" x="330" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="mainL2" parent="mainVm" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fontSize=12;fillColor=#FFEBE6;strokeColor=#DE350B;strokeWidth=2;fontColor=#BF2600;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;b&gt;LayoutInfo L2&lt;/b&gt;&lt;br&gt;[x, attrX] [y, attrY]&lt;br&gt;content(L2) = content(L1)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="100" width="230" x="330" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="mainnote" parent="mainVm" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;verticalAlign=middle;fontSize=11;fillColor=#F4F5F7;strokeColor=#A5ADBA;strokeWidth=1.5;fontColor=#42526E;" value="&lt;font style=&quot;font-size: 24px;&quot;&gt;proto/extensible 等路径为隔离后续原地写而复制；&lt;br&gt;创建前不按完整内容查询。&lt;/font&gt;" vertex="1">
+          <mxGeometry height="115" width="430" x="85" y="355" as="geometry" />
+        </mxCell>
+        <mxCell id="maine1" edge="1" parent="mainVm" source="mainA" style="rounded=0;html=1;strokeColor=#DE350B;strokeWidth=2;endArrow=block;endFill=1;fontSize=10;fontColor=#BF2600;" target="mainL1" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;Layout 强引用&lt;/font&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="maine2" edge="1" parent="mainVm" source="mainB" style="rounded=0;html=1;strokeColor=#DE350B;strokeWidth=2;endArrow=block;endFill=1;fontSize=10;fontColor=#BF2600;" target="mainL2" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;防御性复制&lt;/font&gt;">
+          <mxGeometry relative="1" x="0.0074" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="footer" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fillColor=#FFEBE6;strokeColor=#DE350B;strokeWidth=2;fontColor=#BF2600;" value="问题：L1/L2/L1′/L2′ 的完整物理内容可能相同，但没有 canonical table；直接去掉复制又会让 TrackType、Attr、PGO 原地写互相串扰。" vertex="1">
+          <mxGeometry height="42" width="1360" x="120" y="915" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

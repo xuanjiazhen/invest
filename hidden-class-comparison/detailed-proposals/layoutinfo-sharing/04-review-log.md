@@ -4,19 +4,19 @@
 
 - 冻结源码：`f04900cf951c66c2ea18b2bab5b591d5336c34b9`，审计时工作树 clean。
 - 原方向：`feasible-proposals/16-layoutinfo-sharing/`。
-- 数据：Top13 legacy snapshots、快手前台/后台 translated-v2 snapshots。
+- 数据：TOP13 13 份 rawheap 统一重译的 translated-v2 snapshots、快手后台 translated-v2 snapshot；legacy snapshots 仅作历史上界对照。
 - 评审原则：正式方案只保留取得收益的最终实现；验证事项统一写入风险与关闭证据。
 
 ## 已关闭问题
 
 | ID | 严重度 | 问题 | 当前处理 |
 |---|---|---|---|
-| R1 | P0 | 原模型仅按 key 序列恢复 Layout，缺 Attr primitive，却描述为内容等价 | legacy 统一标为缺 Attr 上界；快手新版使用 key identity + 完整 Attr word strict model |
+| R1 | P0 | 原模型仅按 key 序列恢复 Layout，缺 Attr primitive，却描述为内容等价 | TOP13 全部 rawheap 统一重译为 v2，使用 key identity + 完整 Attr word strict model；legacy 仅保留为历史上界 |
 | R2 | P0 | 原脚本按有效 key 数重建尺寸，遗漏真实 capacity/slack | 新脚本 fingerprint 包含 self_size 推导的 capacity、ExtraLength 和全部物理槽 |
 | R3 | P0 | 相同内容被直接视为可共享，未覆盖原地写 | 最终方案采用 immutable canonical；所有写入口显式 COW |
 | R4 | P0 | 已有 transition-family 多 owner 和新增去重混算 | 先按 Layout target 去重；已有多 owner 不计新增 gross |
 | R5 | P0 | 跨 VM/SharedHeap 引用域未证明 | 最终方案固定为 per-VM LocalHeap；跨 VM/SharedHeap 排除 |
-| R6 | P1 | 原 `54.00/56.35 MiB` 使用错误模型基线 | 重放为真实 Top13 shallow `109.25 MiB`、缺 Attr gross 上界 `70.03 MiB` |
+| R6 | P1 | 原 `54.00/56.35 MiB` 使用错误模型基线 | 重放为 TOP13 shallow `109.25 MiB`、严格 gross `69.64 MiB`、16 B 表后条件净 `65.61 MiB` |
 | R7 | P1 | canonical table 成本和保活未处理 | 使用 weak table；给出 16/24/32B entry 敏感性并扣除索引成本 |
 | R8 | P1 | snapshot 终态被当作创建、热度或物理收益 | 仅作为终态 shallow census；创建/写入/COW/PSS 不从 snapshot 推断 |
 | R9 | P1 | compiler、serializer、AOT fixed-offset 消费者未覆盖 | 物理布局和读取 ABI 不变；写入口统一 COW |
@@ -34,7 +34,7 @@
 
 > 同 VM LocalHeap 完整内容 immutable canonical sharing，per-VM weak table，所有后续写入显式 COW。
 
-快手最终方案的理论容量为：前台 gross `8.17 MiB`、16B-table 条件净 shallow `7.74 MiB`；后台 gross `6.76 MiB`、条件净 `6.34 MiB`。Top13 `70.03 MiB gross / 66.03 MiB 条件净`仅为缺 Attr 上界。
+快手最终方案的理论容量为：前台 gross `8.17 MiB`、16B-table 条件净 shallow `7.74 MiB`；后台 gross `6.76 MiB`、条件净 `6.34 MiB`。TOP13 13 应用完整槽严格结果为 `69.64 MiB gross / 65.61 MiB 条件净`；旧 `70.03 / 66.03 MiB` 仅为 legacy 缺 Attr 上界。
 
 不进入正式方案：跨 VM、SharedHeap、prefix-chain、PropertyAttributes packing、ConstantPool 和 Native Interop。
 
