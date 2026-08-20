@@ -1,0 +1,1932 @@
+{
+  "background": {
+    "constantpool_shared_literal": {
+      "confidence": "low for benefit: worker abc overlap and literal clone/write rates require the existing runtime instrumentation",
+      "constant_pool_count": 213,
+      "constant_pool_shallow_bytes": 10464064,
+      "net_bytes": null,
+      "sub_a_direct_string_edges": 71399,
+      "sub_a_note": "string self_size is payload length in this translator, not complete aligned string object size; a single VM root cannot measure cross-VM duplication",
+      "sub_a_observed_cross_vm_duplicate_gross_bytes": 0,
+      "sub_a_unique_direct_string_count": 60648,
+      "sub_a_unique_string_data_bytes": 1422682,
+      "sub_b_direct_literal_backing_edges": 33380,
+      "sub_b_direct_literal_edges": 16690,
+      "sub_b_direct_literal_note": "direct ConstantPool element targets and their Properties/Elements backings are an observable resident set, not attributable literal-COW benefit because clone/write provenance is absent",
+      "sub_b_direct_literal_resident_bytes": 1336088,
+      "sub_b_direct_literal_target_count": 16690,
+      "sub_b_direct_literal_target_counts": {
+        "JSArray": 8530,
+        "JSObject": 8160
+      },
+      "sub_b_direct_literal_target_shallow_bytes": 887824,
+      "sub_b_direct_literal_unique_backing_count": 8595,
+      "sub_b_direct_literal_unique_backing_shallow_bytes": 448264,
+      "sub_b_generic_backing_edges": 205826,
+      "sub_b_generic_object_array_count": 102913,
+      "sub_b_generic_object_array_counts": {
+        "JSArray": 37135,
+        "JSObject": 65778
+      },
+      "sub_b_generic_object_array_shallow_bytes": 7478488,
+      "sub_b_generic_resident_universe_bytes": 16149632,
+      "sub_b_generic_unique_backing_count": 39101,
+      "sub_b_generic_unique_backing_shallow_bytes": 8671144,
+      "sub_b_note": "the translator does not preserve ordinary JSObject/JSArray creation provenance; this generic resident universe is not attributable literal-COW benefit",
+      "vm_root_count": 1,
+      "vm_root_names": [
+        "VMRoot[14326]"
+      ]
+    },
+    "jitfree_adjacent_layout": {
+      "function_template": {
+        "population": 55523,
+        "shallow_bytes": 2220920
+      },
+      "jsfunction_full_layout": {
+        "code_slot_state_counts": {
+          "baseline_code_only": 0,
+          "machine_code_and_baseline_code": 0,
+          "machine_code_only": 0,
+          "neither": 340842
+        },
+        "identification_rule": "node has serialized RawProfileTypeInfo, MachineCode, and BaselineCode fields, and RawProfileTypeInfo targets a ProfileTypeInfoCell; this excludes 40 B FunctionTemplate nodes and JSApiFunction InternalAccessor placeholders",
+        "population": 340842,
+        "self_size_summary": {
+          "maximum": 4544,
+          "median": 144.0,
+          "minimum": 120,
+          "mode": 144,
+          "unique_values": 46
+        },
+        "shallow_bytes": 49177696,
+        "two_code_slot_shallow_bytes": 5453472
+      },
+      "machine_code": {
+        "population": 0,
+        "shallow_bytes": 0
+      },
+      "method": {
+        "population": 103380,
+        "shallow_bytes": 6616320
+      }
+    },
+    "jshclass_auxdata_sidecar": {
+      "candidate_owner_union": 2155,
+      "candidate_ratio": 0.0313655284836841,
+      "confidence": "high: exact shallow-size model over surviving HClass nodes",
+      "field_non_default_counts": {
+        "DependentInfos": 0,
+        "EnumCache": 1046,
+        "ProtoChangeDetails": 1141,
+        "ProtoChangeMarker": 1003
+      },
+      "main_object_gross_bytes": 1648944,
+      "mask_counts": {
+        "0": 66551,
+        "1": 1004,
+        "10": 0,
+        "11": 0,
+        "12": 0,
+        "13": 0,
+        "14": 0,
+        "15": 0,
+        "2": 10,
+        "3": 0,
+        "4": 148,
+        "5": 0,
+        "6": 951,
+        "7": 42,
+        "8": 0,
+        "9": 0
+      },
+      "model": "88 B -> 64 B main object; 48 B TaggedArray(4) per union owner",
+      "net_bytes": 1545504,
+      "population": 68706,
+      "shallow_bytes": 6046128,
+      "sidecar_cost_bytes": 103440
+    },
+    "layoutinfo_attr_packing": {
+      "confidence": "high: exact per-array shallow-size model over surviving LayoutInfo targets",
+      "current_shallow_bytes": 11982416,
+      "model": "old=16+16N; new=align8(16+12N), evaluated per unique Layout target",
+      "net_bytes": 2598728,
+      "packed_shallow_bytes": 9383688,
+      "padding_and_header_cost_bytes": 1146768,
+      "property_count": 686410,
+      "property_count_histogram": {
+        "0": 2,
+        "1": 4918,
+        "10": 1636,
+        "100": 8,
+        "101": 5,
+        "1023": 3,
+        "103": 4,
+        "104": 18,
+        "106": 1,
+        "108": 20,
+        "109": 14,
+        "11": 1654,
+        "110": 2,
+        "111": 1,
+        "112": 16,
+        "116": 7,
+        "117": 17,
+        "119": 13,
+        "12": 2137,
+        "120": 18,
+        "123": 1,
+        "124": 3,
+        "125": 1,
+        "127": 15,
+        "128": 4,
+        "129": 13,
+        "13": 1304,
+        "131": 3,
+        "132": 2,
+        "133": 2,
+        "134": 2,
+        "136": 9,
+        "138": 1,
+        "139": 2,
+        "14": 1079,
+        "140": 1,
+        "141": 2,
+        "142": 14,
+        "144": 3,
+        "146": 2,
+        "148": 2,
+        "15": 823,
+        "151": 1,
+        "152": 2,
+        "154": 1,
+        "156": 14,
+        "158": 2,
+        "16": 994,
+        "160": 3,
+        "164": 3,
+        "165": 1,
+        "168": 1,
+        "17": 967,
+        "170": 2,
+        "174": 1,
+        "18": 705,
+        "180": 2,
+        "188": 1,
+        "19": 633,
+        "190": 1,
+        "192": 2,
+        "196": 2,
+        "199": 1,
+        "2": 1953,
+        "20": 507,
+        "200": 1,
+        "203": 1,
+        "204": 2,
+        "21": 483,
+        "213": 2,
+        "218": 1,
+        "22": 256,
+        "221": 13,
+        "23": 283,
+        "231": 1,
+        "232": 2,
+        "234": 1,
+        "24": 474,
+        "248": 2,
+        "25": 246,
+        "251": 1,
+        "252": 1,
+        "256": 1,
+        "26": 200,
+        "268": 1,
+        "27": 154,
+        "272": 1,
+        "28": 373,
+        "288": 1,
+        "29": 142,
+        "292": 1,
+        "298": 2,
+        "3": 5378,
+        "30": 164,
+        "31": 177,
+        "319": 1,
+        "32": 320,
+        "320": 1,
+        "33": 147,
+        "336": 2,
+        "34": 131,
+        "35": 96,
+        "36": 163,
+        "364": 1,
+        "37": 83,
+        "38": 113,
+        "380": 1,
+        "381": 13,
+        "39": 73,
+        "4": 7449,
+        "40": 75,
+        "41": 68,
+        "42": 39,
+        "43": 43,
+        "432": 1,
+        "44": 101,
+        "45": 76,
+        "46": 94,
+        "47": 50,
+        "472": 1,
+        "48": 122,
+        "480": 2,
+        "49": 27,
+        "492": 1,
+        "5": 937,
+        "50": 21,
+        "504": 1,
+        "51": 43,
+        "52": 84,
+        "53": 27,
+        "54": 13,
+        "55": 38,
+        "553": 1,
+        "56": 53,
+        "57": 12,
+        "58": 29,
+        "59": 21,
+        "6": 1451,
+        "60": 74,
+        "61": 23,
+        "62": 11,
+        "63": 8,
+        "64": 49,
+        "65": 47,
+        "66": 16,
+        "67": 6,
+        "68": 34,
+        "687": 2,
+        "69": 5,
+        "692": 1,
+        "7": 11760,
+        "70": 28,
+        "71": 7,
+        "72": 40,
+        "73": 10,
+        "74": 2,
+        "744": 1,
+        "75": 5,
+        "76": 22,
+        "77": 4,
+        "78": 28,
+        "79": 1,
+        "8": 4384,
+        "80": 32,
+        "81": 3,
+        "82": 14,
+        "820": 2,
+        "828": 1,
+        "83": 18,
+        "837": 3,
+        "84": 14,
+        "844": 1,
+        "85": 24,
+        "86": 15,
+        "87": 6,
+        "88": 14,
+        "89": 1,
+        "9": 5732,
+        "90": 1,
+        "91": 2,
+        "92": 11,
+        "93": 3,
+        "936": 3,
+        "94": 15,
+        "940": 1,
+        "95": 20,
+        "952": 1,
+        "96": 10,
+        "97": 2,
+        "98": 2,
+        "99": 1
+      },
+      "unique_layout_count": 62491
+    },
+    "native_interop_lazy_binding": {
+      "closure_shallow_bytes": 81088,
+      "confidence": "low for realized benefit: full-GC liveness does not prove a method was never read or called; runtime read/call instrumentation remains mandatory",
+      "known_heap_gross_bytes": 104128,
+      "method_only_structural_upper_bound": {
+        "candidate_prototype_count": 172,
+        "combined_closure_population": 1150,
+        "combined_closure_shallow_bytes": 160840,
+        "combined_closure_shallow_mib": 0.15338897705078125,
+        "confidence": "low for realized benefit: zero live instances do not prove that a class or method was never read or called; runtime instrumentation remains mandatory",
+        "constructor_closure_population": 116,
+        "constructor_closure_shallow_bytes": 14144,
+        "constructor_closure_shallow_mib": 0.01348876953125,
+        "constructor_property_slots": 116,
+        "method_closure_population": 1034,
+        "method_closure_shallow_bytes": 146696,
+        "method_closure_shallow_mib": 0.13990020751953125,
+        "method_property_slots": 1038,
+        "scope": "method-only structural upper bound aligned with the Top13 24.035 MiB semantic scope: unique shared-native-stub closures held by zero-live-instance prototypes, excluding constructor; API 26 property-edge labels replace the older translator's InlineProperty identity edges",
+        "top_property_names": [
+          [
+            "toString",
+            32
+          ],
+          [
+            "next",
+            26
+          ],
+          [
+            "Symbol",
+            25
+          ],
+          [
+            "clone",
+            21
+          ],
+          [
+            "toBinary",
+            19
+          ],
+          [
+            "valueOf",
+            16
+          ],
+          [
+            "has",
+            15
+          ],
+          [
+            "values",
+            13
+          ],
+          [
+            "remove",
+            12
+          ],
+          [
+            "clear",
+            12
+          ],
+          [
+            "add",
+            11
+          ],
+          [
+            "resolvedOptions",
+            11
+          ],
+          [
+            "isEmpty",
+            10
+          ],
+          [
+            "entries",
+            10
+          ],
+          [
+            "get",
+            9
+          ],
+          [
+            "set",
+            9
+          ],
+          [
+            "getIndexOf",
+            7
+          ],
+          [
+            "getLastIndexOf",
+            7
+          ],
+          [
+            "toLocaleString",
+            7
+          ],
+          [
+            "formatToParts",
+            6
+          ],
+          [
+            "getTag",
+            5
+          ],
+          [
+            "keys",
+            5
+          ],
+          [
+            "forEach",
+            4
+          ],
+          [
+            "getFirst",
+            4
+          ],
+          [
+            "getLast",
+            4
+          ],
+          [
+            "insert",
+            4
+          ],
+          [
+            "removeByIndex",
+            4
+          ],
+          [
+            "sort",
+            4
+          ],
+          [
+            "convertToArray",
+            4
+          ],
+          [
+            "isValid",
+            4
+          ]
+        ]
+      },
+      "modeled_descriptor_cost_bytes": {
+        "high": 55296,
+        "low": 41472
+      },
+      "modeled_napi_function_info_bytes": {
+        "high": 23040,
+        "low": 18432
+      },
+      "modeled_net_bytes": {
+        "high": 85696,
+        "low": 67264
+      },
+      "native_pointer_shallow_bytes": 23040,
+      "scope": "strict A2 subset only: method-only structural upper bound further restricted to closures with exactly one visible JSNativePointer",
+      "shared_native_stub_closure_population": 255758,
+      "structural_candidate_property_slots": 576,
+      "structural_candidate_prototype_count": 75,
+      "structural_candidate_unique_closures": 576,
+      "structural_candidate_unique_native_pointers": 576,
+      "top_property_names": [
+        [
+          "clone",
+          19
+        ],
+        [
+          "toBinary",
+          19
+        ],
+        [
+          "getTag",
+          5
+        ],
+        [
+          "isValid",
+          4
+        ],
+        [
+          "getState",
+          4
+        ],
+        [
+          "isFingerCountLimit",
+          4
+        ],
+        [
+          "getEventTargetInfo",
+          4
+        ],
+        [
+          "isEnabled",
+          4
+        ],
+        [
+          "preventBegin",
+          4
+        ],
+        [
+          "isHostBelongsTo",
+          4
+        ],
+        [
+          "setEnabled",
+          4
+        ],
+        [
+          "getFingerCount",
+          4
+        ],
+        [
+          "getType",
+          4
+        ],
+        [
+          "isBuiltIn",
+          4
+        ],
+        [
+          "getString",
+          4
+        ],
+        [
+          "update",
+          3
+        ],
+        [
+          "updateSync",
+          3
+        ],
+        [
+          "getInt",
+          3
+        ],
+        [
+          "on",
+          3
+        ],
+        [
+          "off",
+          3
+        ],
+        [
+          "isSameAs",
+          2
+        ],
+        [
+          "isBlockDevice",
+          2
+        ],
+        [
+          "isCharacterDevice",
+          2
+        ],
+        [
+          "isDirectory",
+          2
+        ],
+        [
+          "isFIFO",
+          2
+        ],
+        [
+          "isFile",
+          2
+        ],
+        [
+          "isSocket",
+          2
+        ],
+        [
+          "isSymbolicLink",
+          2
+        ],
+        [
+          "close",
+          2
+        ],
+        [
+          "getDistance",
+          2
+        ]
+      ],
+      "zero_live_instance_prototype_count": 632
+    },
+    "profile_type_info": {
+      "interpretation": "Reserved tagged slots are identified by physical index: ic_slot_length and ic_slot_length + 1. The remaining three reserved slots hold primitive fields and are not inferred from heap-snapshot edges.",
+      "physical_length_summary": {
+        "maximum": 1494,
+        "median": 15,
+        "minimum": 5,
+        "mode": 11,
+        "sum": 152927,
+        "unique_values": 251
+      },
+      "population": 4353,
+      "reserved_length": 5,
+      "reserved_tagged_slot_edge_counts": {
+        "extra_info_map": {
+          "number:Undefined": 4353
+        },
+        "jit_osr": {
+          "number:Undefined": 4353
+        }
+      },
+      "reserved_tagged_slot_no_visible_edge_counts": {
+        "extra_info_map": 0,
+        "jit_osr": 0
+      },
+      "self_size_formula": "16 B TaggedArray header + 8 B * physical_length",
+      "shallow_bytes": 1293064
+    },
+    "profile_type_info_cell": {
+      "combined_16b_formula_bytes": "923424 + 923424 * e",
+      "combined_24b_formula_bytes": "461712 + 1385136 * e",
+      "confidence": {
+        "existing_stock_layout_cut": "high",
+        "lazy_elimination": "medium-low: cell_0 is a snapshot-time structural upper bound, not a lifecycle first-feedback measurement"
+      },
+      "field_edge_counts": {
+        "Handle": {
+          "property:number:Undefined": 57714
+        },
+        "MachineCode": {},
+        "Value": {
+          "property:array:ArkInternalProfileTypeInfo": 4353,
+          "property:number:Undefined": 53361
+        }
+      },
+      "field_edge_interpretation": "Counts describe serialized outgoing edges only. In these translated snapshots Hole-valued MachineCode fields have no visible edge, while Undefined Handle and Value fields do; a missing edge is therefore reported separately and is not assigned a universal runtime value.",
+      "field_no_visible_edge_counts": {
+        "Handle": 0,
+        "MachineCode": 57714,
+        "Value": 0
+      },
+      "joint_non_default_counts": {
+        "handle_only": 0,
+        "machine_code_and_handle": 0,
+        "machine_code_only": 0,
+        "neither": 57714
+      },
+      "model": "stage 1 has no per-absent-cell heap cost; stage 2 removes 8 B or 16 B from each remaining cell",
+      "population": 57714,
+      "shallow_bytes": 1846848,
+      "stage1_candidate_ratio": 0.9908514398586131,
+      "stage1_lazy_snapshot_time_upper_bytes": 1829952,
+      "stage2_16b_existing_stock_net_bytes": 923424,
+      "stage2_24b_existing_stock_net_bytes": 461712,
+      "state_classification": {
+        "hclass_node_ids": [
+          798119,
+          798121,
+          798123
+        ],
+        "rule": "sort the three ProfileTypeInfoCell HClasses by node id; GlobalEnvConstants creates CELL_0, CELL_1, CELL_N in that order"
+      },
+      "state_counts": {
+        "cell_0": 57186,
+        "cell_1": 25,
+        "cell_n": 503
+      },
+      "value_handle_joint_counts": {
+        "handle_only": 0,
+        "neither": 53361,
+        "value_and_handle": 0,
+        "value_only": 4353
+      }
+    },
+    "snapshot": {
+      "bytes": 278673122,
+      "edge_count": 11573110,
+      "node_count": 1959455,
+      "path": "D:\\docker\\invest\\tmp-napi-scan\\kuaishou-background.heapsnapshot",
+      "schema": {
+        "edge_fields": [
+          "type",
+          "name_or_index",
+          "to_node"
+        ],
+        "edge_types": [
+          [
+            "context",
+            "element",
+            "property",
+            "internal",
+            "hidden",
+            "shortcut",
+            "weak"
+          ],
+          "string_or_number",
+          "node"
+        ],
+        "node_fields": [
+          "type",
+          "name",
+          "id",
+          "self_size",
+          "edge_count",
+          "trace_node_id",
+          "detachedness",
+          "native_size"
+        ],
+        "node_types": [
+          [
+            "hidden",
+            "array",
+            "string",
+            "object",
+            "code",
+            "closure",
+            "regexp",
+            "number",
+            "native",
+            "synthetic",
+            "concatenated string",
+            "slicedstring",
+            "symbol",
+            "bigint",
+            "framework",
+            "handle"
+          ],
+          "string",
+          "number",
+          "number",
+          "number",
+          "number",
+          "number",
+          "number"
+        ]
+      },
+      "sha256": "9ace0e9983b45fd9fa263cc6c3aebd1cd5d3f9aa9261528a885d39d22085443e"
+    }
+  },
+  "background_minus_foreground": {
+    "constantpool_shared_literal": {
+      "constant_pool_count": -30,
+      "constant_pool_shallow_bytes": -6228040,
+      "sub_a_direct_string_edges": 131,
+      "sub_a_observed_cross_vm_duplicate_gross_bytes": 0,
+      "sub_a_unique_direct_string_count": 4,
+      "sub_a_unique_string_data_bytes": -210,
+      "sub_b_direct_literal_backing_edges": -270,
+      "sub_b_direct_literal_edges": -135,
+      "sub_b_direct_literal_resident_bytes": -36136,
+      "sub_b_direct_literal_target_count": -135,
+      "sub_b_direct_literal_target_counts": {
+        "JSArray": -4,
+        "JSObject": -131
+      },
+      "sub_b_direct_literal_target_shallow_bytes": -36080,
+      "sub_b_direct_literal_unique_backing_count": -3,
+      "sub_b_direct_literal_unique_backing_shallow_bytes": -56,
+      "sub_b_generic_backing_edges": -11204,
+      "sub_b_generic_object_array_count": -5602,
+      "sub_b_generic_object_array_counts": {
+        "JSArray": -186,
+        "JSObject": -5416
+      },
+      "sub_b_generic_object_array_shallow_bytes": -703152,
+      "sub_b_generic_resident_universe_bytes": -1394368,
+      "sub_b_generic_unique_backing_count": -3655,
+      "sub_b_generic_unique_backing_shallow_bytes": -691216,
+      "vm_root_count": 0
+    },
+    "jitfree_adjacent_layout": {
+      "function_template": {
+        "population": -2341,
+        "shallow_bytes": -93640
+      },
+      "jsfunction_full_layout": {
+        "code_slot_state_counts": {
+          "baseline_code_only": 0,
+          "machine_code_and_baseline_code": 0,
+          "machine_code_only": -6,
+          "neither": -42041
+        },
+        "population": -42047,
+        "self_size_summary": {
+          "maximum": 0,
+          "median": 0.0,
+          "minimum": 0,
+          "mode": 0,
+          "unique_values": 0
+        },
+        "shallow_bytes": -6060272,
+        "two_code_slot_shallow_bytes": -672752
+      },
+      "machine_code": {
+        "population": -6,
+        "shallow_bytes": -8800
+      },
+      "method": {
+        "population": -3770,
+        "shallow_bytes": -241280
+      }
+    },
+    "jshclass_auxdata_sidecar": {
+      "candidate_owner_union": -9,
+      "candidate_ratio": 0.003206044827635802,
+      "field_non_default_counts": {
+        "DependentInfos": -5,
+        "EnumCache": 36,
+        "ProtoChangeDetails": -35,
+        "ProtoChangeMarker": -32
+      },
+      "main_object_gross_bytes": -195408,
+      "mask_counts": {
+        "0": -8133,
+        "1": 33,
+        "10": 0,
+        "11": 0,
+        "12": 0,
+        "13": 0,
+        "14": -4,
+        "15": -1,
+        "2": -7,
+        "3": 0,
+        "4": -10,
+        "5": 0,
+        "6": -24,
+        "7": 4,
+        "8": 0,
+        "9": 0
+      },
+      "net_bytes": -194976,
+      "population": -8142,
+      "shallow_bytes": -716496,
+      "sidecar_cost_bytes": -432
+    },
+    "layoutinfo_attr_packing": {
+      "current_shallow_bytes": -1610880,
+      "net_bytes": -365920,
+      "packed_shallow_bytes": -1244960,
+      "padding_and_header_cost_bytes": -123836,
+      "property_count": -93427,
+      "property_count_histogram": {
+        "0": 0,
+        "1": -211,
+        "10": 114,
+        "100": 0,
+        "101": -4,
+        "1023": 1,
+        "103": 0,
+        "104": -12,
+        "106": 0,
+        "108": -2,
+        "109": -4,
+        "11": 164,
+        "110": -1,
+        "111": 0,
+        "112": -5,
+        "116": 0,
+        "117": -5,
+        "119": -5,
+        "12": -120,
+        "120": -6,
+        "123": 0,
+        "124": 0,
+        "125": 0,
+        "127": -5,
+        "128": -7,
+        "129": -5,
+        "13": 112,
+        "131": 0,
+        "132": -1,
+        "133": 0,
+        "134": 1,
+        "136": -7,
+        "138": -1,
+        "139": 0,
+        "14": 71,
+        "140": -1,
+        "142": -6,
+        "144": 0,
+        "146": 1,
+        "148": 0,
+        "15": -52,
+        "151": 0,
+        "152": 0,
+        "154": 0,
+        "156": -5,
+        "158": 0,
+        "16": -142,
+        "160": 0,
+        "164": 0,
+        "165": 0,
+        "17": -85,
+        "170": 0,
+        "174": 0,
+        "18": -69,
+        "180": 0,
+        "188": 0,
+        "19": -98,
+        "192": 0,
+        "196": 0,
+        "199": 0,
+        "2": -98,
+        "20": -81,
+        "200": 0,
+        "203": 0,
+        "204": 0,
+        "21": -65,
+        "213": 1,
+        "218": 0,
+        "22": -33,
+        "221": -5,
+        "23": -31,
+        "231": 0,
+        "232": 0,
+        "234": 0,
+        "24": -91,
+        "248": 0,
+        "25": -33,
+        "251": 0,
+        "252": -1,
+        "26": -33,
+        "27": -26,
+        "272": 0,
+        "28": -111,
+        "288": 0,
+        "29": -24,
+        "292": 0,
+        "298": 1,
+        "3": -307,
+        "30": -49,
+        "31": -61,
+        "319": 0,
+        "32": -80,
+        "320": 0,
+        "33": -36,
+        "336": 0,
+        "34": -34,
+        "35": -28,
+        "36": -39,
+        "364": 0,
+        "37": -12,
+        "38": -25,
+        "380": 0,
+        "381": -5,
+        "39": -19,
+        "4": -2525,
+        "40": -31,
+        "41": -20,
+        "42": -7,
+        "43": -9,
+        "432": 0,
+        "44": -28,
+        "45": -19,
+        "46": -36,
+        "47": -11,
+        "472": 0,
+        "48": -15,
+        "480": 0,
+        "49": -4,
+        "5": -103,
+        "50": -5,
+        "504": 0,
+        "51": -10,
+        "52": -13,
+        "53": -5,
+        "54": -10,
+        "55": -9,
+        "553": 0,
+        "56": 1,
+        "57": 0,
+        "58": -4,
+        "59": -5,
+        "6": -717,
+        "60": -10,
+        "61": -5,
+        "62": 1,
+        "63": 0,
+        "64": -4,
+        "65": -15,
+        "66": -5,
+        "67": 0,
+        "68": -3,
+        "687": 0,
+        "69": 0,
+        "692": 0,
+        "7": -2616,
+        "70": -9,
+        "71": 0,
+        "72": -12,
+        "73": 0,
+        "74": 0,
+        "744": 0,
+        "75": 1,
+        "76": 1,
+        "77": 0,
+        "78": -10,
+        "79": 0,
+        "8": -964,
+        "80": -4,
+        "81": 1,
+        "82": -5,
+        "820": -5,
+        "828": 0,
+        "83": -5,
+        "837": -4,
+        "84": -6,
+        "844": 0,
+        "85": -5,
+        "86": -5,
+        "87": 0,
+        "88": 0,
+        "89": 0,
+        "9": 1747,
+        "90": 0,
+        "91": 0,
+        "92": 0,
+        "93": 0,
+        "936": 0,
+        "94": -6,
+        "940": 0,
+        "95": -4,
+        "96": -1,
+        "97": 0,
+        "98": 1,
+        "99": 0
+      },
+      "unique_layout_count": -7253
+    },
+    "native_interop_lazy_binding": {
+      "closure_shallow_bytes": 14960,
+      "known_heap_gross_bytes": 19480,
+      "method_only_structural_upper_bound": {
+        "candidate_prototype_count": -164,
+        "combined_closure_population": -344,
+        "combined_closure_shallow_bytes": -50736,
+        "combined_closure_shallow_mib": -0.0483856201171875,
+        "constructor_closure_population": 0,
+        "constructor_closure_shallow_bytes": -336,
+        "constructor_closure_shallow_mib": -0.0003204345703125,
+        "constructor_property_slots": 0,
+        "method_closure_population": -344,
+        "method_closure_shallow_bytes": -50400,
+        "method_closure_shallow_mib": -0.048065185546875,
+        "method_property_slots": -351
+      },
+      "modeled_descriptor_cost_bytes": {
+        "high": 10848,
+        "low": 8136
+      },
+      "modeled_napi_function_info_bytes": {
+        "high": 4520,
+        "low": 3616
+      },
+      "modeled_net_bytes": {
+        "high": 15864,
+        "low": 12248
+      },
+      "native_pointer_shallow_bytes": 4520,
+      "shared_native_stub_closure_population": -34326,
+      "structural_candidate_property_slots": 113,
+      "structural_candidate_prototype_count": 5,
+      "structural_candidate_unique_closures": 113,
+      "structural_candidate_unique_native_pointers": 113,
+      "zero_live_instance_prototype_count": -248
+    },
+    "profile_type_info": {
+      "physical_length_summary": {
+        "maximum": -329,
+        "median": 0.0,
+        "minimum": 0,
+        "mode": 0,
+        "sum": 656,
+        "unique_values": -1
+      },
+      "population": 281,
+      "reserved_length": 0,
+      "reserved_tagged_slot_edge_counts": {
+        "extra_info_map": {
+          "number:Undefined": 281
+        },
+        "jit_osr": {
+          "number:Undefined": 281
+        }
+      },
+      "reserved_tagged_slot_no_visible_edge_counts": {
+        "extra_info_map": 0,
+        "jit_osr": 0
+      },
+      "shallow_bytes": 9744
+    },
+    "profile_type_info_cell": {
+      "confidence": {},
+      "field_edge_counts": {
+        "Handle": {
+          "property:number:Undefined": -9046
+        },
+        "MachineCode": {},
+        "Value": {
+          "property:array:ArkInternalProfileTypeInfo": 282,
+          "property:number:Undefined": -10508
+        }
+      },
+      "field_no_visible_edge_counts": {
+        "Handle": 0,
+        "MachineCode": -10220,
+        "Value": 0
+      },
+      "joint_non_default_counts": {
+        "handle_only": -1175,
+        "machine_code_and_handle": -5,
+        "machine_code_only": -1,
+        "neither": -9045
+      },
+      "population": -10226,
+      "shallow_bytes": -327232,
+      "stage1_candidate_ratio": -0.0012298083015281902,
+      "stage1_lazy_snapshot_time_upper_bytes": -326912,
+      "stage2_16b_existing_stock_net_bytes": -163616,
+      "stage2_24b_existing_stock_net_bytes": -81808,
+      "state_classification": {},
+      "state_counts": {
+        "cell_0": -10216,
+        "cell_1": -48,
+        "cell_n": 38
+      },
+      "value_handle_joint_counts": {
+        "handle_only": -1121,
+        "neither": -9387,
+        "value_and_handle": -59,
+        "value_only": 341
+      }
+    },
+    "snapshot": {
+      "bytes": -23858649,
+      "edge_count": -1138429,
+      "node_count": -108864,
+      "schema": {}
+    }
+  },
+  "background_rawheap": {
+    "bytes": 211562627,
+    "collection_context": "application background; user states full GC was performed",
+    "path": "C:\\Users\\xuanj\\AppData\\Roaming\\WeLink\\appdata\\IM\\3pqd8bpcgv2w@d5cb51187d2\\DownloadFiles\\hidumper-jsheap-65479-65479-kuaishou-background.rawheap",
+    "protocol": "1.0.0",
+    "sha256": "cc761126b3af8d77d25151161ea3192fde997003f276374e0bdd95d6dcecb8bb",
+    "translator_reported_object_count": 1788325
+  },
+  "foreground": {
+    "constantpool_shared_literal": {
+      "confidence": "low for benefit: worker abc overlap and literal clone/write rates require the existing runtime instrumentation",
+      "constant_pool_count": 243,
+      "constant_pool_shallow_bytes": 16692104,
+      "net_bytes": null,
+      "sub_a_direct_string_edges": 71268,
+      "sub_a_note": "string self_size is payload length in this translator, not complete aligned string object size; a single VM root cannot measure cross-VM duplication",
+      "sub_a_observed_cross_vm_duplicate_gross_bytes": 0,
+      "sub_a_unique_direct_string_count": 60644,
+      "sub_a_unique_string_data_bytes": 1422892,
+      "sub_b_direct_literal_backing_edges": 33650,
+      "sub_b_direct_literal_edges": 16825,
+      "sub_b_direct_literal_note": "direct ConstantPool element targets and their Properties/Elements backings are an observable resident set, not attributable literal-COW benefit because clone/write provenance is absent",
+      "sub_b_direct_literal_resident_bytes": 1372224,
+      "sub_b_direct_literal_target_count": 16825,
+      "sub_b_direct_literal_target_counts": {
+        "JSArray": 8534,
+        "JSObject": 8291
+      },
+      "sub_b_direct_literal_target_shallow_bytes": 923904,
+      "sub_b_direct_literal_unique_backing_count": 8598,
+      "sub_b_direct_literal_unique_backing_shallow_bytes": 448320,
+      "sub_b_generic_backing_edges": 217030,
+      "sub_b_generic_object_array_count": 108515,
+      "sub_b_generic_object_array_counts": {
+        "JSArray": 37321,
+        "JSObject": 71194
+      },
+      "sub_b_generic_object_array_shallow_bytes": 8181640,
+      "sub_b_generic_resident_universe_bytes": 17544000,
+      "sub_b_generic_unique_backing_count": 42756,
+      "sub_b_generic_unique_backing_shallow_bytes": 9362360,
+      "sub_b_note": "the translator does not preserve ordinary JSObject/JSArray creation provenance; this generic resident universe is not attributable literal-COW benefit",
+      "vm_root_count": 1,
+      "vm_root_names": [
+        "VMRoot[13883]"
+      ]
+    },
+    "jitfree_adjacent_layout": {
+      "function_template": {
+        "population": 57864,
+        "shallow_bytes": 2314560
+      },
+      "jsfunction_full_layout": {
+        "code_slot_state_counts": {
+          "baseline_code_only": 0,
+          "machine_code_and_baseline_code": 0,
+          "machine_code_only": 6,
+          "neither": 382883
+        },
+        "identification_rule": "node has serialized RawProfileTypeInfo, MachineCode, and BaselineCode fields, and RawProfileTypeInfo targets a ProfileTypeInfoCell; this excludes 40 B FunctionTemplate nodes and JSApiFunction InternalAccessor placeholders",
+        "population": 382889,
+        "self_size_summary": {
+          "maximum": 4544,
+          "median": 144,
+          "minimum": 120,
+          "mode": 144,
+          "unique_values": 46
+        },
+        "shallow_bytes": 55237968,
+        "two_code_slot_shallow_bytes": 6126224
+      },
+      "machine_code": {
+        "population": 6,
+        "shallow_bytes": 8800
+      },
+      "method": {
+        "population": 107150,
+        "shallow_bytes": 6857600
+      }
+    },
+    "jshclass_auxdata_sidecar": {
+      "candidate_owner_union": 2164,
+      "candidate_ratio": 0.0281594836560483,
+      "confidence": "high: exact shallow-size model over surviving HClass nodes",
+      "field_non_default_counts": {
+        "DependentInfos": 5,
+        "EnumCache": 1010,
+        "ProtoChangeDetails": 1176,
+        "ProtoChangeMarker": 1035
+      },
+      "main_object_gross_bytes": 1844352,
+      "mask_counts": {
+        "0": 74684,
+        "1": 971,
+        "10": 0,
+        "11": 0,
+        "12": 0,
+        "13": 0,
+        "14": 4,
+        "15": 1,
+        "2": 17,
+        "3": 0,
+        "4": 158,
+        "5": 0,
+        "6": 975,
+        "7": 38,
+        "8": 0,
+        "9": 0
+      },
+      "model": "88 B -> 64 B main object; 48 B TaggedArray(4) per union owner",
+      "net_bytes": 1740480,
+      "population": 76848,
+      "shallow_bytes": 6762624,
+      "sidecar_cost_bytes": 103872
+    },
+    "layoutinfo_attr_packing": {
+      "confidence": "high: exact per-array shallow-size model over surviving LayoutInfo targets",
+      "current_shallow_bytes": 13593296,
+      "model": "old=16+16N; new=align8(16+12N), evaluated per unique Layout target",
+      "net_bytes": 2964648,
+      "packed_shallow_bytes": 10628648,
+      "padding_and_header_cost_bytes": 1270604,
+      "property_count": 779837,
+      "property_count_histogram": {
+        "0": 2,
+        "1": 5129,
+        "10": 1522,
+        "100": 8,
+        "101": 9,
+        "1023": 2,
+        "103": 4,
+        "104": 30,
+        "106": 1,
+        "108": 22,
+        "109": 18,
+        "11": 1490,
+        "110": 3,
+        "111": 1,
+        "112": 21,
+        "116": 7,
+        "117": 22,
+        "119": 18,
+        "12": 2257,
+        "120": 24,
+        "123": 1,
+        "124": 3,
+        "125": 1,
+        "127": 20,
+        "128": 11,
+        "129": 18,
+        "13": 1192,
+        "131": 3,
+        "132": 3,
+        "133": 2,
+        "134": 1,
+        "136": 16,
+        "138": 2,
+        "139": 2,
+        "14": 1008,
+        "140": 2,
+        "142": 20,
+        "144": 3,
+        "146": 1,
+        "148": 2,
+        "15": 875,
+        "151": 1,
+        "152": 2,
+        "154": 1,
+        "156": 19,
+        "158": 2,
+        "16": 1136,
+        "160": 3,
+        "164": 3,
+        "165": 1,
+        "17": 1052,
+        "170": 2,
+        "174": 1,
+        "18": 774,
+        "180": 2,
+        "186": 1,
+        "188": 1,
+        "19": 731,
+        "192": 2,
+        "196": 2,
+        "199": 1,
+        "2": 2051,
+        "20": 588,
+        "200": 1,
+        "203": 1,
+        "204": 2,
+        "21": 548,
+        "213": 1,
+        "214": 1,
+        "218": 1,
+        "22": 289,
+        "221": 18,
+        "23": 314,
+        "231": 1,
+        "232": 2,
+        "234": 1,
+        "24": 565,
+        "248": 2,
+        "25": 279,
+        "251": 1,
+        "252": 2,
+        "26": 233,
+        "269": 1,
+        "27": 180,
+        "272": 1,
+        "28": 484,
+        "288": 1,
+        "29": 166,
+        "292": 1,
+        "298": 1,
+        "3": 5685,
+        "30": 213,
+        "31": 238,
+        "319": 1,
+        "32": 400,
+        "320": 1,
+        "33": 183,
+        "336": 2,
+        "34": 165,
+        "35": 124,
+        "36": 202,
+        "364": 1,
+        "37": 95,
+        "38": 138,
+        "380": 1,
+        "381": 18,
+        "39": 92,
+        "4": 9974,
+        "40": 106,
+        "41": 88,
+        "42": 46,
+        "43": 52,
+        "432": 1,
+        "44": 129,
+        "45": 95,
+        "46": 130,
+        "47": 61,
+        "472": 1,
+        "48": 137,
+        "480": 2,
+        "488": 1,
+        "49": 31,
+        "5": 1040,
+        "50": 26,
+        "504": 1,
+        "51": 53,
+        "52": 97,
+        "53": 32,
+        "54": 23,
+        "55": 47,
+        "553": 1,
+        "56": 52,
+        "57": 12,
+        "58": 33,
+        "59": 26,
+        "6": 2168,
+        "60": 84,
+        "61": 28,
+        "62": 10,
+        "63": 8,
+        "64": 53,
+        "65": 62,
+        "66": 21,
+        "67": 6,
+        "68": 37,
+        "687": 2,
+        "69": 5,
+        "692": 1,
+        "7": 14376,
+        "70": 37,
+        "71": 7,
+        "72": 52,
+        "73": 10,
+        "74": 2,
+        "744": 1,
+        "75": 4,
+        "76": 21,
+        "77": 4,
+        "78": 38,
+        "79": 1,
+        "8": 5348,
+        "80": 36,
+        "81": 2,
+        "82": 19,
+        "820": 7,
+        "828": 1,
+        "83": 23,
+        "837": 7,
+        "84": 20,
+        "844": 1,
+        "85": 29,
+        "86": 20,
+        "87": 6,
+        "88": 14,
+        "89": 1,
+        "9": 3985,
+        "90": 1,
+        "91": 2,
+        "92": 11,
+        "93": 3,
+        "936": 3,
+        "94": 21,
+        "940": 1,
+        "944": 1,
+        "95": 24,
+        "96": 11,
+        "97": 2,
+        "98": 1,
+        "99": 1
+      },
+      "unique_layout_count": 69744
+    },
+    "native_interop_lazy_binding": {
+      "closure_shallow_bytes": 66128,
+      "confidence": "low for realized benefit: full-GC liveness does not prove a method was never read or called; runtime read/call instrumentation remains mandatory",
+      "known_heap_gross_bytes": 84648,
+      "method_only_structural_upper_bound": {
+        "candidate_prototype_count": 336,
+        "combined_closure_population": 1494,
+        "combined_closure_shallow_bytes": 211576,
+        "combined_closure_shallow_mib": 0.20177459716796875,
+        "confidence": "low for realized benefit: zero live instances do not prove that a class or method was never read or called; runtime instrumentation remains mandatory",
+        "constructor_closure_population": 116,
+        "constructor_closure_shallow_bytes": 14480,
+        "constructor_closure_shallow_mib": 0.0138092041015625,
+        "constructor_property_slots": 116,
+        "method_closure_population": 1378,
+        "method_closure_shallow_bytes": 197096,
+        "method_closure_shallow_mib": 0.18796539306640625,
+        "method_property_slots": 1389,
+        "scope": "method-only structural upper bound aligned with the Top13 24.035 MiB semantic scope: unique shared-native-stub closures held by zero-live-instance prototypes, excluding constructor; API 26 property-edge labels replace the older translator's InlineProperty identity edges",
+        "top_property_names": [
+          [
+            "toString",
+            120
+          ],
+          [
+            "Symbol",
+            74
+          ],
+          [
+            "next",
+            60
+          ],
+          [
+            "valueOf",
+            50
+          ],
+          [
+            "resolvedOptions",
+            25
+          ],
+          [
+            "toLocaleString",
+            22
+          ],
+          [
+            "has",
+            20
+          ],
+          [
+            "values",
+            20
+          ],
+          [
+            "clone",
+            19
+          ],
+          [
+            "toBinary",
+            19
+          ],
+          [
+            "entries",
+            13
+          ],
+          [
+            "formatToParts",
+            13
+          ],
+          [
+            "at",
+            12
+          ],
+          [
+            "add",
+            12
+          ],
+          [
+            "remove",
+            11
+          ],
+          [
+            "clear",
+            11
+          ],
+          [
+            "isEmpty",
+            11
+          ],
+          [
+            "forEach",
+            11
+          ],
+          [
+            "format",
+            11
+          ],
+          [
+            "includes",
+            10
+          ],
+          [
+            "lastIndexOf",
+            10
+          ],
+          [
+            "match",
+            10
+          ],
+          [
+            "matchAll",
+            10
+          ],
+          [
+            "normalize",
+            10
+          ],
+          [
+            "isWellFormed",
+            10
+          ],
+          [
+            "toWellFormed",
+            10
+          ],
+          [
+            "repeat",
+            10
+          ],
+          [
+            "replaceAll",
+            10
+          ],
+          [
+            "search",
+            10
+          ],
+          [
+            "split",
+            10
+          ]
+        ]
+      },
+      "modeled_descriptor_cost_bytes": {
+        "high": 44448,
+        "low": 33336
+      },
+      "modeled_napi_function_info_bytes": {
+        "high": 18520,
+        "low": 14816
+      },
+      "modeled_net_bytes": {
+        "high": 69832,
+        "low": 55016
+      },
+      "native_pointer_shallow_bytes": 18520,
+      "scope": "strict A2 subset only: method-only structural upper bound further restricted to closures with exactly one visible JSNativePointer",
+      "shared_native_stub_closure_population": 290084,
+      "structural_candidate_property_slots": 463,
+      "structural_candidate_prototype_count": 70,
+      "structural_candidate_unique_closures": 463,
+      "structural_candidate_unique_native_pointers": 463,
+      "top_property_names": [
+        [
+          "clone",
+          19
+        ],
+        [
+          "toBinary",
+          19
+        ],
+        [
+          "on",
+          3
+        ],
+        [
+          "off",
+          3
+        ],
+        [
+          "getInt",
+          3
+        ],
+        [
+          "getString",
+          3
+        ],
+        [
+          "update",
+          3
+        ],
+        [
+          "updateSync",
+          3
+        ],
+        [
+          "getTag",
+          2
+        ],
+        [
+          "build",
+          2
+        ],
+        [
+          "submit",
+          2
+        ],
+        [
+          "getLong",
+          2
+        ],
+        [
+          "has",
+          2
+        ],
+        [
+          "set",
+          2
+        ],
+        [
+          "sort",
+          2
+        ],
+        [
+          "keys",
+          2
+        ],
+        [
+          "values",
+          2
+        ],
+        [
+          "get",
+          2
+        ],
+        [
+          "getAll",
+          2
+        ],
+        [
+          "append",
+          2
+        ],
+        [
+          "delete",
+          2
+        ],
+        [
+          "entries",
+          2
+        ],
+        [
+          "importTypeArray",
+          2
+        ],
+        [
+          "importArray",
+          2
+        ],
+        [
+          "isSameAs",
+          2
+        ],
+        [
+          "close",
+          2
+        ],
+        [
+          "init",
+          2
+        ],
+        [
+          "initSync",
+          2
+        ],
+        [
+          "getEncoded",
+          2
+        ],
+        [
+          "getEncodedDer",
+          2
+        ]
+      ],
+      "zero_live_instance_prototype_count": 880
+    },
+    "profile_type_info": {
+      "interpretation": "Reserved tagged slots are identified by physical index: ic_slot_length and ic_slot_length + 1. The remaining three reserved slots hold primitive fields and are not inferred from heap-snapshot edges.",
+      "physical_length_summary": {
+        "maximum": 1823,
+        "median": 15.0,
+        "minimum": 5,
+        "mode": 11,
+        "sum": 152271,
+        "unique_values": 252
+      },
+      "population": 4072,
+      "reserved_length": 5,
+      "reserved_tagged_slot_edge_counts": {
+        "extra_info_map": {
+          "number:Undefined": 4072
+        },
+        "jit_osr": {
+          "number:Undefined": 4072
+        }
+      },
+      "reserved_tagged_slot_no_visible_edge_counts": {
+        "extra_info_map": 0,
+        "jit_osr": 0
+      },
+      "self_size_formula": "16 B TaggedArray header + 8 B * physical_length",
+      "shallow_bytes": 1283320
+    },
+    "profile_type_info_cell": {
+      "combined_16b_formula_bytes": "1087040 + 1087040 * e",
+      "combined_24b_formula_bytes": "543520 + 1630560 * e",
+      "confidence": {
+        "existing_stock_layout_cut": "high",
+        "lazy_elimination": "medium-low: cell_0 is a snapshot-time structural upper bound, not a lifecycle first-feedback measurement"
+      },
+      "field_edge_counts": {
+        "Handle": {
+          "property:number:Undefined": 66760,
+          "weak:closure:*": 623,
+          "weak:framework:*": 557
+        },
+        "MachineCode": {
+          "weak:native:MachineCode": 6
+        },
+        "Value": {
+          "property:array:ArkInternalProfileTypeInfo": 4071,
+          "property:number:Undefined": 63869
+        }
+      },
+      "field_edge_interpretation": "Counts describe serialized outgoing edges only. In these translated snapshots Hole-valued MachineCode fields have no visible edge, while Undefined Handle and Value fields do; a missing edge is therefore reported separately and is not assigned a universal runtime value.",
+      "field_no_visible_edge_counts": {
+        "Handle": 0,
+        "MachineCode": 67934,
+        "Value": 0
+      },
+      "joint_non_default_counts": {
+        "handle_only": 1175,
+        "machine_code_and_handle": 5,
+        "machine_code_only": 1,
+        "neither": 66759
+      },
+      "model": "stage 1 has no per-absent-cell heap cost; stage 2 removes 8 B or 16 B from each remaining cell",
+      "population": 67940,
+      "shallow_bytes": 2174080,
+      "stage1_candidate_ratio": 0.9920812481601413,
+      "stage1_lazy_snapshot_time_upper_bytes": 2156864,
+      "stage2_16b_existing_stock_net_bytes": 1087040,
+      "stage2_24b_existing_stock_net_bytes": 543520,
+      "state_classification": {
+        "hclass_node_ids": [
+          1542333,
+          1542335,
+          1542337
+        ],
+        "rule": "sort the three ProfileTypeInfoCell HClasses by node id; GlobalEnvConstants creates CELL_0, CELL_1, CELL_N in that order"
+      },
+      "state_counts": {
+        "cell_0": 67402,
+        "cell_1": 73,
+        "cell_n": 465
+      },
+      "value_handle_joint_counts": {
+        "handle_only": 1121,
+        "neither": 62748,
+        "value_and_handle": 59,
+        "value_only": 4012
+      }
+    },
+    "snapshot": {
+      "bytes": 302531771,
+      "edge_count": 12711539,
+      "node_count": 2068319,
+      "path": "D:\\docker\\invest\\tmp-napi-scan\\kuaishou-foreground-api26.heapsnapshot",
+      "schema": {
+        "edge_fields": [
+          "type",
+          "name_or_index",
+          "to_node"
+        ],
+        "edge_types": [
+          [
+            "context",
+            "element",
+            "property",
+            "internal",
+            "hidden",
+            "shortcut",
+            "weak"
+          ],
+          "string_or_number",
+          "node"
+        ],
+        "node_fields": [
+          "type",
+          "name",
+          "id",
+          "self_size",
+          "edge_count",
+          "trace_node_id",
+          "detachedness",
+          "native_size"
+        ],
+        "node_types": [
+          [
+            "hidden",
+            "array",
+            "string",
+            "object",
+            "code",
+            "closure",
+            "regexp",
+            "number",
+            "native",
+            "synthetic",
+            "concatenated string",
+            "slicedstring",
+            "symbol",
+            "bigint",
+            "framework",
+            "handle"
+          ],
+          "string",
+          "number",
+          "number",
+          "number",
+          "number",
+          "number",
+          "number"
+        ]
+      },
+      "sha256": "f520a7b0f397a4f4f53189f918fe7b234011c3a3deced15516b77f2ee1da4d86"
+    }
+  },
+  "foreground_rawheap": {
+    "bytes": 233666747,
+    "path": "D:\\docker\\plan\\top13\\kuaishou_349MB\\hidumper-jsheap-59267-59267-1785565963429.rawheap",
+    "protocol": "1.0.0",
+    "sha256": "5dcb432e261817d97a2e4f5636af268f24d0d2928bd8be32fe5b9deccd437ecb",
+    "translator_reported_object_count": 1894993
+  },
+  "interpretation_limits": [
+    "Full GC improves confidence that background nodes are live at capture time; it does not imply every proposal has a larger absolute benefit.",
+    "A snapshot does not record future first feedback, native property reads/calls, worker abc overlap, or literal clone/write history.",
+    "Snapshot self_size is shallow size. String self_size from this translator is payload length rather than full aligned string-object size.",
+    "External allocator fragmentation, Region slack, RSS/PSS, and GC pause changes require implementation A/B measurements."
+  ],
+  "schema_version": 2,
+  "scope": {
+    "application": "kuaishou",
+    "comparison": "paired foreground conservative-GC vs background full-GC",
+    "rule": "samples are reported separately; no Top13 scaling and no foreground/background population mixing",
+    "source_revisions": {
+      "ets_runtime": "4ad6583a30981259b857579c61b5cc83b3530381",
+      "runtime_core": "ed8cec5810e2ae37d4972f501ff189c82d1db6a8"
+    }
+  },
+  "translator": {
+    "bytes": 811464,
+    "path": "C:\\Users\\xuanj\\AppData\\Local\\Programs\\DevEco Studio\\sdk\\default\\openharmony\\toolchains\\rawheap_translator.exe",
+    "sha256": "c5c9df2b5683c56b5b93dba26ed3aef3f376c9d2f37110f1ba01086e44406990",
+    "version": "2.0.0"
+  },
+  "units": {
+    "MB": 1000000,
+    "MiB": 1048576
+  }
+}

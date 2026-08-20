@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "scope": {
+    "source": "Top13 rawheap snapshots converted to heapsnapshot",
+    "script": "scripts/measure_lazy_binding_targets.py",
+    "script_version": "1.1.0",
+    "wide_threshold": 20,
+    "shared_method_threshold": 1000,
+    "mib_bytes": 1048576,
+    "method_scope": "Bucket C named prototype closures excluding class constructors",
+    "all_bucket_c_scope": "method_scope plus class constructors"
+  },
+  "totals": {
+    "all_bucket_c_population": 505444,
+    "all_bucket_c_bytes": 71864736,
+    "all_bucket_c_mib": 68.53555297851562,
+    "method_population": 447707,
+    "method_bytes": 64460048,
+    "method_mib": 61.47389221191406,
+    "constructor_population": 57737,
+    "constructor_bytes": 7404688,
+    "constructor_mib": 7.0616607666015625
+  },
+  "applications": [
+    {
+      "app": "kuaishou",
+      "c_protos": 15366,
+      "all_bucket_c_population": 189969,
+      "all_bucket_c_bytes": 26964944,
+      "method_population": 175025,
+      "method_bytes": 25202864,
+      "method_mib": 24.035324096679688,
+      "method_share_percent": 39.09842574116607,
+      "constructor_population": 14944,
+      "constructor_bytes": 1762080
+    },
+    {
+      "app": "weibo",
+      "c_protos": 6062,
+      "all_bucket_c_population": 47254,
+      "all_bucket_c_bytes": 6747232,
+      "method_population": 41973,
+      "method_bytes": 6042520,
+      "method_mib": 5.762596130371094,
+      "method_share_percent": 9.374054453077663,
+      "constructor_population": 5281,
+      "constructor_bytes": 704712
+    },
+    {
+      "app": "douyin",
+      "c_protos": 7636,
+      "all_bucket_c_population": 47767,
+      "all_bucket_c_bytes": 6761144,
+      "method_population": 40814,
+      "method_bytes": 5875752,
+      "method_mib": 5.603553771972656,
+      "method_share_percent": 9.1153391632597,
+      "constructor_population": 6953,
+      "constructor_bytes": 885392
+    },
+    {
+      "app": "pinduoduo",
+      "c_protos": 5034,
+      "all_bucket_c_population": 38235,
+      "all_bucket_c_bytes": 5454232,
+      "method_population": 34078,
+      "method_bytes": 4905664,
+      "method_mib": 4.67840576171875,
+      "method_share_percent": 7.610394581152034,
+      "constructor_population": 4157,
+      "constructor_bytes": 548568
+    },
+    {
+      "app": "jingdong",
+      "c_protos": 5408,
+      "all_bucket_c_population": 36435,
+      "all_bucket_c_bytes": 5217760,
+      "method_population": 31827,
+      "method_bytes": 4581728,
+      "method_mib": 4.369476318359375,
+      "method_share_percent": 7.107856947298581,
+      "constructor_population": 4608,
+      "constructor_bytes": 636032
+    },
+    {
+      "app": "alipay",
+      "c_protos": 4621,
+      "all_bucket_c_population": 33053,
+      "all_bucket_c_bytes": 4730192,
+      "method_population": 29172,
+      "method_bytes": 4200320,
+      "method_mib": 4.0057373046875,
+      "method_share_percent": 6.516160211360686,
+      "constructor_population": 3881,
+      "constructor_bytes": 529872
+    },
+    {
+      "app": "meituan",
+      "c_protos": 5515,
+      "all_bucket_c_population": 29227,
+      "all_bucket_c_bytes": 4139888,
+      "method_population": 24141,
+      "method_bytes": 3475856,
+      "method_mib": 3.3148345947265625,
+      "method_share_percent": 5.392264057885901,
+      "constructor_population": 5086,
+      "constructor_bytes": 664032
+    },
+    {
+      "app": "meituanzhongbao",
+      "c_protos": 4827,
+      "all_bucket_c_population": 26730,
+      "all_bucket_c_bytes": 3793592,
+      "method_population": 22339,
+      "method_bytes": 3216576,
+      "method_mib": 3.06756591796875,
+      "method_share_percent": 4.990030413877446,
+      "constructor_population": 4391,
+      "constructor_bytes": 577016
+    },
+    {
+      "app": "jrtt",
+      "c_protos": 3815,
+      "all_bucket_c_population": 23928,
+      "all_bucket_c_bytes": 3393120,
+      "method_population": 20694,
+      "method_bytes": 2979096,
+      "method_mib": 2.8410873413085938,
+      "method_share_percent": 4.621616167583369,
+      "constructor_population": 3234,
+      "constructor_bytes": 414024
+    },
+    {
+      "app": "taobao",
+      "c_protos": 1774,
+      "all_bucket_c_population": 8977,
+      "all_bucket_c_bytes": 1277168,
+      "method_population": 7659,
+      "method_bytes": 1102552,
+      "method_mib": 1.0514755249023438,
+      "method_share_percent": 1.710442412329572,
+      "constructor_population": 1318,
+      "constructor_bytes": 174616
+    },
+    {
+      "app": "gaodeditu",
+      "c_protos": 1386,
+      "all_bucket_c_population": 8287,
+      "all_bucket_c_bytes": 1180720,
+      "method_population": 7069,
+      "method_bytes": 1017696,
+      "method_mib": 0.970550537109375,
+      "method_share_percent": 1.5788011824006087,
+      "constructor_population": 1218,
+      "constructor_bytes": 163024
+    },
+    {
+      "app": "wechat",
+      "c_protos": 1405,
+      "all_bucket_c_population": 7851,
+      "all_bucket_c_bytes": 1110648,
+      "method_population": 6605,
+      "method_bytes": 950880,
+      "method_mib": 0.906829833984375,
+      "method_share_percent": 1.4751462797545543,
+      "constructor_population": 1246,
+      "constructor_bytes": 159768
+    },
+    {
+      "app": "bilibili",
+      "c_protos": 1543,
+      "all_bucket_c_population": 7731,
+      "all_bucket_c_bytes": 1094096,
+      "method_population": 6311,
+      "method_bytes": 908544,
+      "method_mib": 0.866455078125,
+      "method_share_percent": 1.4094683888538215,
+      "constructor_population": 1420,
+      "constructor_bytes": 185552
+    }
+  ]
+}
