@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "units": "bytes unless stated otherwise",
+  "table_assumption": {
+    "entry_bytes": 16,
+    "load_factor": 0.75
+  },
+  "limits": [
+    "Results describe one GC terminal heap snapshot, not allocation counts or access heat.",
+    "Legacy content groups omit PropertyAttributes and are upper bounds only.",
+    "Same content does not prove VM/Realm/GC sharing eligibility.",
+    "Gross or conditional net shallow bytes do not predict Region committed, RSS, or PSS."
+  ],
+  "applications": [
+    {
+      "application": "kuaishou-foreground-api26",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\kuaishou-foreground-api26.heapsnapshot",
+        "bytes": 302531771,
+        "sha256": "f520a7b0f397a4f4f53189f918fe7b234011c3a3deced15516b77f2ee1da4d86",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "translated-v2",
+      "snapshot": {
+        "node_count": 2068319,
+        "edge_count": 12711539,
+        "heap_self_size_bytes": 169356653,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 76848,
+        "distinct_layout_targets": 69745,
+        "layout_shallow_bytes": 13593296,
+        "multi_owner_layout_targets": 1201,
+        "multi_owner_hclass_refs": 8304,
+        "model_admitted_layouts": 69735,
+        "model_admitted_bytes": 13574224,
+        "model_coverage_by_count": 0.9998566205462757,
+        "model_coverage_by_bytes": 0.9985969554403876,
+        "excluded_layouts_by_reason": {
+          "invalid_size": 1,
+          "unsupported_key_type": 9
+        }
+      },
+      "content_model": {
+        "observed_objects": 69735,
+        "observed_bytes": 13574224,
+        "unique_contents": 21321,
+        "duplicate_groups": 3518,
+        "duplicate_objects": 48414,
+        "canonical_bytes": 5004640,
+        "gross_shareable_bytes": 8569584,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 454848,
+          "conditional_net_index_all_unique_contents": 8114736,
+          "cost_index_duplicate_groups_only": 75056,
+          "conditional_net_index_duplicate_groups_only": 8494528
+        },
+        "interpretation": "strict same-snapshot object-identity plus complete Attr tagged-word identity"
+      }
+    },
+    {
+      "application": "kuaishou-background",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\kuaishou-background.heapsnapshot",
+        "bytes": 278673122,
+        "sha256": "9ace0e9983b45fd9fa263cc6c3aebd1cd5d3f9aa9261528a885d39d22085443e",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "translated-v2",
+      "snapshot": {
+        "node_count": 1959455,
+        "edge_count": 11573110,
+        "heap_self_size_bytes": 150132581,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 68706,
+        "distinct_layout_targets": 62492,
+        "layout_shallow_bytes": 11982416,
+        "multi_owner_layout_targets": 1150,
+        "multi_owner_hclass_refs": 7364,
+        "model_admitted_layouts": 62482,
+        "model_admitted_bytes": 11963344,
+        "model_coverage_by_count": 0.9998399795173782,
+        "model_coverage_by_bytes": 0.9984083343459282,
+        "excluded_layouts_by_reason": {
+          "invalid_size": 1,
+          "unsupported_key_type": 9
+        }
+      },
+      "content_model": {
+        "observed_objects": 62482,
+        "observed_bytes": 11963344,
+        "unique_contents": 20546,
+        "duplicate_groups": 4945,
+        "duplicate_objects": 41936,
+        "canonical_bytes": 4877376,
+        "gross_shareable_bytes": 7085968,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 438320,
+          "conditional_net_index_all_unique_contents": 6647648,
+          "cost_index_duplicate_groups_only": 105504,
+          "conditional_net_index_duplicate_groups_only": 6980464
+        },
+        "interpretation": "strict same-snapshot object-identity plus complete Attr tagged-word identity"
+      }
+    }
+  ],
+  "aggregate": {
+    "application_count": 2,
+    "totals": {
+      "hclass_objects": 145554,
+      "distinct_layout_targets": 132237,
+      "layout_shallow_bytes": 25575712,
+      "model_admitted_layouts": 132217,
+      "model_admitted_bytes": 25537568,
+      "unique_contents": 41867,
+      "duplicate_groups": 8463,
+      "duplicate_objects": 90350,
+      "canonical_bytes": 9882016,
+      "gross_shareable_bytes": 15655552,
+      "table_cost_index_all_unique_contents": 893168,
+      "conditional_net_index_all_unique_contents": 14762384
+    },
+    "per_application_distribution_bytes": {
+      "gross_shareable": {
+        "p25": 7456872.0,
+        "median": 7827776.0,
+        "p75": 8198680.0,
+        "maximum": 8569584
+      },
+      "conditional_net_index_all_unique_contents": {
+        "p25": 7014420.0,
+        "median": 7381192.0,
+        "p75": 7747964.0,
+        "maximum": 8114736
+      }
+    },
+    "no_gross_benefit_applications": []
+  }
+}

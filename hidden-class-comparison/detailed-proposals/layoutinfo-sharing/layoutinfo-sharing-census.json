@@ -1,0 +1,672 @@
+{
+  "schema_version": 1,
+  "units": "bytes unless stated otherwise",
+  "table_assumption": {
+    "entry_bytes": 16,
+    "load_factor": 0.75
+  },
+  "limits": [
+    "Results describe one GC terminal heap snapshot, not allocation counts or access heat.",
+    "Legacy content groups omit PropertyAttributes and are upper bounds only.",
+    "Same content does not prove VM/Realm/GC sharing eligibility.",
+    "Gross or conditional net shallow bytes do not predict Region committed, RSS, or PSS."
+  ],
+  "applications": [
+    {
+      "application": "alipay",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\alipay.heapsnapshot",
+        "bytes": 142060096,
+        "sha256": "0450fa10b1da40d1931fc050807c3df68f535120adeda5984055cf0f2834a37d",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 1204888,
+        "edge_count": 5281486,
+        "heap_self_size_bytes": 144449655,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 58508,
+        "distinct_layout_targets": 53781,
+        "layout_shallow_bytes": 7973392,
+        "multi_owner_layout_targets": 431,
+        "multi_owner_hclass_refs": 5021,
+        "model_admitted_layouts": 53781,
+        "model_admitted_bytes": 7973392,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 53781,
+        "observed_bytes": 7973392,
+        "unique_contents": 12922,
+        "duplicate_groups": 2928,
+        "duplicate_objects": 40859,
+        "canonical_bytes": 2347968,
+        "gross_shareable_bytes": 5625424,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 275680,
+          "conditional_net_index_all_unique_contents": 5349744,
+          "cost_index_duplicate_groups_only": 62464,
+          "conditional_net_index_duplicate_groups_only": 5562960
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "bilibili",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\bilibili.heapsnapshot",
+        "bytes": 63414140,
+        "sha256": "e12c91f0e306aa0833525e32eecd509b945c3c6eb2ce0525f88874348cf86ad6",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 564576,
+        "edge_count": 2470397,
+        "heap_self_size_bytes": 47023351,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 23340,
+        "distinct_layout_targets": 21249,
+        "layout_shallow_bytes": 3005808,
+        "multi_owner_layout_targets": 322,
+        "multi_owner_hclass_refs": 2331,
+        "model_admitted_layouts": 21249,
+        "model_admitted_bytes": 3005808,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 21249,
+        "observed_bytes": 3005808,
+        "unique_contents": 7873,
+        "duplicate_groups": 782,
+        "duplicate_objects": 13376,
+        "canonical_bytes": 1669888,
+        "gross_shareable_bytes": 1335920,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 167968,
+          "conditional_net_index_all_unique_contents": 1167952,
+          "cost_index_duplicate_groups_only": 16688,
+          "conditional_net_index_duplicate_groups_only": 1319232
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "douyin",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\douyin.heapsnapshot",
+        "bytes": 448771108,
+        "sha256": "4ce1d111b0f1fc6c734c17a6c7724a969d1d58475670527a8572da4068645ea5",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 3964400,
+        "edge_count": 16412465,
+        "heap_self_size_bytes": 314926757,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 133401,
+        "distinct_layout_targets": 118367,
+        "layout_shallow_bytes": 17229904,
+        "multi_owner_layout_targets": 1969,
+        "multi_owner_hclass_refs": 16861,
+        "model_admitted_layouts": 118367,
+        "model_admitted_bytes": 17229904,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 118367,
+        "observed_bytes": 17229904,
+        "unique_contents": 39422,
+        "duplicate_groups": 5243,
+        "duplicate_objects": 78945,
+        "canonical_bytes": 7464656,
+        "gross_shareable_bytes": 9765248,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 841008,
+          "conditional_net_index_all_unique_contents": 8924240,
+          "cost_index_duplicate_groups_only": 111856,
+          "conditional_net_index_duplicate_groups_only": 9653392
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "gaodeditu",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\gaodeditu.heapsnapshot",
+        "bytes": 64146199,
+        "sha256": "7b2c4eb5f40e3f94c146458aedcc6b8974f132ba0288448cddf072bd8e3a0e05",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 553672,
+        "edge_count": 2398816,
+        "heap_self_size_bytes": 45108224,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 27083,
+        "distinct_layout_targets": 22322,
+        "layout_shallow_bytes": 3473408,
+        "multi_owner_layout_targets": 739,
+        "multi_owner_hclass_refs": 5418,
+        "model_admitted_layouts": 22322,
+        "model_admitted_bytes": 3473408,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 22322,
+        "observed_bytes": 3473408,
+        "unique_contents": 9341,
+        "duplicate_groups": 2460,
+        "duplicate_objects": 12981,
+        "canonical_bytes": 2113088,
+        "gross_shareable_bytes": 1360320,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 199280,
+          "conditional_net_index_all_unique_contents": 1161040,
+          "cost_index_duplicate_groups_only": 52480,
+          "conditional_net_index_duplicate_groups_only": 1307840
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "jingdong",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\jingdong.heapsnapshot",
+        "bytes": 194749088,
+        "sha256": "b9d419f45ec5921e464d52fa8e8051d9ea6769a62a43bbb4a3dcde696be276cc",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 1653323,
+        "edge_count": 7587417,
+        "heap_self_size_bytes": 192206304,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 83345,
+        "distinct_layout_targets": 74235,
+        "layout_shallow_bytes": 11662880,
+        "multi_owner_layout_targets": 1475,
+        "multi_owner_hclass_refs": 10443,
+        "model_admitted_layouts": 74235,
+        "model_admitted_bytes": 11662880,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 74235,
+        "observed_bytes": 11662880,
+        "unique_contents": 14763,
+        "duplicate_groups": 4418,
+        "duplicate_objects": 59472,
+        "canonical_bytes": 3483184,
+        "gross_shareable_bytes": 8179696,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 314944,
+          "conditional_net_index_all_unique_contents": 7864752,
+          "cost_index_duplicate_groups_only": 94256,
+          "conditional_net_index_duplicate_groups_only": 8085440
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "jrtt",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\jrtt.heapsnapshot",
+        "bytes": 166776198,
+        "sha256": "7de3931ceab5893208a01d76491a810442f0d05b8a4b741cfe912bc65a105543",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 1402177,
+        "edge_count": 6176241,
+        "heap_self_size_bytes": 141657123,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 68103,
+        "distinct_layout_targets": 58842,
+        "layout_shallow_bytes": 8515904,
+        "multi_owner_layout_targets": 1465,
+        "multi_owner_hclass_refs": 10604,
+        "model_admitted_layouts": 58842,
+        "model_admitted_bytes": 8515904,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 58842,
+        "observed_bytes": 8515904,
+        "unique_contents": 16614,
+        "duplicate_groups": 3727,
+        "duplicate_objects": 42228,
+        "canonical_bytes": 3261136,
+        "gross_shareable_bytes": 5254768,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 354432,
+          "conditional_net_index_all_unique_contents": 4900336,
+          "cost_index_duplicate_groups_only": 79520,
+          "conditional_net_index_duplicate_groups_only": 5175248
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "kuaishou",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\kuaishou.heapsnapshot",
+        "bytes": 226568531,
+        "sha256": "1e79e0b2d78c46df54cbc741fadbc820ca6849c1bf3e738aaf6fed909d20e9cc",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 1919039,
+        "edge_count": 8858085,
+        "heap_self_size_bytes": 169356651,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 76848,
+        "distinct_layout_targets": 69744,
+        "layout_shallow_bytes": 13593296,
+        "multi_owner_layout_targets": 1200,
+        "multi_owner_hclass_refs": 8182,
+        "model_admitted_layouts": 69744,
+        "model_admitted_bytes": 13593296,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 69744,
+        "observed_bytes": 13593296,
+        "unique_contents": 20495,
+        "duplicate_groups": 3325,
+        "duplicate_objects": 49249,
+        "canonical_bytes": 4879792,
+        "gross_shareable_bytes": 8713504,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 437232,
+          "conditional_net_index_all_unique_contents": 8276272,
+          "cost_index_duplicate_groups_only": 70944,
+          "conditional_net_index_duplicate_groups_only": 8642560
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "meituan",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\meituan.heapsnapshot",
+        "bytes": 163024059,
+        "sha256": "f4fb7d936b1cdcb283be3581950909605291c2a86b74015125f67696657d6829",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 1374688,
+        "edge_count": 6108596,
+        "heap_self_size_bytes": 121877036,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 61146,
+        "distinct_layout_targets": 55571,
+        "layout_shallow_bytes": 8497968,
+        "multi_owner_layout_targets": 669,
+        "multi_owner_hclass_refs": 6142,
+        "model_admitted_layouts": 55571,
+        "model_admitted_bytes": 8497968,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 55571,
+        "observed_bytes": 8497968,
+        "unique_contents": 15101,
+        "duplicate_groups": 4932,
+        "duplicate_objects": 40470,
+        "canonical_bytes": 3104208,
+        "gross_shareable_bytes": 5393760,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 322160,
+          "conditional_net_index_all_unique_contents": 5071600,
+          "cost_index_duplicate_groups_only": 105216,
+          "conditional_net_index_duplicate_groups_only": 5288544
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "meituanzhongbao",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\meituanzhongbao.heapsnapshot",
+        "bytes": 92445077,
+        "sha256": "bc9a19ed587a9c8e118ea6be5e134acd3994156da1eb6b5b1f5baa0ab4c26277",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 804043,
+        "edge_count": 3712906,
+        "heap_self_size_bytes": 70116793,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 43415,
+        "distinct_layout_targets": 39494,
+        "layout_shallow_bytes": 6090304,
+        "multi_owner_layout_targets": 485,
+        "multi_owner_hclass_refs": 4304,
+        "model_admitted_layouts": 39494,
+        "model_admitted_bytes": 6090304,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 39494,
+        "observed_bytes": 6090304,
+        "unique_contents": 8932,
+        "duplicate_groups": 2958,
+        "duplicate_objects": 30562,
+        "canonical_bytes": 1818208,
+        "gross_shareable_bytes": 4272096,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 190560,
+          "conditional_net_index_all_unique_contents": 4081536,
+          "cost_index_duplicate_groups_only": 63104,
+          "conditional_net_index_duplicate_groups_only": 4208992
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "pinduoduo",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\pinduoduo.heapsnapshot",
+        "bytes": 119330012,
+        "sha256": "07f6bd3ba2147bf795c2aa2092a718c93d3fe4f0fa78122f8275ff6bd1330c69",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 1086298,
+        "edge_count": 4994469,
+        "heap_self_size_bytes": 112130763,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 63222,
+        "distinct_layout_targets": 56242,
+        "layout_shallow_bytes": 8418128,
+        "multi_owner_layout_targets": 999,
+        "multi_owner_hclass_refs": 7832,
+        "model_admitted_layouts": 56242,
+        "model_admitted_bytes": 8418128,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 56242,
+        "observed_bytes": 8418128,
+        "unique_contents": 8637,
+        "duplicate_groups": 3636,
+        "duplicate_objects": 47605,
+        "canonical_bytes": 1767344,
+        "gross_shareable_bytes": 6650784,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 184256,
+          "conditional_net_index_all_unique_contents": 6466528,
+          "cost_index_duplicate_groups_only": 77568,
+          "conditional_net_index_duplicate_groups_only": 6573216
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "taobao",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\taobao.heapsnapshot",
+        "bytes": 92430862,
+        "sha256": "dc2447eb2fcf81bbe6ffa649145972a228e1abf19cea5beda35122c4e128001c",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 789366,
+        "edge_count": 3303483,
+        "heap_self_size_bytes": 69135262,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 32373,
+        "distinct_layout_targets": 28365,
+        "layout_shallow_bytes": 4115568,
+        "multi_owner_layout_targets": 615,
+        "multi_owner_hclass_refs": 4531,
+        "model_admitted_layouts": 28365,
+        "model_admitted_bytes": 4115568,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 28365,
+        "observed_bytes": 4115568,
+        "unique_contents": 11720,
+        "duplicate_groups": 1624,
+        "duplicate_objects": 16645,
+        "canonical_bytes": 2482240,
+        "gross_shareable_bytes": 1633328,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 250032,
+          "conditional_net_index_all_unique_contents": 1383296,
+          "cost_index_duplicate_groups_only": 34656,
+          "conditional_net_index_duplicate_groups_only": 1598672
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "wechat",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\wechat.heapsnapshot",
+        "bytes": 134531677,
+        "sha256": "946e768be0f7e8b8951a130b821a69bf800f68c2d8e68ce8cc3a7d1c85252a5c",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 1162266,
+        "edge_count": 4838417,
+        "heap_self_size_bytes": 88087012,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 40753,
+        "distinct_layout_targets": 38555,
+        "layout_shallow_bytes": 5465200,
+        "multi_owner_layout_targets": 389,
+        "multi_owner_hclass_refs": 2500,
+        "model_admitted_layouts": 38555,
+        "model_admitted_bytes": 5465200,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 38555,
+        "observed_bytes": 5465200,
+        "unique_contents": 18027,
+        "duplicate_groups": 1670,
+        "duplicate_objects": 20528,
+        "canonical_bytes": 3541920,
+        "gross_shareable_bytes": 1923280,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 384576,
+          "conditional_net_index_all_unique_contents": 1538704,
+          "cost_index_duplicate_groups_only": 35632,
+          "conditional_net_index_duplicate_groups_only": 1887648
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    },
+    {
+      "application": "weibo",
+      "input": {
+        "path": "D:\\docker\\invest\\tmp-napi-scan\\weibo.heapsnapshot",
+        "bytes": 280851104,
+        "sha256": "75dd99e6fd3292cc99e200facfa89e55e9f7bcfd6bb87ad2ec0a194ac716f68c",
+        "collection_time": null,
+        "collection_time_note": "not encoded in the heap snapshot; file mtime is not treated as collection time"
+      },
+      "schema": "legacy",
+      "snapshot": {
+        "node_count": 2299237,
+        "edge_count": 11113309,
+        "heap_self_size_bytes": 211939894,
+        "vm_count": null,
+        "vm_count_note": "the snapshot does not expose a proven VM/Realm ownership field for each LayoutInfo"
+      },
+      "population": {
+        "hclass_objects": 107960,
+        "distinct_layout_targets": 98967,
+        "layout_shallow_bytes": 16513792,
+        "multi_owner_layout_targets": 1490,
+        "multi_owner_hclass_refs": 10346,
+        "model_admitted_layouts": 98967,
+        "model_admitted_bytes": 16513792,
+        "model_coverage_by_count": 1.0,
+        "model_coverage_by_bytes": 1.0,
+        "excluded_layouts_by_reason": {}
+      },
+      "content_model": {
+        "observed_objects": 98967,
+        "observed_bytes": 16513792,
+        "unique_contents": 12821,
+        "duplicate_groups": 4597,
+        "duplicate_objects": 86146,
+        "canonical_bytes": 3187936,
+        "gross_shareable_bytes": 13325856,
+        "table_model": {
+          "entry_bytes": 16,
+          "load_factor": 0.75,
+          "cost_index_all_unique_contents": 273520,
+          "conditional_net_index_all_unique_contents": 13052336,
+          "cost_index_duplicate_groups_only": 98080,
+          "conditional_net_index_duplicate_groups_only": 13227776
+        },
+        "interpretation": "upper bound: same capacity and key object identity; Attr primitive values are absent"
+      }
+    }
+  ],
+  "aggregate": {
+    "application_count": 13,
+    "totals": {
+      "hclass_objects": 819497,
+      "distinct_layout_targets": 735734,
+      "layout_shallow_bytes": 114555552,
+      "model_admitted_layouts": 735734,
+      "model_admitted_bytes": 114555552,
+      "unique_contents": 196668,
+      "duplicate_groups": 42300,
+      "duplicate_objects": 539066,
+      "canonical_bytes": 41121568,
+      "gross_shareable_bytes": 73433984,
+      "table_cost_index_all_unique_contents": 4195648,
+      "conditional_net_index_all_unique_contents": 69238336
+    },
+    "per_application_distribution_bytes": {
+      "gross_shareable": {
+        "p25": 1923280.0,
+        "median": 5393760,
+        "p75": 8179696.0,
+        "maximum": 13325856
+      },
+      "conditional_net_index_all_unique_contents": {
+        "p25": 1538704.0,
+        "median": 5071600,
+        "p75": 7864752.0,
+        "maximum": 13052336
+      }
+    },
+    "no_gross_benefit_applications": []
+  }
+}
