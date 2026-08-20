@@ -1,0 +1,65 @@
+<mxfile host="app.diagrams.net" agent="Hermes Agent">
+  <diagram id="native-interop-flow" name="A1-A2 系统流程">
+    <mxGraphModel dx="2054" dy="1103" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#0f172a;" value="Native Interop 闭包惰性原型绑定：A1 / A2 系统流程" vertex="1">
+          <mxGeometry height="40" width="1000" x="50" y="24" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontColor=#475569;" value="实线：已有调用链　虚线：候选新增路径　红色：当前即时分配" vertex="1">
+          <mxGeometry height="28" width="900" x="50" y="66" as="geometry" />
+        </mxCell>
+        <mxCell id="register" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;strokeWidth=2;fontSize=15;" value="Native 模块注册&lt;br&gt;&lt;b&gt;napi_define_class&lt;/b&gt;&lt;br&gt;&lt;font color=&#39;#64748b&#39;&gt;properties[] + constructor&lt;/font&gt;" vertex="1">
+          <mxGeometry height="90" width="210" x="25" y="142" as="geometry" />
+        </mxCell>
+        <mxCell id="current" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;strokeWidth=2;fontSize=14;" value="当前路径&lt;br&gt;&lt;b&gt;NapiInitAttrValFromProp&lt;/b&gt;&lt;br&gt;注册时为全部方法创建闭包" vertex="1">
+          <mxGeometry height="100" width="250" x="346" y="137" as="geometry" />
+        </mxCell>
+        <mxCell id="current_objs" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1f2;strokeColor=#f43f5e;strokeWidth=1.5;fontSize=13;" value="每个方法内存驻留&lt;br&gt;JSFunction + JSNativePointer&lt;br&gt;+ NapiFunctionInfo" vertex="1">
+          <mxGeometry height="100" width="235" x="708" y="232" as="geometry" />
+        </mxCell>
+        <mxCell id="common" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontSize=14;" value="共同收尾&lt;br&gt;&lt;b&gt;按普通数据属性写回 prototype&lt;/b&gt;&lt;br&gt;透传 writable / enumerable / configurable" vertex="1">
+          <mxGeometry height="90" width="300" x="415" y="629" as="geometry" />
+        </mxCell>
+        <mxCell id="invalidate" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#9333ea;strokeWidth=1.5;fontSize=13;" value="HClass transition / attr 更新&lt;br&gt;MarkProtoChanged + RefreshUsers&lt;br&gt;旧 IC handler 失效" vertex="1">
+          <mxGeometry height="90" width="190" x="760" y="629" as="geometry" />
+        </mxCell>
+        <mxCell id="compat" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#64748b;dashed=1;strokeWidth=1.5;fontSize=12;" value="反射与修改语义入口&lt;br&gt;descriptor / freeze / seal / delete / setter&lt;br&gt;按规则触发物化、合成或删除" vertex="1">
+          <mxGeometry height="90" width="270" x="100" y="629" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="register" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#dc2626;strokeWidth=2;endArrow=block;endFill=1;" target="current">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="current" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#dc2626;strokeWidth=2;endArrow=block;endFill=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="current_objs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="common" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9333ea;strokeWidth=2;endArrow=block;endFill=1;" target="invalidate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="compat" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#64748b;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" target="common">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a2_read" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;strokeWidth=1.5;fontSize=14;container=0;" value="首次读取方法&lt;br&gt;&lt;b&gt;X.prototype.m&lt;/b&gt;" vertex="1">
+          <mxGeometry height="100" width="204" x="25" y="337" as="geometry" />
+        </mxCell>
+        <mxCell id="a2_one" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d1fae5;strokeColor=#059669;strokeWidth=1.5;fontSize=13;container=0;" value="为当前方法创建驻留和绑定&lt;br&gt;&lt;b&gt;NapiNativeCreateFunction&lt;/b&gt;" vertex="1">
+          <mxGeometry height="100" width="210" x="363" y="337" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="a2_read" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#16a34a;strokeWidth=2;endArrow=block;endFill=1;" target="a2_one">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inGAXub3ByvdAwAwrcbw-3" edge="1" parent="1" source="a2_one" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#16a34a;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="current_objs">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="652" y="387" />
+              <mxPoint x="652" y="282" />
+            </Array>
+            <mxPoint x="290" y="401" as="sourcePoint" />
+            <mxPoint x="436" y="401" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

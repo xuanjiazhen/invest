@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="920" viewBox="0 0 1500 920" role="img" aria-labelledby="title desc">
+  <title id="title">Native Interop 惰性绑定关键数据结构与生命周期</title>
+  <desc id="desc">展示 descriptor 输入、候选生命周期与索引表、A1 和 A2 slot 表示、property lookup、物化对象与 IC 失效关系。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="context-stroke"/></marker>
+    <style>text{font-family:"Microsoft YaHei","Noto Sans CJK SC",Arial,sans-serif;fill:#0f172a;letter-spacing:0}.h{font-size:24px;font-weight:700}.sub{font-size:13px;fill:#475569}.t{font-size:13px}.s{font-size:11px;fill:#475569}.b{font-weight:700}.box{stroke-width:2}.edge{fill:none;stroke-width:2;marker-end:url(#arrow)}.dash{stroke-dasharray:8 6}</style>
+  </defs>
+  <rect width="1500" height="920" fill="#ffffff"/>
+  <text x="50" y="52" class="h">Native Interop 惰性绑定：关键数据结构与生命周期</text>
+  <text x="50" y="82" class="sub">蓝色：现有结构/路径　绿色：候选新增结构　紫色：物化后结构　虚线：候选或条件关系</text>
+  <path d="M315 200 H370 V177 H405" class="edge dash" stroke="#16a34a"/>
+  <path d="M545 230 V275" class="edge" stroke="#059669"/>
+  <path d="M770 178 H735 V305 H685" class="edge dash" stroke="#0891b2"/>
+  <path d="M1040 337 H1130" class="edge" stroke="#2563eb"/>
+  <path d="M905 390 V455" class="edge dash" stroke="#16a34a"/>
+  <path d="M970 390 V425 H1270 V455" class="edge dash" stroke="#d97706"/>
+  <path d="M770 520 H720 V360 H685" class="edge dash" stroke="#059669"/>
+  <path d="M905 570 V635" class="edge" stroke="#059669"/>
+  <path d="M1270 570 V600 H1100 V610 H1020 V635" class="edge dash" stroke="#d97706"/>
+  <path d="M820 740 V765 H515 V790" class="edge" stroke="#7c3aed"/>
+  <path d="M640 837 H725" class="edge" stroke="#9333ea"/>
+  <path d="M960 837 H1045" class="edge" stroke="#c026d3"/>
+  <path d="M1070 687 H1170" class="edge" stroke="#7e22ce"/>
+  <rect x="65" y="145" width="250" height="115" rx="7" fill="#e0f2fe" stroke="#0284c7" class="box"/><text x="190" y="173" text-anchor="middle" class="t"><tspan x="190">现有输入</tspan><tspan x="190" dy="22" class="b">napi_property_descriptor[]</tspan><tspan x="190" dy="20">utf8name / callback / data</tspan><tspan x="190" dy="20" class="s">getter / setter / attributes</tspan></text>
+  <rect x="405" y="125" width="280" height="105" rx="7" fill="#dcfce7" stroke="#16a34a" class="box"/><text x="545" y="152" text-anchor="middle" class="t"><tspan x="545" class="b">候选新增：ClassBindingLifetime</tspan><tspan x="545" dy="21">类 / module unload 生命周期所有者</tspan><tspan x="545" dy="20" class="s">统一释放未物化 descriptor 资源</tspan></text>
+  <rect x="405" y="275" width="280" height="115" rx="7" fill="#d1fae5" stroke="#059669" class="box"/><text x="545" y="303" text-anchor="middle" class="t"><tspan x="545" class="b">NativeLazyDescriptorTable</tspan><tspan x="545" dy="21">key / callback / data / attrs / state</tspan><tspan x="545" dy="20">深拷贝 72–96 B/项</tspan><tspan x="545" dy="19" class="s">或静态存储期零拷贝</tspan></text>
+  <rect x="770" y="120" width="270" height="115" rx="7" fill="#cffafe" stroke="#0891b2"/><text x="905" y="147" text-anchor="middle" class="t"><tspan x="905" class="b">A1 备选</tspan><tspan x="905" dy="21">module exports[className]</tspan><tspan x="905" dy="20">→ InternalAccessor (24 B)</tspan><tspan x="905" dy="19" class="s">类级 materialize callback</tspan></text>
+  <rect x="770" y="285" width="270" height="105" rx="7" fill="#e0f2fe" stroke="#0284c7" class="box"/><text x="905" y="313" text-anchor="middle" class="t"><tspan x="905" class="b">现有：prototype JSObject</tspan><tspan x="905" dy="21">持有 HClass + property storage</tspan><tspan x="905" dy="20" class="s">方法 key 由 LayoutInfo 描述</tspan></text>
+  <rect x="1130" y="285" width="280" height="105" rx="7" fill="#dbeafe" stroke="#2563eb"/><text x="1270" y="313" text-anchor="middle" class="t"><tspan x="1270" class="b">JSHClass / LayoutInfo</tspan><tspan x="1270" dy="21">key + PropertyAttributes + slot offset</tspan><tspan x="1270" dy="20" class="s">prototype marker / EnumCache</tspan></text>
+  <rect x="770" y="455" width="270" height="115" rx="7" fill="#dcfce7" stroke="#16a34a" class="box"/><text x="905" y="482" text-anchor="middle" class="t"><tspan x="905" class="b">A2 形态二（候选主方向）</tspan><tspan x="905" dy="21">PropertyAttributes.lazy = 1</tspan><tspan x="905" dy="20">value = Smi(descriptor index)</tspan><tspan x="905" dy="19" class="s">零额外堆对象/方法</tspan></text>
+  <rect x="1130" y="455" width="280" height="115" rx="7" fill="#fef3c7" stroke="#d97706"/><text x="1270" y="482" text-anchor="middle" class="t"><tspan x="1270" class="b">A2 形态一（低侵入备选）</tspan><tspan x="1270" dy="21">每方法 InternalAccessor (24 B)</tspan><tspan x="1270" dy="20">getter 不接收属性 key</tspan><tspan x="1270" dy="19" class="s">不能单例复用</tspan></text>
+  <rect x="770" y="635" width="300" height="105" rx="7" fill="#d1fae5" stroke="#059669" class="box"/><text x="920" y="663" text-anchor="middle" class="t"><tspan x="920">现有路径扩展点</tspan><tspan x="920" dy="22" class="b">JSObject::GetProperty / LoadIC</tspan><tspan x="920" dy="20" class="s">识别 lazy attr → 锁定 slot → 查 descriptor</tspan></text>
+  <rect x="1170" y="635" width="260" height="105" rx="7" fill="#f3e8ff" stroke="#7e22ce"/><text x="1300" y="663" text-anchor="middle" class="t"><tspan x="1300" class="b">物化写回后的失效链</tspan><tspan x="1300" dy="21">HClass transition → MarkProtoChanged</tspan><tspan x="1300" dy="20" class="s">RefreshUsers / IC invalidate</tspan></text>
+  <rect x="390" y="790" width="250" height="95" rx="7" fill="#ede9fe" stroke="#7c3aed" class="box"/><text x="515" y="817" text-anchor="middle" class="t"><tspan x="515" class="b">物化后：JSFunction</tspan><tspan x="515" dy="21">name / length / Method</tspan><tspan x="515" dy="19" class="s">同 slot 连续读取返回同一对象</tspan></text>
+  <rect x="725" y="790" width="235" height="95" rx="7" fill="#f3e8ff" stroke="#9333ea"/><text x="842" y="819" text-anchor="middle" class="t"><tspan x="842" class="b">JSNativePointer</tspan><tspan x="842" dy="21">HashField 持有</tspan><tspan x="842" dy="19" class="s">native pointer wrapper</tspan></text>
+  <rect x="1045" y="790" width="245" height="95" rx="7" fill="#fae8ff" stroke="#c026d3"/><text x="1167" y="817" text-anchor="middle" class="t"><tspan x="1167" class="b">堆外：NapiFunctionInfo</tspan><tspan x="1167" dy="21">callback / data / env / scopeId</tspan><tspan x="1167" dy="19" class="s">CommonDeleter 释放</tspan></text>
+</svg>

@@ -1,0 +1,598 @@
+diff --git a/napi.gni b/napi.gni
+index 830b2edec792d3cd4dcaadab11bbec9344cf6392..d276dfa95989d35e6e3bcf3282286d25ec279c98 100755
+--- a/napi.gni
++++ b/napi.gni
+@@ -26,6 +26,7 @@ napi_sources = [
+   "native_engine/impl/ark/ark_native_engine.cpp",
+   "native_engine/impl/ark/ark_native_reference.cpp",
+   "native_engine/impl/ark/ark_native_timer.cpp",
++  "native_engine/impl/ark/native_interop_usage_registry.cpp",
+   "native_engine/impl/ark/ark_sendable_native_reference.cpp",
+   "native_engine/impl/ark/cj_support.cpp",
+   "native_engine/native_api.cpp",
+diff --git a/native_engine/impl/ark/ark_native_engine.cpp b/native_engine/impl/ark/ark_native_engine.cpp
+index 325e88ffb314ad1360cb87e0194ed492a5684def..418c03e3aaaef018771ed12f2a87281398626baa 100644
+--- a/native_engine/impl/ark/ark_native_engine.cpp
++++ b/native_engine/impl/ark/ark_native_engine.cpp
+@@ -17,6 +17,7 @@
+ 
+ #include <cinttypes>
+ #include <cstdint>
++#include <vector>
+ 
+ #ifdef ENABLE_HITRACE
+ #include <sys/prctl.h>
+@@ -27,6 +28,7 @@
+ #include "ark_native_reference.h"
+ #include "ark_hybrid_native_reference.h"
+ #include "ark_native_timer.h"
++#include "native_interop_usage_registry.h"
+ #include "native_engine/native_utils.h"
+ #include "native_sendable.h"
+ #include "cj_support.h"
+@@ -188,7 +190,8 @@ void FunctionSetContainerId(napi_env env, panda::Local<panda::JSValueRef> &value
+ #endif
+ 
+ static Local<panda::JSValueRef> NapiNativeCreateFunction(napi_env env, const char* name,
+-                                                         NapiNativeCallback cb, void* value)
++                                                         NapiNativeCallback cb, void* value,
++                                                         NapiFunctionInfo **createdInfo = nullptr)
+ {
+     auto engine = reinterpret_cast<NativeEngine*>(env);
+     auto vm = const_cast<EcmaVM*>(engine->GetEcmaVm());
+@@ -200,6 +203,9 @@ static Local<panda::JSValueRef> NapiNativeCreateFunction(napi_env env, const cha
+     funcInfo->callback = cb;
+     funcInfo->data = value;
+     funcInfo->env = env;
++    if (createdInfo != nullptr) {
++        *createdInfo = funcInfo;
++    }
+ #ifdef ENABLE_CONTAINER_SCOPE
+     if (engine->IsContainerScopeEnabled()) {
+         funcInfo->scopeId = engine->GetContainerScopeIdFunc();
+@@ -213,8 +219,14 @@ static Local<panda::JSValueRef> NapiNativeCreateFunction(napi_env env, const cha
+     return fn;
+ }
+ 
++struct PendingNativeInteropFunction final {
++    NapiFunctionInfo *info {nullptr};
++    NativeInteropRole role {NativeInteropRole::PROTOTYPE_METHOD};
++};
++
+ static Local<panda::JSValueRef> NapiInitAttrValFromProp(napi_env env, const NapiPropertyDescriptor &property,
+-                                                        bool &writable, Local<panda::JSValueRef> *curKey)
++                                                        bool &writable, Local<panda::JSValueRef> *curKey,
++                                                        std::vector<PendingNativeInteropFunction> *pendingFunctions)
+ {
+     const EcmaVM *vm = reinterpret_cast<NativeEngine *>(env)->GetEcmaVm();
+     Local<panda::JSValueRef> val = panda::JSValueRef::Undefined(vm);
+@@ -224,11 +236,19 @@ static Local<panda::JSValueRef> NapiInitAttrValFromProp(napi_env env, const Napi
+         Local<panda::JSValueRef> localSetter = panda::JSValueRef::Undefined(vm);
+         if (property.getter != nullptr) {
+             fullName += "getter";
+-            localGetter = NapiNativeCreateFunction(env, fullName.c_str(), property.getter, property.data);
++            NapiFunctionInfo *createdInfo = nullptr;
++            localGetter = NapiNativeCreateFunction(env, fullName.c_str(), property.getter, property.data, &createdInfo);
++            if (pendingFunctions != nullptr && createdInfo != nullptr) {
++                pendingFunctions->push_back({createdInfo, NativeInteropRole::PROTOTYPE_GETTER});
++            }
+         }
+         if (property.setter != nullptr) {
+             fullName += "setter";
+-            localSetter = NapiNativeCreateFunction(env, fullName.c_str(), property.setter, property.data);
++            NapiFunctionInfo *createdInfo = nullptr;
++            localSetter = NapiNativeCreateFunction(env, fullName.c_str(), property.setter, property.data, &createdInfo);
++            if (pendingFunctions != nullptr && createdInfo != nullptr) {
++                pendingFunctions->push_back({createdInfo, NativeInteropRole::PROTOTYPE_SETTER});
++            }
+         }
+         val = panda::ObjectRef::CreateAccessorData(vm, localGetter, localSetter);
+         writable = false; // the default writable of getter and setter is 'false'
+@@ -240,7 +260,11 @@ static Local<panda::JSValueRef> NapiInitAttrValFromProp(napi_env env, const Napi
+                         Local<panda::StringRef>(*curKey)->ToString(vm) :
+                         Local<panda::SymbolRef>(*curKey)->GetDescription(vm)->ToString(vm);
+         }
+-        val = NapiNativeCreateFunction(env, fullName.c_str(), property.method, property.data);
++        NapiFunctionInfo *createdInfo = nullptr;
++        val = NapiNativeCreateFunction(env, fullName.c_str(), property.method, property.data, &createdInfo);
++        if (pendingFunctions != nullptr && createdInfo != nullptr) {
++            pendingFunctions->push_back({createdInfo, NativeInteropRole::PROTOTYPE_METHOD});
++        }
+     } else {
+         val = LocalValueFromJsValue(property.value);
+     }
+@@ -248,7 +272,8 @@ static Local<panda::JSValueRef> NapiInitAttrValFromProp(napi_env env, const Napi
+ }
+ 
+ static size_t NapiGetKeysAndAttrsFromProps(napi_env env, size_t propertyCount, const NapiPropertyDescriptor *properties,
+-                                           Local<panda::JSValueRef> *keys, PropertyAttribute *attrs)
++                                           Local<panda::JSValueRef> *keys, PropertyAttribute *attrs,
++                                           std::vector<PendingNativeInteropFunction> &pendingFunctions)
+ {
+     auto vm = reinterpret_cast<NativeEngine *>(env)->GetEcmaVm();
+     size_t curNonStaticPropIdx = propertyCount - 1; // 1: last index of array is 'lenght - 1'.
+@@ -278,7 +303,9 @@ static size_t NapiGetKeysAndAttrsFromProps(napi_env env, size_t propertyCount, c
+         bool writable = (property.attributes & NATIVE_WRITABLE) != 0;
+         bool enumable = (property.attributes & NATIVE_ENUMERABLE) != 0;
+         bool configable = (property.attributes & NATIVE_CONFIGURABLE) != 0;
+-        Local<panda::JSValueRef> val = NapiInitAttrValFromProp(env, property, writable, curKey);
++        auto pending = ArkNativeEngine::napiProfilerEnabled && (property.attributes & NATIVE_STATIC) == 0 ?
++            &pendingFunctions : nullptr;
++        Local<panda::JSValueRef> val = NapiInitAttrValFromProp(env, property, writable, curKey, pending);
+         // ~PropertyAttribute() was called in NewConcurrentClassFunctionWithName
+         new (curAttr) PropertyAttribute(val, writable, enumable, configable);
+     }
+@@ -287,7 +314,8 @@ static size_t NapiGetKeysAndAttrsFromProps(napi_env env, size_t propertyCount, c
+ 
+ static Local<panda::FunctionRef> NapiCreateClassFunction(napi_env env, std::string &className,
+                                                          NapiFunctionInfo* funcInfo, size_t propCount,
+-                                                         const NapiPropertyDescriptor* properties)
++                                                         const NapiPropertyDescriptor* properties,
++                                                         std::vector<PendingNativeInteropFunction> &pendingFunctions)
+ {
+     const EcmaVM *vm = reinterpret_cast<NativeEngine*>(env)->GetEcmaVm();
+     NativeEngine* engine = reinterpret_cast<NativeEngine*>(env);
+@@ -300,7 +328,8 @@ static Local<panda::FunctionRef> NapiCreateClassFunction(napi_env env, std::stri
+     } else if (propCount <= panda::ObjectRef::MAX_PROPERTIES_ON_STACK) {
+         Local<panda::JSValueRef> keys[panda::ObjectRef::MAX_PROPERTIES_ON_STACK];
+         PropertyAttribute attrs[panda::ObjectRef::MAX_PROPERTIES_ON_STACK];
+-        size_t staticPropCount = NapiGetKeysAndAttrsFromProps(env, propCount, properties, &keys[0], &attrs[0]);
++        size_t staticPropCount =
++            NapiGetKeysAndAttrsFromProps(env, propCount, properties, &keys[0], &attrs[0], pendingFunctions);
+         fn = panda::FunctionRef::NewConcurrentClassFunctionWithName(vm, context, ArkNativeFunctionCallBack,
+                                                                     CommonDeleter, className.c_str(),
+                                                                     reinterpret_cast<void*>(funcInfo), true, propCount,
+@@ -310,7 +339,8 @@ static Local<panda::FunctionRef> NapiCreateClassFunction(napi_env env, std::stri
+             reinterpret_cast<Local<panda::JSValueRef> *>(malloc(sizeof(Local<panda::JSValueRef>) * propCount));
+         PropertyAttribute *attrs = reinterpret_cast<PropertyAttribute *>(malloc(sizeof(PropertyAttribute) * propCount));
+         if (attrs != nullptr && keys != nullptr) {
+-            size_t staticPropCount = NapiGetKeysAndAttrsFromProps(env, propCount, properties, keys, attrs);
++            size_t staticPropCount =
++                NapiGetKeysAndAttrsFromProps(env, propCount, properties, keys, attrs, pendingFunctions);
+             fn = panda::FunctionRef::NewConcurrentClassFunctionWithName(vm, context, ArkNativeFunctionCallBack,
+                                                                         CommonDeleter, className.c_str(),
+                                                                         reinterpret_cast<void*>(funcInfo), true,
+@@ -353,18 +383,31 @@ panda::Local<panda::JSValueRef> NapiDefineClass(napi_env env, const char* name,
+         funcInfo->scopeId = engine->GetContainerScopeIdFunc();
+     }
+ #endif
+-    Local<panda::FunctionRef> fn = NapiCreateClassFunction(env, className, funcInfo, length, properties);
++    std::vector<PendingNativeInteropFunction> pendingFunctions;
++    if (ArkNativeEngine::napiProfilerEnabled) {
++        pendingFunctions.reserve(length * 2U);
++    }
++    Local<panda::FunctionRef> fn =
++        NapiCreateClassFunction(env, className, funcInfo, length, properties, pendingFunctions);
+ 
+-    if (JSNApi::HasPendingException(vm)) {
++    bool classCreated = !JSNApi::HasPendingException(vm) && fn->IsFunction(vm);
++    if (!classCreated) {
+         HILOG_WARN("occur exception, className:%{public}s", className.c_str());
+         if (reinterpret_cast<NativeEngine*>(env)->IsCrossThreadCheckEnabled()) {
+             JSNApi::PrintExceptionInfo(vm);
+         }
+         JSNApi::GetAndClearUncaughtException(vm);
++    } else {
++        NativeInteropUsageRegistry::Register(funcInfo, vm, NativeInteropRole::CONSTRUCTOR);
++        for (const auto &function : pendingFunctions) {
++            NativeInteropUsageRegistry::Register(function.info, vm, function.role, funcInfo);
++        }
+     }
+ #ifdef ENABLE_HITRACE
+-    Local<panda::ObjectRef> classPrototype = fn->GetFunctionPrototype(vm);
+-    reinterpret_cast<ArkNativeEngine*>(env)->SetModuleName(classPrototype, className);
++    if (classCreated) {
++        Local<panda::ObjectRef> classPrototype = fn->GetFunctionPrototype(vm);
++        reinterpret_cast<ArkNativeEngine*>(env)->SetModuleName(classPrototype, className);
++    }
+ #endif
+     return fn;
+ }
+@@ -502,6 +545,11 @@ ArkNativeEngine::ArkNativeEngine(EcmaVM* vm, void* jsEngine, bool isLimitedWorke
+     JSNApi::SetEnv(vm, this);
+     // enable napi profiler
+     EnableNapiProfiler();
++    if (ArkNativeEngine::napiProfilerEnabled) {
++        NativeInteropUsageRegistry::Enable(vm_);
++        JSNApi::SetNativeInteropUsageCallback(vm_,
++            reinterpret_cast<void *>(NativeInteropUsageRegistry::Observe));
++    }
+     LocalScope scope(vm_);
+ 
+     // save the first context
+@@ -624,6 +672,8 @@ ArkNativeEngine::~ArkNativeEngine()
+     engineState_ = ArkNativeEngineState::RELEASING;
+ 
+     if (isMainEnvContext_) {
++        JSNApi::SetNativeInteropUsageCallback(vm_, nullptr);
++        NativeInteropUsageRegistry::Disable(vm_);
+         // unregister worker env for idle GC
+         ArkIdleMonitor::GetInstance()->UnregisterEnv(this);
+         JSNApi::SetTimerTaskCallback(vm_, nullptr);
+@@ -1214,6 +1264,7 @@ panda::JSValueRef ArkNativeFunctionCallBack(JsiRuntimeCallInfo *runtimeInfo)
+     bool getStackBeforeCallNapiSuccess = false;
+     JSNApi::GetStackBeforeCallNapiSuccess(vm, getStackBeforeCallNapiSuccess);
+     auto info = reinterpret_cast<NapiFunctionInfo*>(runtimeInfo->GetData());
++    NativeInteropUsageRegistry::RecordCall(info, !runtimeInfo->GetNewTargetRef()->IsUndefined());
+     napi_env env = nullptr;
+     if (info->isSendable) {
+         env = reinterpret_cast<napi_env>(JSNApi::GetEnv(vm));
+@@ -1510,6 +1561,7 @@ void CommonDeleter(void *env, void *externalPointer, void *data)
+ {
+     auto info = reinterpret_cast<NapiFunctionInfo *>(data);
+     if (info != nullptr) {
++        NativeInteropUsageRegistry::Unregister(info);
+         delete info;
+     }
+ }
+diff --git a/native_engine/impl/ark/native_interop_usage_registry.h b/native_engine/impl/ark/native_interop_usage_registry.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb4926e168ddab20e474f5a2ca24ad4f9c35eba8
+--- /dev/null
++++ b/native_engine/impl/ark/native_interop_usage_registry.h
+@@ -0,0 +1,48 @@
++/*
++ * Copyright (c) 2026 Huawei Device Co., Ltd.
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#ifndef FOUNDATION_ACE_NAPI_NATIVE_ENGINE_IMPL_ARK_NATIVE_INTEROP_USAGE_REGISTRY_H
++#define FOUNDATION_ACE_NAPI_NATIVE_ENGINE_IMPL_ARK_NATIVE_INTEROP_USAGE_REGISTRY_H
++
++#include <cstdint>
++
++struct NapiFunctionInfo;
++
++namespace panda::ecmascript {
++class EcmaVM;
++}
++
++enum class NativeInteropRole : uint8_t {
++    CONSTRUCTOR = 0,
++    PROTOTYPE_METHOD,
++    PROTOTYPE_GETTER,
++    PROTOTYPE_SETTER,
++};
++
++class NativeInteropUsageRegistry final {
++public:
++    static void Enable(panda::ecmascript::EcmaVM *vm);
++    static void Disable(panda::ecmascript::EcmaVM *vm);
++    static void Register(NapiFunctionInfo *info, panda::ecmascript::EcmaVM *vm, NativeInteropRole role,
++                         NapiFunctionInfo *constructorInfo = nullptr);
++    static void Unregister(NapiFunctionInfo *info);
++    static void RecordCall(NapiFunctionInfo *info, bool isConstructCall);
++    static void Observe(void *vm, void *functionInfo, uint8_t event);
++
++private:
++    NativeInteropUsageRegistry() = delete;
++};
++
++#endif // FOUNDATION_ACE_NAPI_NATIVE_ENGINE_IMPL_ARK_NATIVE_INTEROP_USAGE_REGISTRY_H
+diff --git a/native_engine/impl/ark/native_interop_usage_registry.cpp b/native_engine/impl/ark/native_interop_usage_registry.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..7716e225c5eea0fc154c33f5985bc0aa1737b78e
+--- /dev/null
++++ b/native_engine/impl/ark/native_interop_usage_registry.cpp
+@@ -0,0 +1,311 @@
++/*
++ * Copyright (c) 2026 Huawei Device Co., Ltd.
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#include "native_interop_usage_registry.h"
++
++#include <array>
++#include <atomic>
++#include <cstddef>
++#include <mutex>
++#include <new>
++
++#include "native_engine/native_value.h"
++
++#ifdef ENABLE_HITRACE
++#include "hitrace_meter.h"
++#endif
++
++namespace {
++constexpr uint8_t EVENT_READ = 0;
++constexpr uint8_t EVENT_CHECKPOINT = 1;
++constexpr uint8_t STATE_READ = 1U << 0U;
++constexpr uint8_t STATE_CALLED = 1U << 1U;
++constexpr size_t BUCKET_COUNT = 16384;
++
++struct VmStats final {
++    panda::ecmascript::EcmaVM *vm {nullptr};
++    std::atomic<bool> enabled {false};
++    VmStats *next {nullptr};
++};
++
++struct ClassGroup final {
++    VmStats *stats {nullptr};
++    NapiFunctionInfo *constructorInfo {nullptr};
++    std::atomic<bool> instantiated {false};
++    ClassGroup *next {nullptr};
++};
++
++struct Entry final {
++    NapiFunctionInfo *info {nullptr};
++    VmStats *stats {nullptr};
++    ClassGroup *group {nullptr};
++    Entry *next {nullptr};
++    NativeInteropRole role {NativeInteropRole::PROTOTYPE_METHOD};
++    std::atomic<bool> active {false};
++    std::atomic<uint8_t> state {0};
++};
++
++std::array<std::atomic<Entry *>, BUCKET_COUNT> g_buckets {};
++std::atomic<VmStats *> g_vmStatsHead {nullptr};
++std::atomic<ClassGroup *> g_classGroups {nullptr};
++std::mutex g_lifecycleMutex;
++std::atomic<uint32_t> g_enabledVmCount {0};
++
++size_t BucketIndex(const NapiFunctionInfo *info)
++{
++    uintptr_t value = reinterpret_cast<uintptr_t>(info);
++    return ((value >> 4U) ^ (value >> 20U)) & (BUCKET_COUNT - 1U);
++}
++
++VmStats *FindEnabledVmStats(panda::ecmascript::EcmaVM *vm)
++{
++    for (VmStats *stats = g_vmStatsHead.load(std::memory_order_acquire); stats != nullptr; stats = stats->next) {
++        if (stats->vm == vm && stats->enabled.load(std::memory_order_acquire)) {
++            return stats;
++        }
++    }
++    return nullptr;
++}
++
++Entry *FindActiveEntry(NapiFunctionInfo *info)
++{
++    if (info == nullptr || g_enabledVmCount.load(std::memory_order_relaxed) == 0) {
++        return nullptr;
++    }
++    for (Entry *entry = g_buckets[BucketIndex(info)].load(std::memory_order_acquire);
++         entry != nullptr; entry = entry->next) {
++        if (entry->info == info && entry->active.load(std::memory_order_acquire)) {
++            return entry;
++        }
++    }
++    return nullptr;
++}
++
++ClassGroup *FindClassGroup(VmStats *stats, NapiFunctionInfo *constructorInfo)
++{
++    for (ClassGroup *group = g_classGroups.load(std::memory_order_acquire);
++         group != nullptr; group = group->next) {
++        if (group->stats == stats && group->constructorInfo == constructorInfo) {
++            return group;
++        }
++    }
++    return nullptr;
++}
++
++ClassGroup *CreateClassGroup(VmStats *stats, NapiFunctionInfo *constructorInfo)
++{
++    auto group = new (std::nothrow) ClassGroup();
++    if (group == nullptr) {
++        return nullptr;
++    }
++    group->stats = stats;
++    group->constructorInfo = constructorInfo;
++    ClassGroup *head = g_classGroups.load(std::memory_order_relaxed);
++    do {
++        group->next = head;
++    } while (!g_classGroups.compare_exchange_weak(head, group, std::memory_order_release,
++                                                  std::memory_order_relaxed));
++    return group;
++}
++
++#ifdef ENABLE_HITRACE
++struct Snapshot final {
++    uint64_t zeroInstanceClasses = 0;
++    uint64_t bucketCClosures = 0;
++    uint64_t bucketCNeverRead = 0;
++    uint64_t bucketCNeverCalled = 0;
++    uint64_t constructors = 0;
++    uint64_t prototypeMethods = 0;
++    uint64_t prototypeGetters = 0;
++    uint64_t prototypeSetters = 0;
++};
++
++Snapshot BuildSnapshot(VmStats *stats)
++{
++    Snapshot result;
++    for (const auto &bucket : g_buckets) {
++        for (Entry *entry = bucket.load(std::memory_order_acquire); entry != nullptr; entry = entry->next) {
++            if (entry->stats != stats || !entry->active.load(std::memory_order_acquire)) {
++                continue;
++            }
++            switch (entry->role) {
++                case NativeInteropRole::CONSTRUCTOR:
++                    ++result.constructors;
++                    if (entry->group != nullptr && !entry->group->instantiated.load(std::memory_order_relaxed)) {
++                        ++result.zeroInstanceClasses;
++                    }
++                    break;
++                case NativeInteropRole::PROTOTYPE_METHOD:
++                    ++result.prototypeMethods;
++                    break;
++                case NativeInteropRole::PROTOTYPE_GETTER:
++                    ++result.prototypeGetters;
++                    break;
++                case NativeInteropRole::PROTOTYPE_SETTER:
++                    ++result.prototypeSetters;
++                    break;
++                default:
++                    break;
++            }
++            if (entry->group != nullptr && !entry->group->instantiated.load(std::memory_order_relaxed)) {
++                ++result.bucketCClosures;
++                if ((entry->state.load(std::memory_order_relaxed) & STATE_READ) == 0) {
++                    ++result.bucketCNeverRead;
++                }
++                if ((entry->state.load(std::memory_order_relaxed) & STATE_CALLED) == 0) {
++                    ++result.bucketCNeverCalled;
++                }
++            }
++        }
++    }
++    return result;
++}
++
++void TraceCounter(const char *name, uint64_t value)
++{
++    CountTraceEx(HITRACE_LEVEL_COMMERCIAL, HITRACE_TAG_ACE, name, static_cast<int64_t>(value));
++}
++
++void TraceSnapshot(const Snapshot &snapshot)
++{
++    TraceCounter("NativeInterop.ZeroInstanceClasses", snapshot.zeroInstanceClasses);
++    TraceCounter("NativeInterop.BucketCClosures", snapshot.bucketCClosures);
++    TraceCounter("NativeInterop.BucketCNeverRead", snapshot.bucketCNeverRead);
++    TraceCounter("NativeInterop.BucketCNeverCalled", snapshot.bucketCNeverCalled);
++    TraceCounter("NativeInterop.Constructors", snapshot.constructors);
++    TraceCounter("NativeInterop.PrototypeMethods", snapshot.prototypeMethods);
++    TraceCounter("NativeInterop.PrototypeGetters", snapshot.prototypeGetters);
++    TraceCounter("NativeInterop.PrototypeSetters", snapshot.prototypeSetters);
++}
++#endif
++} // namespace
++
++void NativeInteropUsageRegistry::Enable(panda::ecmascript::EcmaVM *vm)
++{
++    if (vm == nullptr) {
++        return;
++    }
++    std::lock_guard<std::mutex> lock(g_lifecycleMutex);
++    if (FindEnabledVmStats(vm) != nullptr) {
++        return;
++    }
++    auto stats = new (std::nothrow) VmStats();
++    if (stats == nullptr) {
++        return;
++    }
++    stats->vm = vm;
++    stats->enabled.store(true, std::memory_order_relaxed);
++    VmStats *head = g_vmStatsHead.load(std::memory_order_relaxed);
++    do {
++        stats->next = head;
++    } while (!g_vmStatsHead.compare_exchange_weak(head, stats, std::memory_order_release,
++                                                  std::memory_order_relaxed));
++    g_enabledVmCount.fetch_add(1, std::memory_order_relaxed);
++}
++
++void NativeInteropUsageRegistry::Disable(panda::ecmascript::EcmaVM *vm)
++{
++    std::lock_guard<std::mutex> lock(g_lifecycleMutex);
++    VmStats *stats = FindEnabledVmStats(vm);
++    if (stats == nullptr || !stats->enabled.exchange(false, std::memory_order_acq_rel)) {
++        return;
++    }
++    for (const auto &bucket : g_buckets) {
++        for (Entry *entry = bucket.load(std::memory_order_acquire); entry != nullptr; entry = entry->next) {
++            if (entry->stats == stats) {
++                entry->active.store(false, std::memory_order_release);
++            }
++        }
++    }
++    g_enabledVmCount.fetch_sub(1, std::memory_order_relaxed);
++}
++
++void NativeInteropUsageRegistry::Register(NapiFunctionInfo *info, panda::ecmascript::EcmaVM *vm,
++                                          NativeInteropRole role, NapiFunctionInfo *constructorInfo)
++{
++    if (info == nullptr || vm == nullptr || g_enabledVmCount.load(std::memory_order_relaxed) == 0) {
++        return;
++    }
++    std::lock_guard<std::mutex> lock(g_lifecycleMutex);
++    VmStats *stats = FindEnabledVmStats(vm);
++    if (stats == nullptr) {
++        return;
++    }
++    auto entry = new (std::nothrow) Entry();
++    if (entry == nullptr) {
++        return;
++    }
++    NapiFunctionInfo *groupKey = constructorInfo == nullptr ? info : constructorInfo;
++    ClassGroup *group = role == NativeInteropRole::CONSTRUCTOR ?
++        CreateClassGroup(stats, groupKey) : FindClassGroup(stats, groupKey);
++    if (group == nullptr) {
++        delete entry;
++        return;
++    }
++    entry->info = info;
++    entry->stats = stats;
++    entry->group = group;
++    entry->role = role;
++    entry->active.store(true, std::memory_order_relaxed);
++    auto &bucket = g_buckets[BucketIndex(info)];
++    Entry *head = bucket.load(std::memory_order_relaxed);
++    do {
++        entry->next = head;
++    } while (!bucket.compare_exchange_weak(head, entry, std::memory_order_release,
++                                           std::memory_order_relaxed));
++}
++
++void NativeInteropUsageRegistry::Unregister(NapiFunctionInfo *info)
++{
++    Entry *entry = FindActiveEntry(info);
++    if (entry != nullptr) {
++        entry->active.store(false, std::memory_order_release);
++    }
++}
++
++void NativeInteropUsageRegistry::RecordCall(NapiFunctionInfo *info, bool isConstructCall)
++{
++    Entry *entry = FindActiveEntry(info);
++    if (entry == nullptr) {
++        return;
++    }
++    entry->state.fetch_or(STATE_READ | STATE_CALLED, std::memory_order_relaxed);
++    if (isConstructCall && entry->role == NativeInteropRole::CONSTRUCTOR && entry->group != nullptr) {
++        entry->group->instantiated.store(true, std::memory_order_relaxed);
++    }
++}
++
++void NativeInteropUsageRegistry::Observe(void *vm, void *functionInfo, uint8_t event)
++{
++    auto ecmaVm = reinterpret_cast<panda::ecmascript::EcmaVM *>(vm);
++    if (event == EVENT_CHECKPOINT) {
++        VmStats *stats = FindEnabledVmStats(ecmaVm);
++        if (stats == nullptr) {
++            return;
++        }
++#ifdef ENABLE_HITRACE
++        TraceSnapshot(BuildSnapshot(stats));
++#endif
++        return;
++    }
++    if (event != EVENT_READ) {
++        return;
++    }
++    Entry *entry = FindActiveEntry(reinterpret_cast<NapiFunctionInfo *>(functionInfo));
++    if (entry != nullptr && entry->stats != nullptr && entry->stats->vm == ecmaVm &&
++        entry->stats->enabled.load(std::memory_order_acquire)) {
++        entry->state.fetch_or(STATE_READ, std::memory_order_relaxed);
++    }
++}

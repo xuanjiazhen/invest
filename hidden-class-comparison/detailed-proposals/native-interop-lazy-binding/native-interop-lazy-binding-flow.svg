@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="900" viewBox="0 0 1500 900" role="img" aria-labelledby="title desc">
+  <title id="title">Native Interop 闭包惰性原型绑定 A1 与 A2 系统流程</title>
+  <desc id="desc">展示当前即时分配路径、A1 类粒度、A2 方法粒度及共同的属性写回与 IC 失效流程。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="context-stroke"/></marker>
+    <style>
+      text{font-family:"Microsoft YaHei","Noto Sans CJK SC",Arial,sans-serif;fill:#0f172a;letter-spacing:0}.h{font-size:24px;font-weight:700}.sub{font-size:13px;fill:#475569}.t{font-size:14px}.s{font-size:12px;fill:#475569}.b{font-weight:700}.box{stroke-width:2}.edge{fill:none;stroke-width:2;marker-end:url(#arrow)}.dash{stroke-dasharray:8 6}.lane{fill-opacity:.6}
+    </style>
+  </defs>
+  <rect width="1500" height="900" fill="#ffffff"/>
+  <text x="50" y="52" class="h">Native Interop 闭包惰性原型绑定：A1 / A2 系统流程</text>
+  <text x="50" y="82" class="sub">实线：已有调用链　虚线：候选新增路径　红色：当前即时分配</text>
+  <path d="M270 190 H325 V158 H345" class="edge" stroke="#dc2626"/>
+  <path d="M595 158 H675" class="edge" stroke="#dc2626"/>
+  <path d="M165 235 V270 H400 V300" class="edge dash" stroke="#d97706"/>
+  <path d="M595 345 H625 V360 H675" class="edge dash" stroke="#0891b2"/>
+  <path d="M468 425 V560 H670" class="edge dash" stroke="#16a34a"/>
+  <path d="M900 362 H955" class="edge" stroke="#0891b2"/>
+  <path d="M1110 362 H1165" class="edge" stroke="#0891b2"/>
+  <path d="M930 620 H985" class="edge" stroke="#16a34a"/>
+  <path d="M1160 620 H1215" class="edge" stroke="#16a34a"/>
+  <path d="M1395 362 H1455 V750 H1120 V770" class="edge" stroke="#7c3aed"/>
+  <path d="M1320 670 V735 H1185 V770" class="edge" stroke="#7c3aed"/>
+  <path d="M1245 815 H1290" class="edge" stroke="#9333ea"/>
+  <path d="M900 815 H945" class="edge dash" stroke="#64748b"/>
+  <rect x="60" y="145" width="210" height="90" rx="7" fill="#e0f2fe" stroke="#0284c7" class="box"/><text x="165" y="174" text-anchor="middle" class="t"><tspan x="165">Native 模块注册</tspan><tspan x="165" dy="23" class="b">napi_define_class</tspan><tspan x="165" dy="20" class="s">properties[] + constructor</tspan></text>
+  <rect x="345" y="108" width="250" height="100" rx="7" fill="#fee2e2" stroke="#dc2626" class="box"/><text x="470" y="137" text-anchor="middle" class="t"><tspan x="470">当前路径</tspan><tspan x="470" dy="23" class="b">NapiInitAttrValFromProp</tspan><tspan x="470" dy="21">注册时创建全部方法闭包</tspan></text>
+  <rect x="675" y="108" width="235" height="100" rx="7" fill="#fff1f2" stroke="#f43f5e" class="box"/><text x="792" y="137" text-anchor="middle" class="t"><tspan x="792">每个方法立即驻留</tspan><tspan x="792" dy="22">JSFunction + JSNativePointer</tspan><tspan x="792" dy="21">+ NapiFunctionInfo</tspan></text>
+  <polygon points="468,280 595,352 468,425 340,352" fill="#fef3c7" stroke="#d97706" class="box"/><text x="468" y="327" text-anchor="middle" class="t"><tspan x="468" class="b">候选选型</tspan><tspan x="468" dy="21">整类未触及率 vs</tspan><tspan x="468" dy="20">单方法未读取率</tspan></text>
+  <rect x="640" y="255" width="790" height="210" rx="9" fill="#ecfeff" stroke="#0891b2" class="box lane"/><text x="665" y="286" class="t b">A1　类粒度</text>
+  <rect x="675" y="317" width="225" height="90" rx="7" fill="#cffafe" stroke="#0891b2"/><text x="787" y="346" text-anchor="middle" class="t"><tspan x="787">模块导出对象</tspan><tspan x="787" dy="21">类名 slot 安装</tspan><tspan x="787" dy="21" class="b">InternalAccessor</tspan></text>
+  <rect x="955" y="317" width="155" height="90" rx="7" fill="#e0f2fe" stroke="#0284c7"/><text x="1032" y="350" text-anchor="middle" class="t"><tspan x="1032">首次读取类名</tspan><tspan x="1032" dy="24" class="b">exports.X</tspan></text>
+  <rect x="1165" y="317" width="230" height="90" rx="7" fill="#d1fae5" stroke="#059669"/><text x="1280" y="344" text-anchor="middle" class="t"><tspan x="1280">执行完整 NapiDefineClass</tspan><tspan x="1280" dy="22" class="b">整类所有方法物化</tspan><tspan x="1280" dy="20" class="s">单点访问触发整类</tspan></text>
+  <rect x="640" y="505" width="790" height="220" rx="9" fill="#f0fdf4" stroke="#16a34a" class="box lane"/><text x="665" y="536" class="t b">A2　方法粒度（主目标）</text>
+  <rect x="670" y="570" width="260" height="100" rx="7" fill="#dcfce7" stroke="#16a34a"/><text x="800" y="597" text-anchor="middle" class="t"><tspan x="800">prototype 每个方法 slot</tspan><tspan x="800" dy="21">lazy attr + descriptor index</tspan><tspan x="800" dy="21" class="s">或每方法 InternalAccessor</tspan></text>
+  <rect x="985" y="570" width="175" height="100" rx="7" fill="#e0f2fe" stroke="#0284c7"/><text x="1072" y="608" text-anchor="middle" class="t"><tspan x="1072">首次读取方法</tspan><tspan x="1072" dy="24" class="b">X.prototype.m</tspan></text>
+  <rect x="1215" y="570" width="190" height="100" rx="7" fill="#d1fae5" stroke="#059669"/><text x="1310" y="597" text-anchor="middle" class="t"><tspan x="1310">只物化当前 slot</tspan><tspan x="1310" dy="21" class="b">CreateFunction</tspan><tspan x="1310" dy="21" class="s">并发首次访问幂等</tspan></text>
+  <rect x="630" y="770" width="270" height="90" rx="7" fill="#f8fafc" stroke="#64748b" stroke-dasharray="7 5"/><text x="765" y="795" text-anchor="middle" class="t"><tspan x="765">反射与修改语义入口</tspan><tspan x="765" dy="20" class="s">descriptor / freeze / seal / delete / setter</tspan><tspan x="765" dy="19" class="s">按规则物化、合成或删除</tspan></text>
+  <rect x="945" y="770" width="300" height="90" rx="7" fill="#ede9fe" stroke="#7c3aed" class="box"/><text x="1095" y="795" text-anchor="middle" class="t"><tspan x="1095" class="b">按普通数据属性写回 prototype</tspan><tspan x="1095" dy="21">透传 writable / enumerable / configurable</tspan><tspan x="1095" dy="19" class="s">A1 / A2 共用收尾</tspan></text>
+  <rect x="1290" y="770" width="190" height="90" rx="7" fill="#f3e8ff" stroke="#9333ea"/><text x="1385" y="795" text-anchor="middle" class="t"><tspan x="1385">HClass transition</tspan><tspan x="1385" dy="20">MarkProtoChanged</tspan><tspan x="1385" dy="20" class="s">旧 IC handler 失效</tspan></text>
+</svg>
