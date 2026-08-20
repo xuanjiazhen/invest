@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760" role="img" aria-labelledby="title desc">
+  <title id="title">ProfileTypeInfoCell 编译期两阶段裁槽</title>
+  <desc id="desc">基线 32 字节布局依次删除 JIT 专用 MachineCode 和 PGO 专用 Handle，形成 24 字节和 16 字节布局。</desc>
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#0284c7"/></marker>
+    <marker id="arrow-violet" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#7c3aed"/></marker>
+    <style>
+      text { font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif; letter-spacing: 0; }
+      .title { font-size: 26px; font-weight: 700; fill: #0f172a; }
+      .subtitle { font-size: 14px; fill: #475569; }
+      .card-title { font-size: 17px; font-weight: 700; fill: #0f172a; }
+      .field { font-size: 14px; fill: #0f172a; }
+      .removed-blue { font-size: 14px; font-weight: 700; fill: #0369a1; }
+      .removed-violet { font-size: 14px; font-weight: 700; fill: #6d28d9; }
+      .gate-title { font-size: 12px; font-weight: 700; }
+      .gate-body { font-size: 11px; }
+      .band-title { font-size: 15px; font-weight: 700; fill: #0f172a; }
+      .band-body { font-size: 14px; fill: #334155; }
+      .note { font-size: 13px; fill: #64748b; }
+    </style>
+  </defs>
+  <rect width="1400" height="760" fill="#ffffff"/>
+  <text x="40" y="52" class="title">ProfileTypeInfoCell 编译期两阶段裁槽</text>
+  <text x="40" y="82" class="subtitle">只缩小现存对象布局；cell 数量、Value、创建路径与共享语义保持不变</text>
+
+  <line x1="410" y1="295" x2="507" y2="295" stroke="#0284c7" stroke-width="3" marker-end="url(#arrow-blue)"/>
+  <line x1="885" y1="295" x2="982" y2="295" stroke="#7c3aed" stroke-width="3" marker-end="url(#arrow-violet)"/>
+
+  <rect x="40" y="125" width="370" height="340" rx="8" fill="#ffffff" stroke="#64748b" stroke-width="2"/>
+  <text x="62" y="158" class="card-title">基线 · 全能力 · 32 B</text>
+  <rect x="62" y="185" width="326" height="52" rx="3" fill="#e2e8f0"/>
+  <text x="78" y="217" class="field">TaggedObject header · 8 B</text>
+  <rect x="62" y="245" width="326" height="52" rx="3" fill="#dcfce7"/>
+  <text x="78" y="277" class="field">Value · 8 B · 公共反馈入口</text>
+  <rect x="62" y="305" width="326" height="52" rx="3" fill="#dbeafe"/>
+  <text x="78" y="337" class="field">MachineCode · 8 B · JIT 弱缓存</text>
+  <rect x="62" y="365" width="326" height="52" rx="3" fill="#fef3c7"/>
+  <text x="78" y="397" class="field">Handle · 8 B · PGO define-class</text>
+
+  <rect x="515" y="125" width="370" height="340" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2"/>
+  <text x="537" y="158" class="card-title">阶段一 · JIT-free · 24 B</text>
+  <rect x="537" y="185" width="326" height="52" rx="3" fill="#e2e8f0"/>
+  <text x="553" y="217" class="field">TaggedObject header · 8 B</text>
+  <rect x="537" y="245" width="326" height="52" rx="3" fill="#dcfce7"/>
+  <text x="553" y="277" class="field">Value · 8 B · 保留</text>
+  <rect x="537" y="305" width="326" height="52" rx="3" fill="#fef3c7"/>
+  <text x="553" y="337" class="field">Handle · 8 B · PGO 保留</text>
+  <text x="537" y="403" class="removed-blue">删除 MachineCode · 每 cell 节省 8 B</text>
+
+  <rect x="990" y="125" width="370" height="340" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="1012" y="158" class="card-title">阶段二 · JIT-free + PGO-free · 16 B</text>
+  <rect x="1012" y="185" width="326" height="52" rx="3" fill="#e2e8f0"/>
+  <text x="1028" y="217" class="field">TaggedObject header · 8 B</text>
+  <rect x="1012" y="245" width="326" height="52" rx="3" fill="#dcfce7"/>
+  <text x="1028" y="277" class="field">Value · 8 B · 保留</text>
+  <text x="1012" y="343" class="removed-violet">再删除 Handle</text>
+  <text x="1012" y="369" class="removed-violet">累计每 cell 节省 16 B</text>
+
+  <rect x="422" y="198" width="81" height="94" rx="7" fill="#f0f9ff" stroke="#0284c7"/>
+  <text x="462.5" y="218" text-anchor="middle" class="gate-title" fill="#0c4a6e">JIT 闭包 = 0</text>
+  <text x="462.5" y="239" text-anchor="middle" class="gate-body" fill="#0c4a6e">安装 · deopt</text>
+  <text x="462.5" y="256" text-anchor="middle" class="gate-body" fill="#0c4a6e">OSR · 诊断</text>
+  <text x="462.5" y="273" text-anchor="middle" class="gate-body" fill="#0c4a6e">消费者清零</text>
+
+  <rect x="897" y="198" width="81" height="94" rx="7" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="937.5" y="218" text-anchor="middle" class="gate-title" fill="#4c1d95">PGO 闭包 = 0</text>
+  <text x="937.5" y="239" text-anchor="middle" class="gate-body" fill="#4c1d95">stub · profiler</text>
+  <text x="937.5" y="256" text-anchor="middle" class="gate-body" fill="#4c1d95">factory · DFX</text>
+  <text x="937.5" y="273" text-anchor="middle" class="gate-body" fill="#4c1d95">消费者清零</text>
+
+  <rect x="40" y="500" width="1320" height="74" rx="8" fill="#f8fafc" stroke="#334155"/>
+  <text x="62" y="528" class="band-title">快手快照浅层收益</text>
+  <text x="62" y="553" class="band-body">前台：阶段一 0.518 MiB · 阶段二累计 1.037 MiB　　后台 full-GC：阶段一 0.440 MiB · 阶段二累计 0.881 MiB</text>
+
+  <rect x="40" y="594" width="1320" height="74" rx="8" fill="#fffbeb" stroke="#d97706"/>
+  <text x="62" y="622" class="band-title" fill="#78350f">能力边界</text>
+  <text x="62" y="647" class="band-body" fill="#78350f">AOT-free ≠ PGO-free：PGO 可在无 AOT 时独立采集并保存 .ap；只有显式关闭 PGO 编译能力，阶段二才可实施。</text>
+
+  <text x="40" y="710" class="note">收益为 snapshot self_size，不直接等同 Region committed、RSS 或 PSS；正式结果以同设备 clean A/B 为准。</text>
+</svg>

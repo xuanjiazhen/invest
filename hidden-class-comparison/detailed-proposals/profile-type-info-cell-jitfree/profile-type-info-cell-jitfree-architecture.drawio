@@ -1,0 +1,46 @@
+<mxfile host="app.diagrams.net" modified="2026-08-18T00:00:00.000Z" agent="Hermes Agent" version="24.7.17" type="device">
+  <diagram id="profile-cell-slot-trim" name="两阶段裁槽">
+    <mxGraphModel dx="1400" dy="760" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="760" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="ProfileTypeInfoCell 编译期两阶段裁槽" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontStyle=1;fontSize=24;fontColor=#0f172a;" vertex="1" parent="1">
+          <mxGeometry x="40" y="26" width="780" height="34" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="只缩小现存对象布局；cell 数量、Value、创建路径与共享语义保持不变" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry x="40" y="65" width="900" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="baseline" value="&lt;b&gt;基线 · 全能力 · 32 B&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;table cellspacing='0' cellpadding='9' border='0' width='100%'&gt;&lt;tr&gt;&lt;td bgcolor='#e2e8f0'&gt;TaggedObject header · 8 B&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td bgcolor='#dcfce7'&gt;Value · 8 B · 公共反馈入口&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td bgcolor='#dbeafe'&gt;MachineCode · 8 B · JIT 弱缓存&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td bgcolor='#fef3c7'&gt;Handle · 8 B · PGO define-class&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#64748b;fillColor=#ffffff;fontSize=14;fontColor=#0f172a;spacing=14;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="125" width="370" height="340" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage1" value="&lt;b&gt;阶段一 · JIT-free · 24 B&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;table cellspacing='0' cellpadding='9' border='0' width='100%'&gt;&lt;tr&gt;&lt;td bgcolor='#e2e8f0'&gt;TaggedObject header · 8 B&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td bgcolor='#dcfce7'&gt;Value · 8 B · 保留&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td bgcolor='#fef3c7'&gt;Handle · 8 B · PGO 保留&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;br&gt;&lt;font color='#0369a1'&gt;&lt;b&gt;删除 MachineCode · 每 cell 节省 8 B&lt;/b&gt;&lt;/font&gt;" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#0284c7;fillColor=#ffffff;fontSize=14;fontColor=#0f172a;spacing=14;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="515" y="125" width="370" height="340" as="geometry"/>
+        </mxCell>
+        <mxCell id="stage2" value="&lt;b&gt;阶段二 · JIT-free + PGO-free · 16 B&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;table cellspacing='0' cellpadding='9' border='0' width='100%'&gt;&lt;tr&gt;&lt;td bgcolor='#e2e8f0'&gt;TaggedObject header · 8 B&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td bgcolor='#dcfce7'&gt;Value · 8 B · 保留&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;br&gt;&lt;font color='#6d28d9'&gt;&lt;b&gt;再删除 Handle · 累计每 cell 节省 16 B&lt;/b&gt;&lt;/font&gt;" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;strokeWidth=2;strokeColor=#7c3aed;fillColor=#ffffff;fontSize=14;fontColor=#0f172a;spacing=14;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="990" y="125" width="370" height="340" as="geometry"/>
+        </mxCell>
+        <mxCell id="gate1" value="&lt;b&gt;JIT 能力闭包 = 0&lt;/b&gt;&lt;br&gt;安装 · deopt · OSR · 诊断消费者清零" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;strokeColor=#0284c7;fillColor=#f0f9ff;fontSize=12;fontColor=#0c4a6e;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="420" y="205" width="85" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="gate2" value="&lt;b&gt;PGO 能力闭包 = 0&lt;/b&gt;&lt;br&gt;stub · profiler · factory · DFX 消费者清零" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;strokeColor=#7c3aed;fillColor=#f5f3ff;fontSize=12;fontColor=#4c1d95;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="895" y="205" width="85" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#0284c7;" edge="1" parent="1" source="baseline" target="stage1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#7c3aed;" edge="1" parent="1" source="stage1" target="stage2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="benefit" value="&lt;b&gt;快手快照浅层收益&lt;/b&gt;&lt;br&gt;前台：阶段一 0.518 MiB · 阶段二累计 1.037 MiB　　后台 full-GC：阶段一 0.440 MiB · 阶段二累计 0.881 MiB" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;strokeWidth=1;strokeColor=#334155;fillColor=#f8fafc;fontSize=14;fontColor=#0f172a;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="500" width="1320" height="74" as="geometry"/>
+        </mxCell>
+        <mxCell id="boundary" value="&lt;b&gt;能力边界&lt;/b&gt;　AOT-free ≠ PGO-free：PGO 可在无 AOT 时独立采集并保存 .ap；只有显式关闭 PGO 编译能力，阶段二才可实施。" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;strokeWidth=1;strokeColor=#d97706;fillColor=#fffbeb;fontSize=14;fontColor=#78350f;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="594" width="1320" height="74" as="geometry"/>
+        </mxCell>
+        <mxCell id="foot" value="收益为 snapshot self_size，不直接等同 Region committed、RSS 或 PSS；正式结果以同设备 clean A/B 为准。" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=12;fontColor=#64748b;" vertex="1" parent="1">
+          <mxGeometry x="40" y="688" width="1200" height="24" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
