@@ -100,6 +100,12 @@
 
 **闭环结论**：03 新增 §4.7 备选路线——表 A `CellCodeCacheTable`（per-VM 开放寻址双弱关系表，16 B/entry，分片锁，GC 双弱清理、无 ephemeron 不动点，API 对应安装/复位/诊断三触点，业界对位 JSDispatchTable 与旧 SFI optimized_code_map）；`Handle` 取 B2 堆外会话表（`(Method*, slotId)` 键、GC 零参与、会话结束丢弃，V8 CPU profiler 同款），否决 B1 弱表方案（相同的 stub→runtime 后果、无增量收益）。定位为通用构建统一 16 B 的备选（`16N`，前台 1.037 MiB / 后台 0.881 MiB，表成本 ≤2 MiB）；≤6G 档与裁槽等价，维持裁槽首选。§3 业界边界补外存先例引用，§4.6 利弊表与 §8 结论同步，02 新增 §1.1 指针。
 
+## 第 9 轮：表 A 由哈希键控修订为索引表（人工意见）
+
+**人工意见**：哈希表可能导致 JIT IR 访问性能问题，无法通过偏移等指令进行访问，建议通过 index 表处理。
+
+**闭环结论**：03 §4.7 表 A 修订为 `CodeIndexTable`（V8 JSDispatchTable 同构）——cell 内联 4 B `ExtIdx`，行表 free-list 分配（16 B/行：weak MachineCode + state），访问链 `load ExtIdx → base+idx×16 → load 字段`为固定指令序列（两次依赖 load、零分支、零哈希、读侧无锁），可编译为 IR 偏移指令；GC 改为 cell visitor 标记行、死 cell 行回 free-list（较哈希双弱清理更简单）；并发改为 free-list CAS + release 写。**收益口径诚实修正**：内联索引使通用构建 cell 为 24 B（8N：前台 0.518 / 后台 0.440 MiB），非哈希方案的 16 B；哈希变体（16 B、C++-only 访问）保留为注记、当前不采纳。§3/§4.6/§8 与 02 §1.1 同步。
+
 ## 审视结论汇总
 
 当前方案只保留两个编译期裁槽阶段：阶段一删除 JIT-only `MachineCode`（32→24 B），阶段二在显式 PGO-free 构建中再删除 `Handle`（24→16 B）。字段消费者、能力闭包、布局、兼容、GC/工具、收益和 55 人日工作量已形成闭环；阶段二唯一产品前置是冻结 PGO-free 构建。
