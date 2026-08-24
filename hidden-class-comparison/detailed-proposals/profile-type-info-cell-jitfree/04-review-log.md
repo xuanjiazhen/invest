@@ -106,6 +106,12 @@
 
 **闭环结论**：03 §4.7 表 A 修订为 `CodeIndexTable`（V8 JSDispatchTable 同构）——cell 内联 4 B `ExtIdx`，行表 free-list 分配（16 B/行：weak MachineCode + state），访问链 `load ExtIdx → base+idx×16 → load 字段`为固定指令序列（两次依赖 load、零分支、零哈希、读侧无锁），可编译为 IR 偏移指令；GC 改为 cell visitor 标记行、死 cell 行回 free-list（较哈希双弱清理更简单）；并发改为 free-list CAS + release 写。**收益口径诚实修正**：内联索引使通用构建 cell 为 24 B（8N：前台 0.518 / 后台 0.440 MiB），非哈希方案的 16 B；哈希变体（16 B、C++-only 访问）保留为注记、当前不采纳。§3/§4.6/§8 与 02 §1.1 同步。
 
+## 第 10 轮：Handle 形态与单索引方案选定（人工意见）
+
+**人工意见**：Handle 也采用索引表结构是否可行；两索引表是否支持并发标记回收；采用单索引方案重新调整设计。
+
+**闭环结论**：§4.7 重写为**单索引双列行表**形态（人工选定）——cell 内联一个 4 B write-once `ExtIdx`，行 24 B 含 `weak MachineCode` + `weak ctor` 两弱列：Handle 入行表后 profiler stub 保持内联（消除 stub→runtime 回退点）；补并发标记回收四机制（born-marked、发布屏障、弱列免 SATB、标记后相位回收，ArkVM CMC 相位契约列为核验项）；记录双索引形态评估（第二个 4 B 索引可吃掉 padding、拆两张单弱列表，双用站点占两行 32 B——同为 24 B cell，人工选定单表）；堆外会话表降为零 GC 参与变体、哈希变体维持不采纳。收益口径不变（通用构建 24 B / `8N`：前台 0.518 / 后台 0.440 MiB；行表 ≤3 MiB）。§3/§4.6/§8 与 02 §1.1 同步。
+
 ## 审视结论汇总
 
 当前方案只保留两个编译期裁槽阶段：阶段一删除 JIT-only `MachineCode`（32→24 B），阶段二在显式 PGO-free 构建中再删除 `Handle`（24→16 B）。字段消费者、能力闭包、布局、兼容、GC/工具、收益和 55 人日工作量已形成闭环；阶段二唯一产品前置是冻结 PGO-free 构建。
