@@ -75,7 +75,7 @@
 
 前 5 轮 8 项意见全部闭环；第 6 轮独立复核 6 项（链路核验、机制核验、IC 失效具体化、descriptor 成本量化、插桩形态细化、尺寸口径确认），已同步落稿。第 7 轮提出的插桩方案后来经第 10 轮 Release 源码复核修正，历史内容保留用于追溯，不再作为当前实施结论。
 
-## 第 8 轮：Kuaishou 后台 full-GC 快照复核
+## 第 8 轮：Kuaishou 后台 full-GC 快照复核（历史 schema v3，已由第 12 轮废止）
 
 **评估口径**：前台与后台 rawheap 使用同一 API 26 `rawheap_translator` 2.0.0 转换；后台为应用进入后台并执行全量 GC 后的独立存活堆。本轮只构造 A2 **结构候选上界**：HClass 无存活实例、prototype 直接持有非 `constructor` native-stub 方法、且闭包自身持有唯一 `JSNativePointer`。该条件不等价于“从未读取/调用”。冻结数据见 `evidence/kuaishou-background-paired-census.json`。
 
@@ -85,10 +85,12 @@
 | 闭包 + JSNativePointer 浅层毛收益 | 84,648 B | 104,128 B | +19,480 B |
 | `NapiFunctionInfo` 堆外模型 | 14,816–18,520 B | 18,432–23,040 B | +3,616–4,520 B |
 | 毛收益合计 | 99,464–103,168 B（0.095–0.098 MiB） | 122,560–127,168 B（0.117–0.121 MiB） | +23,096–24,000 B |
-| descriptor 驻留成本 | 33,336–44,448 B（0.032–0.042 MiB） | 41,472–55,296 B（0.040–0.053 MiB） | +8,136–10,848 B |
-| 结构上界净收益 | 55,016–69,832 B（0.052–0.067 MiB） | 67,264–85,696 B（0.064–0.082 MiB） | +12,248–15,864 B |
+| X1 `NapiLazyAccessor` | 14,816 B | 18,432 B | +3,616 B |
+| 历史连续 recipe + 1 B state（已废止） | 7,872 B | 9,792 B | +1,920 B |
+| 历史模型 class overhead 前条件净收益（已废止） | 76,776–80,480 B（0.073–0.077 MiB） | 94,336–98,944 B（0.090–0.094 MiB） | +17,560–18,464 B |
+| 历史模型未读取率 break-even（已废止） | 8.91%–9.30% | 9.01%–9.40% | — |
 
-**结论**：后台结构候选上界比前台高，但这反映两个采样时点的存活结构差异，不能解释为 full-GC 使真实收益增加。full-GC 只确认这些 prototype/闭包在后台采集时仍存活；它不记录属性是否曾读取、方法是否曾调用、descriptor 形态读取，也不覆盖 A1 整类未触及率。**原结论不变：A1/A2 选型与立项仍必须以前置插桩为准；本轮 0.064–0.082 MiB 只作低置信结构上界，不作承诺净收益。**另需通过实现 A/B 量化 allocator 碎片、IC 失效与 GC/RSS/PSS。
+**历史结论（已由第 12 轮废止）**：后台结构候选上界比前台高，但这反映两个采样时点的存活结构差异，不能解释为 full-GC 使真实收益增加。full-GC 只确认这些 prototype/闭包在后台采集时仍存活；它不记录属性是否曾读取、方法是否曾调用或反射形态读取。该表使用 schema v3 的连续 recipe + 1 B state 模型，仅保留用于审视追溯，不再作为正式成本或收益结论。
 
 ## 第 9 轮：Top13 61.47 MiB 应用归属与口径闭环
 
@@ -123,7 +125,7 @@
 
 该数值仍是**结构上界**：零存活实例不证明类名或方法从未被读取，也不证明闭包可全部消除；真实可优化量仍需读取/调用插桩和 clean A/B。历史 `24.035 MiB` 来自同一前台 rawheap 的旧 translator 输出；旧、新 translator 的 prototype/HClass 和属性边表达不同，不能将 `24.035 MiB` 与新前台 `0.188 MiB` 相减并解释为版本收益。
 
-第 8 轮 `0.064–0.082 MiB` 则是上述方法闭包结构上界进一步限制为“闭包具有唯一可见 `JSNativePointer`”后，再计入 pointer、堆外 `NapiFunctionInfo` 和 descriptor 成本得到的 strict A2 净收益模型，不是方法闭包本体大小；两套数字不混用。
+第 8 轮 strict A2 模型是上述方法闭包结构上界进一步限制为“闭包具有唯一可见 `JSNativePointer`”后，按 463/576 个 property slots 扣除 X1 accessor、最小 method/data recipe 与 state 得到的 `before class overhead` 条件净收益，不是方法闭包本体大小；两套数字不混用。
 
 ## 第 10 轮：7.0 Release 插桩可行性复核
 
@@ -136,6 +138,29 @@
 ## 审视结论更新
 
 第 8、9、10 轮意见已闭环：后台 full-GC 样本只作低置信结构上界；Top13 61.47 MiB 已完成方法/构造器拆分和逐应用归属，最大贡献应用为 kuaishou；Kuaishou 已按 `24.035 MiB` 的方法闭包语义口径刷新 API26 前后台结构上界；第 7 轮插桩实现已由 7.0 Release 源码核查纠正为 Phase 1/Phase 2 方案；两种粒度及关键数据结构关系已落两份 DrawIO/SVG 架构图。当前插桩范围无遗留项，但 Phase 2 读取全路径覆盖仍是实施前置条件。
+
+## 第 12 轮：正式实现改为最小 VM-owned recipe（2026-08-20）
+
+**人工意见**：正式实现不得保留完整 `napi_property_descriptor[]`；按最小 owned recipe 修正所有相关设计、生命周期和收益口径。
+
+**当前正式结论**：A2 + X1 采用最小 `NativeLazyMethodRecipe { method, data }`。64 位 ABI 下 payload 为 16 B、8 B 对齐，每个未物化槽独立分配；每类 `atomic<uintptr_t> slotDirectory[N]` 按 8 B/eligible slot 表达 `LAZY(recipe*) / MATERIALIZING(recipe*) / DONE / DEAD`；X1 `NapiLazyAccessor` 按设计 32 B/未物化槽计，最终类型仍需 ABI probe。`utf8name`、`napi_value name`、attributes、getter/setter/value 和 static 属性不进入 recipe：键和属性位已经进入 prototype 的 VM-owned `LayoutInfo`/`PropertyAttributes`，专用 lazy lookup 必须把当前 VM key 传入物化路径。禁止保存调用方数组、临时字符串和裸 handle；`data` 只复制非拥有指针值，资源释放仍由模块/既有协议负责。
+
+每个 `LAZY(recipe*)` entry 独占一个 recipe allocator block；成功物化、覆盖或删除发布终态后立即释放该 block，directory 到全部终态、批量终止或 unload 时整体释放。正式净收益必须从未物化槽 avoided eager bytes 中扣除 32 B accessor、recipe allocator actual，再扣除按全部 eligible 槽 `N` 计的 8N B directory、每类 lifetime/registry/header 和实测 GC/物理内存成本。若剩余 avoided bytes 不再覆盖 live recipe actual、directory 与类固定成本，批量物化剩余槽并释放 directory/token；每类净收益不正则直接走即时路径。原“完整 descriptor 深拷贝 72–96 B/项”“连续 recipe + 1 B state”和“超过消除量 20% 切静态存储期”均标记为 **superseded**。
+
+A1 不能复用 A2 的 16 B recipe，因为类粒度首次读取前尚无 prototype/LayoutInfo；A1 的完整类 recipe、模块注册契约和成本另行评审，本轮正式实现固定 A2。
+
+Kuaishou strict A2 证据已重生为 schema v4。下表的“乐观中间值”只按 16 B logical recipe payload 扣费，不含独立 allocation 的 usable-size/metadata，也不含每类 lifetime/registry/header、GC 和 RSS/PSS，不能称为最终净收益；最终 break-even 同样不可用。
+
+| schema v4 指标 | 前台 Kuaishou | 后台 full-GC Kuaishou |
+|---|---:|---:|
+| 结构候选 prototype / eligible slots | 70 / 463 | 75 / 576 |
+| 闭包 + JSNativePointer + NapiFunctionInfo 毛收益 | 99,464–103,168 B | 122,560–127,168 B |
+| 32 B accessor | 14,816 B | 18,432 B |
+| 16 B logical recipe payload | 7,408 B | 9,216 B |
+| 8 B/slot tagged directory | 3,704 B | 4,608 B |
+| 乐观中间 savings（仅按 16 B payload） | 73,536–77,240 B | 90,304–94,912 B |
+| recipe allocator actual / class fixed overhead | 未实测 | 未实测 |
+| 最终净收益 / break-even | 不可计算 | 不可计算 |
 
 ## 第 11 轮：人工意见（2026-08-20，背景补写 InternalAccessor）
 

@@ -218,6 +218,18 @@ Phase 1/2 聚合与 rawheap 只共享采样检查点。现有快照不保证导�
 
 不能固定乘 `184 B`。冻结证据中不同闭包类型的 `self_size` 不同，应从同次同版 heapsnapshot 逐对象求和。`self_size` 是浅层堆大小，不代表 committed、RSS 或 PSS；物理内存收益必须通过 clean A/B 测量。
 
+A2 X1 的净收益必须按方法**属性槽**而不是唯一 callback/闭包数扣减。设一类共有 `N` 个 lazy 方法槽、检查点仍有 `U` 个未物化槽：
+
+```text
+条件净收益 = Σ(i∈U)(闭包 + NativePointer + NapiFunctionInfo
+                    − 32 B accessor
+                    − recipe allocator actual bytes)
+             − align8(8 × N)                         # tagged atomic directory
+             − 每类 lifetime/registry/header 实际成本
+```
+
+Phase 2 除读取形态外还必须按类输出 `N`、`U` 和终态原因（materialize/overwrite/delete/unload），实现 A/B 输出 live recipe 数、recipe payload/allocator actual、8N B directory 及每类固定成本。`napi_property_descriptor` 完整深拷贝和“静态存储期零拷贝”不属于正式 A2 路径，不再进入净收益模型。
+
 ## 7. 验收条件
 
 1. 参数关闭时无 registry entry/state 分配、无 `NapiFunctionInfo` 布局变化、无名称复制、无统计 counter；
@@ -228,3 +240,5 @@ Phase 1/2 聚合与 rawheap 只共享采样检查点。现有快照不保证导�
 6. 不生成自定义 TSV、HiSysEvent schema、hidumper 命令或显示；每个检查点只发固定数量的 HiTrace counters，Hilog 不承载结果；
 7. rawheap 与调用统计不做无稳定键的逐项 join，不把累计人口当成 GC 后存活人口；
 8. Phase 2 全路径矩阵未通过前，报表不得给出 `neverRead` 或“未读取比例”结论。
+9. 净收益逐类为正；少数未物化槽不再覆盖 live recipe actual、directory 与类固定成本时触发批量物化并释放 directory/token；
+10. recipe ABI 验证为 `method + data` 两个指针；不复制名称/attributes，不持有裸 `napi_value`，并单列所有固定/allocator 成本。

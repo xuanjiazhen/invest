@@ -1,473 +1,435 @@
-# Native Interop 惰性原型绑定 —— InternalAccessor 迁移 NAPI 设计评审
-
-> 本文档对「把 VM 内建 InternalAccessor 惰性机制迁移到 NAPI 类注册链」的实现设计进行架构级评审，包含现有内建机制剖析、迁移架构图、流程图、数据结构、兼容性、性能、风险等维度的系统性评估。写作体例参照 `ArkTS-ConstantPool-Sparse-Pool-Phase1-Review.md`。
+# NAPI Prototype Native 方法按需绑定设计方案
 
 | 项目 | 内容 |
 |------|------|
-| 文档版本 | v1.0 |
-| 评审日期 | 2026-08-20 |
-| 方案阶段 | A1 类粒度 / A2 形态一（InternalAccessor 迁移路径）；A2 形态二（PropertyAttributes.lazy）不在本文范围 |
-| 配套文档 | `01-背景.md`、`02-需求.md`、`03-方案设计.md`、`04-review-log.md`、`05-插桩patch.md` |
-| 核验基线 | manifest `OpenHarmony-7.0-Release@4ad97323…`；`arkcompiler_ets_runtime@f04900cf`；`foundation/arkui/napi@464170c9`（沿用第 10 轮冻结基线） |
-| 评审范围 | 内建机制可迁移性、迁移架构合理性、流程正确性、兼容性、性能、风险、可回滚性 |
+| 文档用途 | 最终设计方案 |
+| 文档日期 | 2026-08-21 |
+| 源码基线 | `OpenHarmony-7.0-Release@4ad97323...`；`arkcompiler_ets_runtime@f04900cf`；`foundation/arkui/napi@464170c9` |
+| 设计范围 | `napi_define_class` 的 prototype native 方法注册、首次读取、属性语义、并发、卸载、GC 与 IC 正确性 |
 
----
+## 1. 目标与范围
 
-## 1. 概述
+`napi_define_class` 当前在类注册期间为每个 native prototype 方法创建完整的 JavaScript 函数对象。即使方法从未被读取，这些对象仍由 prototype 属性强引用。
 
-### 1.1 背景
+本设计将普通、非 Sendable 类的 prototype `method` 改为按需绑定：
 
-`napi_define_class` 在类定义时即时为 prototype 上每个方法创建 JSFunction + JSNativePointer + 堆外 NapiFunctionInfo，与方法是否被访问无关（`01-背景.md` §1–§2）。Top13 快照中零实例类 prototype 方法闭包 447,707 个、61.474 MiB（上界，非期望值，见 `01-背景.md` §4）。
+1. 注册期创建 constructor、prototype、属性键和属性标志，但不创建目标方法的 `JSFunction`、`JSNativePointer` 与 `NapiFunctionInfo`；
+2. 每个目标方法安装一个 VM 管理的 `NapiLazyAccessor`，并保存一个运行时自有的最小回调元数据记录 `{method, data}`；
+3. 首次读取该属性时创建现有 native 函数对象图，将 prototype 属性写回为普通数据属性；
+4. 后续读取、调用和 IC 行为与当前即时创建路径一致。
 
-VM 已有一套**内建对象惰性初始化机制**：
+### 1.1 设计目标
 
-| 组件 | 锚点 | 作用 |
-|------|------|------|
-| `Builtins::SetLazyAccessor` | `ecmascript/builtins/builtins.cpp:479` | 在全局对象槽位安装惰性 accessor |
-| `InternalAccessor` | `ecmascript/accessor_data.h:29` | 24 B（Record::SIZE=8 + getter 8 B + setter 8 B），存**裸函数指针**，非 JSFunction |
-| `BuiltinsLazyCallback` | `ecmascript/builtins/builtins_lazy_callback.cpp` | Date/Set/Map/WeakMap 等逐槽惰性初始化回调 |
-| `ResetLazyInternalAttr` | ets_runtime（物化写回点） | 首次读取后把惰性 accessor 槽位改回数据属性 |
+- 未读取的方法不创建 native 函数对象图；
+- 不改变公开 NAPI API、`napi_define_class` 签名或字节码格式；
+- 函数名称、`length`、对象身份、属性标志和严格模式行为与当前实现一致；
+- 属性写回保持 prototype HClass、`LayoutInfo` 和属性标志不变，并显式失效依赖惰性槽的 prototype/IC 缓存；
+- 每个方法的回调元数据可在物化、覆盖或删除后单独释放；
+- 环境销毁时不留下可调用的 native 回调或悬空 `data` 指针。
 
-本文回答的核心问题：**这套机制迁移到 NAPI 类注册链需要改什么、哪些部分能直接复用、哪些部分在 NAPI 场景下语义不成立**。
+### 1.2 适用范围
 
-### 1.2 目标
+按需绑定仅用于同时满足以下条件的属性：
 
-| 目标 | 度量 |
-|------|------|
-| 消除未访问 native 方法的确定性驻留 | 每未访问方法节省堆内 ~184 B + 堆外 32–40 B，残留降为一个惰性 slot |
-| 语义等价 | `typeof`、`fn.name/length`、`proto.m === proto.m`、descriptor 形态、严格模式赋值全兼容 |
-| IC 正确 | materialize 后旧原型链 handler 不得命中（`03-方案设计.md` §4.5） |
-| 可回滚 | 注册期开关控制，关闭时回到即时绑定 |
-| 复用优先 | 最大化复用 SetLazyAccessor/CallInternalGet/ResetLazyInternalAttr 既有链路，最小化新增类型 |
+- 通过 `napi_define_class` 注册；
+- `property.method != nullptr`；
+- 未设置 `NATIVE_STATIC`；
+- 类不是 Sendable 类。
 
-### 1.3 范围
+constructor、static method、getter、setter、普通 value 属性以及 Sendable 类保持当前即时创建流程。
 
-- **本文范围**：InternalAccessor 机制从内建对象迁移到 NAPI 的实现设计——A1（模块导出对象类名 slot）与 A2 形态一（prototype 方法 slot，每方法一个 accessor）；
-- **不在本文范围**：A2 形态二（`PropertyAttributes.lazy` + Smi 索引，零堆残留但改 property lookup 全路径——第 2 轮已定为目标形态，形态一为过渡）；插桩统计（见 `05-插桩patch.md`）。
+## 2. 当前创建流程
 
----
+### 2.1 调用链
 
-## 2. 现有架构分析
+当前 OpenHarmony 7.0 源码中的方法创建链为：
 
-### 2.1 内建 InternalAccessor 机制架构图（现状，迁移源）
+```text
+napi_define_class                                  native_api.cpp:1643-1674
+  -> NapiDefineClass                              ark_native_engine.cpp:333-369
+     -> NapiCreateClassFunction                   ark_native_engine.cpp:288-330
+        -> NapiGetKeysAndAttrsFromProps           ark_native_engine.cpp:250-285
+           -> NapiInitAttrValFromProp             ark_native_engine.cpp:216-247
+              -> NapiNativeCreateFunction         ark_native_engine.cpp:190-213
+                 -> FunctionRef::NewConcurrentWithName
+                                                    jsnapi_expo.cpp:3947-3978
+```
 
-![内建 InternalAccessor 机制现状架构](napi-internal-accessor-current.svg)
-
-> 可编辑源文件：[napi-internal-accessor-current.drawio](napi-internal-accessor-current.drawio)
-
-### 2.2 NAPI 即时绑定数据流（现状，迁移目标位置）
-
-![NAPI 即时绑定现有数据流](napi-eager-binding-current-flow.svg)
+![当前 napi_define_class 方法创建流程](napi-eager-binding-current-flow.svg)
 
 > 可编辑源文件：[napi-eager-binding-current-flow.drawio](napi-eager-binding-current-flow.drawio)
 
-descriptor 数组（`napi_property_descriptor[]`）在 `napi_define_class` 返回后即被调用方丢弃——**这是迁移的第一个硬约束**：惰性化后 descriptor 必须活到首次访问或模块卸载（`03-方案设计.md` §4.3/§4.6）。
+### 2.2 当前各阶段的职责
 
-### 2.3 内建场景与 NAPI 场景的关键差异矩阵
+| 阶段 | 当前行为 | 产生的数据 |
+|------|----------|------------|
+| `NapiGetKeysAndAttrsFromProps` | 遍历所有 descriptor，区分 static 与 prototype 属性，构造 VM key 和 `PropertyAttribute` | 临时 `keys[]`、`attrs[]` |
+| `NapiInitAttrValFromProp` | getter/setter 创建 accessor；method 直接创建 native 函数；value 直接转换 | 每个 method 的 `JSFunction` 引用 |
+| `NapiNativeCreateFunction` | 分配并初始化 `NapiFunctionInfo` | `{callback, data, env, scopeId}` |
+| `FunctionRef::NewConcurrentWithName` | 创建 `JSFunction`，并通过 extra info 关联 `JSNativePointer` 和 `NapiFunctionInfo` | 完整 native 函数对象图 |
+| `NewConcurrentClassFunctionWithName` | 创建 constructor/prototype，并安装 static 与 prototype 属性 | prototype 数据属性强引用 `JSFunction` |
 
-迁移不是平移。内建机制的四个隐含前提在 NAPI 场景全部不成立：
+`napi_property_descriptor[]`、`utf8name` 和 `napi_value name` 都属于调用方输入。`napi_define_class` 返回后，按需路径不得继续引用这些临时数据。
 
-| # | 维度 | 内建场景（机制原生环境） | NAPI 场景（迁移目标环境） | 迁移含义 |
-|---|------|------------------------|--------------------------|----------|
-| D1 | **槽位身份** | 槽位集合编译期固定（Date/Set/Map…），每槽一个静态回调函数，回调"自知身份"，`InternalGetFunc` 不需要属性键 | 类与方法运行期动态注册，数量无上界，不可能每方法一个静态回调 | 必须为 accessor 引入 **per-slot 运行期身份**（payload），这是 InternalAccessor 现有布局没有的能力 |
-| D2 | **宿主对象属性存储** | 全局对象走慢字典模式（GlobalDictionary/PropertyBox，属性位 per-object），`ResetLazyInternalAttr` 原地改 attr 不涉及共享结构【待核验 V1】 | prototype 是普通对象，共享 HClass + LayoutInfo，参与原型链 IC | 原地改共享 LayoutInfo 会影响同 HClass 其他对象与已建 IC（第 2 轮/需求 §4 高风险项）——materialize 写回必须走 transition 等价路径 + `MarkProtoChanged`（`js_hclass-inl.h:379-399`），不能照搬内建的原地改写 |
-| D3 | **回调闭包数据生命周期** | 回调只依赖 env/thread，无外部资源 | 回调依赖 `napi_property_descriptor`（方法指针/名称/data），原契约在 define_class 返回后失效 | 需要 descriptor 深拷贝（默认）或静态存储期契约，并有明确的卸载所有者 |
-| D4 | **卸载/重入** | 内建永不卸载，初始化单线程 | 模块可卸载；worker/多 context 各自注册；首次访问可能并发、可能抛异常 | 需要 per-slot 原子 materialize 状态机 + module unload 时未物化资源的释放路径（第 4 轮闭环） |
+## 3. 最终架构
 
-**结论先行**：CallInternalGet 分发骨架、"accessor→数据属性"的物化范式、attributes 处理框架可复用；**槽位身份（D1）与写回路径（D2）必须重新设计**，这两点构成迁移的全部实质工作量。
+### 3.1 方法级生命周期
 
----
+![prototype native 方法修改前后核心流程](napi-lazy-binding-method-before-after-core.svg)
 
-## 3. 目标架构设计
+> 可编辑源文件：[napi-lazy-binding-method-before-after-core.drawio](napi-lazy-binding-method-before-after-core.drawio)
 
-### 3.1 目标架构图（迁移后）
+生命周期分为三个阶段：
 
-![InternalAccessor 迁移 NAPI 目标架构](napi-lazy-binding-target-architecture.svg)
+- **注册完成**：prototype 属性保存 `NapiLazyAccessor`；runtime 保存独立 `{method, data}` 记录；native 函数对象尚未创建；
+- **首次读取**：属性查找携带 holder 和当前 VM key 进入物化流程；创建 native 函数并写回 prototype；
+- **稳态**：prototype 属性是普通数据属性，值为 `JSFunction`；不再经过惰性分发。
+
+### 3.2 组件关系
+
+![按需绑定目标架构](napi-lazy-binding-target-architecture.svg)
 
 > 可编辑源文件：[napi-lazy-binding-target-architecture.drawio](napi-lazy-binding-target-architecture.drawio)
 
-### 3.2 架构设计原则
-
-| 原则 | 说明 |
-|------|------|
-| 复用分发骨架 | 惰性 slot 命中、CallInternalGet 分发、"accessor→数据属性"物化范式沿用内建机制，property lookup 慢路径不新增分支类别 |
-| 身份外置 | per-slot 身份放在 accessor payload，descriptor 内容放在堆外 ClassBindingLifetime——堆内残留最小化（每 slot 一个小对象） |
-| 写回走正门 | materialize 写回必须走 SetProperty/DefineProperty 等价路径触发 `MarkProtoChanged` 失效链，**禁止**照搬内建的原地改 LayoutInfo attr（差异 D2） |
-| 产物等价 | materialize 复用 `NapiNativeCreateFunction`→`FunctionRef::NewConcurrentWithName` 现行链路，产物对象与即时绑定逐字段一致 |
-| 默认关闭 | 注册期开关（复用 NAPI 侧既有参数机制，具体参数名实施时定）控制惰性化；关闭时行为与现状完全一致 |
-| sendable 排除 | `NapiDefineSendableClass` 保持即时路径，不安装惰性 slot |
-
-### 3.3 InternalAccessor 身份问题的候选解（D1 的三个方案）
-
-`InternalGetFunc` 签名为 `JSTaggedValue (*)(JSThread*, const JSHandle<JSObject>&)`——不接收属性键、不接收 accessor 自身（第 6 轮核验）。NAPI 动态槽位无法靠"每槽一个静态函数"自知身份，必须三选一：
-
-| 候选 | 做法 | 残留/成本 | 侵入面 | 评估 |
-|------|------|-----------|--------|------|
-| X1 **扩展布局（推荐）** | 新增 `NapiLazyAccessor`（InternalAccessor 派生布局）：getter/setter 沿用裸指针 + 新增 payload 字段（Smi 编码 `(tableId, descIndex)` 或 JSNativePointer 指向 lifetime entry） | 每 slot 24→32 B | 新增一个 JSType + CallInternalGet 处调用点适配（回调需拿到 self）；内建路径不动 | 侵入面小、内建零改动；**32 B 残留取代文档中 24 B 口径，需同步修订** |
-| X2 签名扩展 | `InternalGetFunc` 增加 `JSHandle<InternalAccessor> self`（或属性键）参数，payload 放扩展字段 | 同 X1 | 全部既有 `BuiltinsLazyCallback` 回调签名机械适配（~20 处）+ 所有 CallInternalGet 调用点 | 改动机械但横切内建，回归面大于 X1 |
-| X3 receiver 侧表 | getter 统一 stub，以 receiver 为键查 native side map 找 lifetime | 每 slot 24 B（不扩布局） | 新增 GC 感知的对象→native 映射 | **仅 A1 可用**（模块导出对象 → 整模块 lifetime，一次触发物化整模块）；A2 同一 prototype 多方法无法区分 slot，不可用；且键随对象移动需 weak/更新语义，复杂度不划算 |
-
-**推荐**：X1 为主路径（A1/A2 通用）；A1 若接受"整模块粒度物化"可退化用 X3 省一个新 JSType，但敏感度进一步恶化（任一类名读取物化整模块），不推荐。
-
-### 3.4 组件关系图
-
-![InternalAccessor 迁移 NAPI 组件关系](napi-lazy-binding-component-relations.svg)
+![按需绑定组件边界](napi-lazy-binding-component-relations.svg)
 
 > 可编辑源文件：[napi-lazy-binding-component-relations.drawio](napi-lazy-binding-component-relations.drawio)
 
----
+| 组件 | 职责 |
+|------|------|
+| NAPI class registration | 分类属性、建立最小回调元数据、创建 constructor/prototype、安装惰性方法槽 |
+| VM property lookup | 识别 `NapiLazyAccessor`，传递 holder、receiver 和当前 VM key |
+| Lazy method registry | 用 generation-safe token 定位 `ClassBindingLifetime`，返回受保护的 lifetime guard |
+| Native function factory | 复用 `NapiNativeCreateFunction` 与 `FunctionRef::NewConcurrentWithName` 创建最终函数 |
+| Property update path | 在同一 property slot 中把惰性值替换为 `JSFunction`，保持 HClass/LayoutInfo 不变并失效旧 IC handler |
+| Environment cleanup | 发布 `DEAD`，等待在途 guard，释放未物化记录、状态目录和 registry token |
 
-## 4. 流程设计
+## 4. 注册期设计
 
-### 4.1 注册期流程（napi_define_class 惰性化）
+### 4.1 流程修改
 
-![napi_define_class 惰性化注册期流程](napi-lazy-binding-registration-flow.svg)
+![按需绑定注册流程](napi-lazy-binding-registration-flow.svg)
 
 > 可编辑源文件：[napi-lazy-binding-registration-flow.drawio](napi-lazy-binding-registration-flow.drawio)
 
-### 4.2 首次读取 materialize 流程（A2 形态一，核心路径）
+`NapiCreateClassFunction` 的属性准备与类对象填充阶段改为以下顺序：
 
-![A2 形态一首次读取 materialize 核心流程](napi-lazy-binding-materialize-flow.svg)
+1. 扫描 descriptor，统计目标 prototype method 数量并保持现有 static/prototype 排序规则；
+2. 若数量非零，创建一个 `ClassBindingLifetime`、一个 `slotDirectory[N]` 和 generation-safe registry token；
+3. 对每个属性按现有规则创建 VM String/Symbol key，并填充临时 `PropertyAttribute` 的 writable、enumerable、configurable；
+4. 对目标 prototype method 单独分配 `NativeLazyMethodRecipe {method, data}`，创建 payload 为 `{token, recipeIndex}` 的 `NapiLazyAccessor`，并将其写入临时 `PropertyAttribute.value`；其他属性继续调用当前 `NapiInitAttrValFromProp` 创建即时值；
+5. `NewConcurrentClassFunctionWithName` 将 `PropertyAttribute[]` 转成临时 `PropertyDescriptor[]`；两条路径都产生普通数据属性 descriptor，区别仅是目标方法的 `value` 为 `JSFunction` 或 `NapiLazyAccessor`；
+6. `AddInlinedPropToHClass` 按相同顺序把 key、writable/enumerable/configurable、data-property 标志、inline/out-of-line 位置、slot offset 和 `TAGGED` representation 填入 prototype HClass/LayoutInfo；
+7. `NewJSObjectWithInit` 按该 HClass 创建 prototype；随后 `SetPropertyInlinedProps` 或 `DefinePropertyOrThrow` 把 descriptor value 写入对应 property slot；
+8. 将目录项发布为 `LAZY(recipe*)`。注册成功后，目标 property slot 保存 `NapiLazyAccessor`；当前即时路径则保存 `JSFunction`；
+9. 任一步骤失败时，撤销已发布 token，并释放已分配的 recipe、目录和 lifetime，再沿当前异常路径返回。
+
+注册成功后，调用方 descriptor、临时名称、`keys[]`/`attrs[]`/`PropertyDescriptor[]` 容器和 handle 均不进入持久状态。VM String/Symbol key、`PropertyAttributes` 和 prototype property slot 已复制到 VM 管理对象中。
+
+### 4.2 注册期填充前后差异
+
+注册期必须区分临时转换数据、HClass/LayoutInfo 属性元数据和 prototype 属性值。`LayoutInfo` 不保存 property value、callback、recipe 或 directory entry。
+
+| 填充位置 | 当前即时创建 | 按需绑定注册完成 | 差异性质 |
+|----------|--------------|------------------|----------|
+| 调用方 `napi_property_descriptor` | 提供 name、method、data、attributes | 输入结构与 ABI 相同 | 不变；返回后均不再引用 |
+| 临时 `keys[]` | 每属性创建 VM String/Symbol key | 相同 key、数量和 static/prototype 排序 | 不变 |
+| 临时 `PropertyAttribute[]` 的 W/E/C | 从 descriptor attributes 填充 | 相同 | 不变 |
+| 目标方法的 `PropertyAttribute.value` | 注册期创建并填入 `JSFunction` | 填入 `NapiLazyAccessor` | value 创建方式改变 |
+| 临时 `PropertyDescriptor[]` | 普通数据属性；value 为 `JSFunction` | 普通数据属性；value 为 `NapiLazyAccessor` | 仅临时 value 不同 |
+| prototype HClass | 加入全部 prototype key，确定属性数、inline capacity 和对象尺寸 | 相同 | HClass 填充内容不变 |
+| prototype `LayoutInfo` | `key + PropertyAttributes` | 相同 key、W/E/C、`IsAccessor=false`、offset、inline 标志和 `TAGGED` representation | 属性元数据不变 |
+| prototype property slot | 写入 `JSFunction` 引用 | 写入 `NapiLazyAccessor` 引用 | 持久 value 不同 |
+| callback metadata | 创建 `JSNativePointer + NapiFunctionInfo` | 保存独立 `{method, data}` recipe、directory state 和 accessor payload | 持久回调表示改变 |
+
+目标方法从注册完成起就是一个普通数据属性。`NapiLazyAccessor` 只是该数据属性 value slot 中的 VM 内部惰性值；它不得使 `JSTaggedValue::IsAccessor()` 返回 true，也不得使 `PropertyAttributes::IsAccessor` 置位。否则类创建中的 `PropertyAttributes(PropertyDescriptor)` 会把目标方法填成 accessor property，首次物化将被迫执行 accessor-to-data HClass transition，并改变可观察 descriptor 语义。
+
+两条路径的注册完成状态为：
+
+```text
+当前即时创建：
+  LayoutInfo[i] = { key: "m", attrs: data + W/E/C + offset + TAGGED }
+  prototype.slot[i] = JSFunction
+
+按需绑定：
+  LayoutInfo[i] = { key: "m", attrs: data + W/E/C + offset + TAGGED }
+  prototype.slot[i] = NapiLazyAccessor
+  slotDirectory[j] = LAZY(NativeLazyMethodRecipe { method, data })
+```
+
+### 4.3 新增数据结构
+
+```cpp
+struct NativeLazyMethodRecipe {
+    NapiNativeCallback method;
+    void *data;
+};
+```
+
+在 64 位 ABI 下，该记录包含两个指针，逻辑 payload 为 16 B、对齐为 8 B。每个未物化方法拥有一个独立 allocator block；`data` 是非拥有指针，释放 recipe 时不得释放 `data` 指向的资源。
+
+```cpp
+class NapiLazyAccessor : public Record {
+    NativeReadEntry readEntry;
+    NativeWriteEntry writeEntry;
+    TaggedPayload payload;  // generation-safe token + recipe index
+};
+```
+
+`NapiLazyAccessor` 是 VM 管理的专用惰性方法槽对象，不依赖内建对象初始化类型。设计目标为 32 B；最终对象大小、GC visitor 范围和 factory 分配大小必须由目标 ABI probe 共同确认。
+
+```cpp
+struct ClassBindingLifetime {
+    std::unique_ptr<std::atomic<uintptr_t>[]> slotDirectory;
+    uint32_t slotCount;
+    uint32_t lazyCount;
+    GenerationSafeToken token;
+};
+```
+
+每个目录项占一个机器字，在 64 位目标上为 8 B，编码以下状态：
+
+```text
+LAZY(recipe*) -> MATERIALIZING(recipe*) -> DONE
+       |                    |
+       +---- failure -------+
+
+LAZY / MATERIALIZING / DONE -> DEAD  (environment teardown)
+```
+
+具体 tag 编码必须满足 recipe 指针对齐要求。目录项是 recipe block 的唯一所有者；只有在终态发布后才能释放 recipe。
+
+### 4.4 字段来源与所有权
+
+| 数据 | 来源 | 持久位置 | 所有权与生命周期 |
+|------|------|----------|------------------|
+| property key / function name | `utf8name` 或 `napi_value name` | VM String/Symbol 与属性元数据 | VM 管理；物化时从当前 key 重建函数名 |
+| writable/enumerable/configurable | descriptor attributes | `PropertyAttributes` | VM 管理；始终作为数据属性语义解释 |
+| `method` | descriptor | `NativeLazyMethodRecipe` | 复制指针值；recipe 独立拥有该副本 |
+| `data` | descriptor | `NativeLazyMethodRecipe` | 复制非拥有指针值；资源仍归 native 模块 |
+| recipe identity | 注册顺序 | accessor payload 与 `slotDirectory` | token 防地址复用，index 在 lifetime 内稳定 |
+| materialization state | registration/runtime | `slotDirectory[index]` | 原子发布；environment cleanup 统一终止 |
+
+## 5. 首次读取与写回
+
+### 5.1 首次读取流程
+
+![首次读取与按需物化流程](napi-lazy-binding-materialize-flow.svg)
 
 > 可编辑源文件：[napi-lazy-binding-materialize-flow.drawio](napi-lazy-binding-materialize-flow.drawio)
 
-### 4.3 materialize 写回与 IC 失效链路（与内建路径的分叉点）
+读取 `receiver.m` 时，属性查找必须保留实际持有属性的 `holder` 和当前 VM key：
 
-![materialize 写回与 IC 失效链路](napi-lazy-binding-ic-invalidation-flow.svg)
+1. lookup 在 `holder` 上命中 `NapiLazyAccessor`；
+2. `CallNapiLazyGet(thread, receiver, holder, key, payload)` 解析 token/index，并取得 lifetime guard；
+3. 对目录项执行 `LAZY(recipe*) -> MATERIALIZING(recipe*)` CAS；
+4. 胜者使用当前 key、recipe.method 和 recipe.data 调用现有 native 函数创建链；
+5. 写回前重新确认 holder 的属性仍是同一个 accessor，避免覆盖已发生的重定义或删除；
+6. 在保持 key、writable/enumerable/configurable、offset、representation、HClass 和 LayoutInfo 不变的前提下，把 holder 的同一 property slot 从 `NapiLazyAccessor` 原子替换为 `JSFunction`；
+7. 写回提交后发布 `DONE`，再释放该槽的 recipe block；
+8. 返回新建的 `JSFunction`。后续读取走普通数据属性与正常 IC。
 
-> 可编辑源文件：[napi-lazy-binding-ic-invalidation-flow.drawio](napi-lazy-binding-ic-invalidation-flow.drawio)
+创建或写回失败时，目录项回滚为 `LAZY(recipe*)`，recipe 保持有效，异常按当前 NAPI/VM 路径传播。CAS 未获胜的线程重新读取属性；胜者写回后所有读取者得到同一个 `JSFunction`。
 
-### 4.4 兼容操作分流流程（惰性 slot 的非取值访问）
+### 5.2 时序
 
-![惰性 slot 兼容操作分流](napi-lazy-binding-compatible-operations-flow.svg)
-
-> 可编辑源文件：[napi-lazy-binding-compatible-operations-flow.drawio](napi-lazy-binding-compatible-operations-flow.drawio)
-
-### 4.5 module unload 流程（未物化资源释放）
-
-![Module unload 未物化资源释放流程](napi-lazy-binding-unload-flow.svg)
-
-> 可编辑源文件：[napi-lazy-binding-unload-flow.drawio](napi-lazy-binding-unload-flow.drawio)
-
-### 4.6 时序图（A2 形态一首次访问）
-
-![A2 形态一首次访问时序](napi-lazy-binding-first-access-sequence.svg)
+![首次读取时序](napi-lazy-binding-first-access-sequence.svg)
 
 > 可编辑源文件：[napi-lazy-binding-first-access-sequence.drawio](napi-lazy-binding-first-access-sequence.drawio)
 
----
+### 5.3 Prototype value 写回与 IC 失效
 
-## 5. 数据结构设计
+![按需物化写回与 IC 失效](napi-lazy-binding-ic-invalidation-flow.svg)
 
-### 5.1 现有结构（复用，不改）
+> 可编辑源文件：[napi-lazy-binding-ic-invalidation-flow.drawio](napi-lazy-binding-ic-invalidation-flow.drawio)
 
-| 数据结构 | 定义位置 | 用途 | 是否修改 |
-|----------|----------|------|----------|
-| `InternalAccessor` | `accessor_data.h:29` | 24 B，getter/setter 裸函数指针 | 不修改（内建路径原样） |
-| `BuiltinsLazyCallback` | `builtins_lazy_callback.cpp` | 内建逐槽惰性回调 | 不修改（作机制先例参照） |
-| `NapiFunctionInfo` | `native_value.h:54` | 32–40 B 堆外回调信息 | 不修改布局（第 10 轮结论沿用），仅创建时机推迟 |
-| `MarkProtoChanged`/`ProtoChangeDetails` | `js_hclass-inl.h:379-399` | 原型链失效链路 | 不修改，materialize 写回复用 |
+物化不增加、删除或重定义属性，也不修改共享 `LayoutInfo`。惰性值和最终 `JSFunction` 都是 `TAGGED` value，因此正常物化不需要 HClass transition：
 
-### 5.2 新增结构
+1. 根据现有 HClass/LayoutInfo 取得目标 key、attributes 和 slot offset；
+2. 校验 slot 仍保存当前 `NapiLazyAccessor`，然后通过带写屏障的专用路径替换同一 slot value；
+3. prototype HClass identity、LayoutInfo identity、key、W/E/C、`IsAccessor=false`、offset 和 representation 保持不变；
+4. 显式调用 `JSHClass::MarkProtoChanged`/`NoticeThroughChain` 并刷新 prototype users，因为不能依靠 HClass transition 自动失效依赖旧值的缓存；
+5. 依赖惰性读取 handler 的 LoadIC、StoreIC 和 MegaIC 条目失效，新读取建立普通数据属性 handler。
 
-```cpp
-// ecmascript/accessor_data.h —— 候选 X1
-class NapiLazyAccessor : public Record {
-public:
-    static constexpr size_t GETTER_OFFSET = Record::SIZE;        // 裸指针 8 B
-    static constexpr size_t SETTER_OFFSET = GETTER_OFFSET + 8;   // 裸指针 8 B
-    static constexpr size_t PAYLOAD_OFFSET = SETTER_OFFSET + 8;  // 8 B
-    // payload: Smi 编码 (lifetimeId << 16 | descIndex)，或 JSNativePointer
-    // 共 32 B/slot（★ 修订 03/04 文档中形态一 24 B 口径）
-};
-```
+物化专用写回不应被记录为一次 JavaScript 用户属性写入。若复用普通写入入口，必须验证 PGO `TrackType` 不会产生与即时创建路径不同的更新；否则应由专用写回跳过该 profiling 更新。
 
-```cpp
-// foundation/arkui/napi —— 堆外，每类一个
-struct ClassBindingLifetime {
-    // NativeLazyDescriptorTable: descriptor 深拷贝
-    //（名称副本 + 方法指针 + data 指针 + 属性位），72–96 B/方法
-    std::unique_ptr<CopiedDescriptor[]> table;
-    uint32_t count;
-    std::atomic<uint8_t> slotState[/*count*/];  // LAZY/MATERIALIZING/DONE/DEAD
-    // 所有权: env cleanup 链；data 指向资源所有权仍归模块
-};
-```
+必须覆盖解释器、IC、runtime stub、compiler/AOT 和反射入口，保证任何读取路径都不会把 `NapiLazyAccessor` 本身作为 JavaScript 可观察值返回。
 
-### 5.3 内建机制与迁移设计的结构对照
+## 6. 属性语义
 
-| 维度 | 内建（InternalAccessor） | 迁移（NapiLazyAccessor） |
-|------|--------------------------|--------------------------|
-| 槽位身份 | 静态回调函数自知（Date 槽配 `::Date`） | payload 运行期携带 `(lifetime, idx)` |
-| 每槽残留 | 24 B | 32 B（X1）|
-| 回调数据 | 无外部数据依赖 | 堆外 descriptor 深拷贝 72–96 B/方法 |
-| 写回路径 | ResetLazyInternalAttr 原地改 attr | SetProperty 等价路径 + MarkProtoChanged 全链 |
-| 卸载 | 永不 | env cleanup 链 + DEAD 态 |
-| 并发 | 初始化期单线程 | per-slot 原子状态机 |
+![惰性方法槽属性操作](napi-lazy-binding-compatible-operations-flow.svg)
 
-### 5.4 残留成本口径（A2 形态一，X1）
+> 可编辑源文件：[napi-lazy-binding-compatible-operations-flow.drawio](napi-lazy-binding-compatible-operations-flow.drawio)
 
-每未访问方法的残留 = 堆内 NapiLazyAccessor 32 B + 堆外 descriptor 深拷贝摊派 72–96 B，对比消除的堆内 184 B + 堆外 32–40 B。**堆内净省 ~152 B/方法（83%）；堆外净增 32–64 B/方法**——堆外增量直接抵扣收益，维持 `03-方案设计.md` §4.6 的 20% 触发线：descriptor 驻留超过消除量 20% 时静态存储期契约（零拷贝）转主路径。
+`NapiLazyAccessor` 只是 VM 内部表示，对 JavaScript 必须表现为普通数据属性。
 
----
-
-## 6. 兼容性分析
-
-### 6.1 兼容性矩阵
-
-| 路径 | 影响 | 兼容措施 | 风险 |
-|------|------|----------|------|
-| 惰性开关关闭 | ❌ 行为不变 | 注册期分叉回即时路径 | 无 |
-| sendable 类 | ❌ 不受影响 | `NapiDefineSendableClass` 保持即时路径 | 无 |
-| 内建对象惰性路径 | ❌ 不受影响 | X1 新增类型，InternalAccessor/BuiltinsLazyCallback 原样 | 无 |
-| `getOwnPropertyDescriptor` | ⚠️ 需适配 | 物化或按元数据合成数据属性描述符（避免探测风暴） | 中 |
-| 严格模式赋值 `proto.m = f` | ⚠️ 需适配 | lazy setter 丢弃元数据按数据属性写入 | 低 |
-| `Object.freeze/seal` | ⚠️ 物化风暴 | 全量 materialize 后执行；插桩需统计此形态占比（05 §Phase 2 读取形态单列） | 中 |
-| `delete proto.m` | ✅ 直接支持 | configurable=1 直接删 slot | 低 |
-| worker/多 context | ⚠️ 需验证 | 每 env 独立 lifetime；per-context 类各自惰性 | 中 |
-| module unload | ⚠️ 需适配 | env cleanup 链释放未物化拷贝；DEAD 态防悬空 getter | 中 |
-| 属性位透传 | ⚠️ 需适配 | `napi_writable/enumerable/configurable` 逐条透传，不沿用内建固定值 | 低 |
-| 快照/调试工具 | ⚠️ 需适配 | 快照识别 NapiLazyAccessor 类型；debugger 取值策略（物化 or 合成显示）实施时定 | 中 |
-
-### 6.2 关键兼容性保证
-
-1. **产物等价**：materialize 走现行 `NapiNativeCreateFunction` 链，`fn.name/length`、`proto.m === proto.m`（写回后同一对象）与即时绑定一致；
-2. **内建路径零改动**（X1）：迁移以新增类型实现，不触碰 `BuiltinsLazyCallback` 与全局对象惰性槽位；
-3. **IC 正确性**：写回复用既有原型链失效链（§4.3），有明确验证方法；
-4. **可回滚**：开关关闭即回即时路径；已惰性化的存量类在下次进程启动后恢复即时。
-
----
-
-## 7. 性能分析
-
-### 7.1 内存收益（结构口径，非承诺值）
-
-| 项 | 即时绑定 | 惰性（未访问方法） | 差值 |
-|----|----------|--------------------|------|
-| 堆内/方法 | 184 B（JSFunction+JSNativePointer） | 32 B（NapiLazyAccessor） | **-152 B（-83%）** |
-| 堆外/方法 | 32–40 B（NapiFunctionInfo） | 72–96 B（descriptor 拷贝） | **+32–64 B** |
-| 收益总量 | — | — | 上界 61.474 MiB 方法分量 ×「未读取占比」（插桩后折算，02 §2）|
-
-结构上界参考：第 8/9 轮 Kuaishou API26 口径下前台方法闭包结构上界 0.188 MiB、strict A2 净收益模型 0.052–0.067 MiB——**收益期望必须以插桩为准，本文不修改该结论**。
-
-### 7.2 时间开销
-
-| 阶段 | 影响 | 分析 |
-|------|------|------|
-| 注册期 | ✅ 改善 | 每类少创建 N 个闭包，改为 N 个 32 B accessor + 一次 memcpy 深拷贝；多 context 场景按 context 数倍增收益 |
-| 首次访问 | ⚠️ 增加 | 慢路径 accessor 分发 + 创建闭包 + transition + 失效链，估 1–3 μs/方法（未测，插桩阶段实测） |
-| 稳态（全部已物化） | ❌ 不变 | 数据属性 + 正常 IC，与即时绑定不可区分 |
-| freeze/序列化风暴 | ⚠️ 集中开销 | 一次操作物化整类，等价把注册期成本搬到操作点 |
-
-### 7.3 GC 影响
-
-- 未物化期堆内对象数从每方法 2 个（JSFunction+NativePointer）降为 1 个更小对象，标记/清扫量下降；
-- descriptor 深拷贝在堆外，不进 GC 图；
-- materialize 在 handle scope 内进行，创建的中间对象受 handle 保护（与内建 BuiltinsLazyCallback 同规约）。
-
----
-
-## 8. 风险评估
-
-### 8.1 风险矩阵
-
-| ID | 描述 | 概率 | 影响 | 缓解措施 | 残余风险 |
-|----|------|------|------|----------|----------|
-| R1 | 原地改共享 LayoutInfo 导致 IC 错误命中（照搬内建 ResetLazyInternalAttr） | 高（若照搬） | 高 | 设计上禁止照搬：写回强制走 SetProperty 等价 + MarkProtoChanged 全链（§4.3），DT 固化验证 | 低 |
-| R2 | IC/快路径对 internal accessor 的处理不走慢路径，绕过 getter【待核验 V2】 | 中 | 高 | 实施前核验解释器快路径/LoadIC/compiler stub/AOT 对 IsInternal accessor 的分发；任何缓存 accessor handler 的路径必须仍进 getter | 中（核验前） |
-| R3 | 每 slot 32 B 与文档 24 B 口径不一致导致收益高估 | 确定 | 低 | 本文 §5.4 修订口径；03/04 同步更新 | 无 |
-| R4 | descriptor 深拷贝堆外驻留抵扣收益 | 中 | 中 | 维持 20% 触发线转静态存储期契约（03 §4.6） | 低 |
-| R5 | freeze/getOwnPropertyDescriptor/展开等形态读取触发物化风暴，真实收益归零 | 中 | 高 | 插桩 Phase 2 读取形态单列（05）；descriptor 合成路径避免探测物化 | 中 |
-| R6 | 并发首次访问 / 异常重入导致半初始化 | 低 | 高 | per-slot 原子状态机 LAZY→MATERIALIZING→DONE，异常回滚 LAZY（第 4 轮闭环） | 低 |
-| R7 | module unload 时未物化 descriptor 重复释放或悬空 getter | 低 | 高 | env cleanup 链单一所有者 + DEAD 态；data 所有权归模块不代管 | 低 |
-| R8 | A1 模块注册契约缺失（exports 归属钩子未设计） | 确定 | 中（阻塞 A1） | A1 前置项：先定模块级注册契约与版本管理（03 §2.4），否则只做 A2 形态一 | 中 |
-| R9 | 快照/debugger 无法识别惰性 slot，误报泄漏或取值副作用 | 中 | 中 | 快照识别新类型；debugger 取值策略实施时定并进 DT | 低 |
-
-### 8.2 关键风险深入分析
-
-#### R1/R2：写回与读取路径的双向 IC 风险
-
-迁移的本质危险在于内建机制的两个"便宜做法"在 NAPI 场景都不成立：
-
-- **写方向（R1）**：内建槽位在全局对象上（字典存储、属性位 per-object【待核验 V1】），原地改 attr 无共享结构副作用；prototype 的 LayoutInfo 跨同 HClass 对象共享且被原型链 IC handler 依赖 marker 版本——写回必须制造 transition 并置 marker。
-- **读方向（R2）**：内建槽位首次读取几乎必然走慢路径（全局名字查找）；prototype 方法可经解释器快路径、LoadIC、compiler stub、AOT 读取（05 §2 已核验这些路径可不经 `JSObject::GetProperty`）。若任一路径对 internal accessor 不回落慢路径而直接取 accessor 对象本身或缓存了错误 handler，惰性 getter 会被绕过。**这是实施前必须逐路径核验的硬性前置**，与插桩 Phase 2 的全路径覆盖要求同源。
-
-#### R8：A1 的真正成本不在 VM 侧
-
-A1 的 VM 侧改动比 A2 小（一个 slot/类），但它需要一个**新的模块级注册契约**——NAPI 现无"把类名 slot 的定义推迟到 exports 上"的挂载点，`napi_define_class` 的调用时机由模块自己决定。契约设计（新 API or 注册钩子）、文档化与版本管理是 A1 的主工作量与主兼容风险，且不落在本迁移设计的机制部分。选型仍按既有结论：插桩产出「整类未触及占比 vs 单方法未读取占比」后冻结。
-
-### 8.3 实施前核验清单（本文新增待核验项）
-
-| 编号 | 待核验项 | 核验方法 | 影响 |
-|------|----------|----------|------|
-| V1 | 全局对象惰性槽位的存储形态（字典/PropertyBox）与 ResetLazyInternalAttr 是否涉及共享 LayoutInfo | 7.0 Release 源码走读 `ResetLazyInternalAttr` 及全局对象属性存储 | 决定 §2.3-D2 表述准确性（不影响迁移设计结论：prototype 侧必须走失效链） |
-| V2 | 解释器快路径/LoadIC/compiler stub/AOT 对 `IsInternal` accessor 的分发是否全部落入 getter | 逐锚点走读 `fast_runtime_stub-inl.h:175-190`、`ic_runtime_stub-inl.h:92-119,493-525`、`common_stubs.cpp:1117-1158` + 热路径 DT | R2 定级；不闭合则形态一不可上线 |
-| V3 | CallInternalGet 调用点数量与 self 可达性（X1 需回调拿到 accessor） | 全仓搜索 CallInternalGet | X1 侵入面估计 |
-| V4 | env cleanup 链在 worker teardown 的执行时序 | NAPI 侧走读 | R7 |
-
----
-
-## 9. 测试计划
-
-### 9.1 单元测试
-
-| 测试用例 | 验证目标 | 通过条件 |
-|----------|----------|----------|
-| `LazySlotFirstReadMaterialize` | 首次读取创建闭包 | `typeof proto.m === 'function'`；二次读取同一对象 |
-| `LazySlotIdentity` | payload 身份正确 | 多方法/多类交叉读取，各得其所 |
-| `LazySlotDescriptorSynthesis` | descriptor 合成 | `getOwnPropertyDescriptor` 返回数据属性形态且（按策略）不物化 |
-| `LazySlotStrictAssign` | setter 覆盖 | `proto.m = f` 后为普通数据属性，元数据丢弃 |
-| `LazySlotFreezeStorm` | freeze 全量物化 | freeze 后所有方法可调用且不可写 |
-| `LazySlotDelete` | 删除 | configurable=1 时 delete 成功 |
-| `LazySlotConcurrentFirstRead` | 并发幂等 | 双线程首读同 slot 仅物化一次 |
-| `LazySlotExceptionRollback` | 异常重入 | 首读中抛异常后 slot 回 LAZY，二次读取成功 |
-| `SendableClassExcluded` | sendable 排除 | sendable 类走即时路径，无 lazy slot |
-| `BuiltinLazyUnaffected` | 内建回归 | Date/Set/Map 惰性行为与迁移前一致 |
-
-### 9.2 IC/写回专项
-
-| 测试场景 | 通过条件 |
-|----------|----------|
-| 热访问原型属性建 IC → materialize → 再访问 | 旧 handler 不命中，取到新 JSFunction |
-| 同 HClass 多 prototype，其一 materialize | 其他 prototype 的惰性 slot 与 IC 不受污染 |
-| MegaIC 建立后 materialize | Invalidate 生效 |
-| AOT/compiler stub 路径读取惰性 slot（V2 配套） | 落入 getter，不绕过 |
-
-### 9.3 生命周期/回归
-
-| 测试 | 通过条件 |
+| 操作 | 最终行为 |
 |------|----------|
-| module unload（含未物化 slot） | descriptor 不重复释放；卸载后读取按 DEAD 策略 |
-| worker 创建/销毁 | 各 env lifetime 独立，无跨 env 悬空 |
-| Test262 + 既有 NAPI/property semantics 套件 | 100% 通过 |
-| 两版快照 A/B | Bucket C 方法分量下降；NapiLazyAccessor/descriptor 驻留计入净收益口径 |
+| `receiver.m` | 首次读取物化 holder 上的方法；返回 `JSFunction` |
+| `Object.getOwnPropertyDescriptor(proto, "m")` | 先物化，再返回包含真实函数 value 的数据属性 descriptor |
+| `holder.m = value` | `m` 是 holder 自有惰性槽时，writable 则直接用 value 替换并释放 recipe；不可写时沿当前严格/非严格模式处理 |
+| `instance.m = value` | prototype 属性 writable 时在 receiver 上创建自有数据属性；prototype 惰性槽保持不变；不可写时沿当前失败语义处理 |
+| `Object.defineProperty` 指定 value 或 accessor | 直接重定义并释放原 recipe |
+| `Object.defineProperty` 仅修改 attributes | 先物化以保留原函数 value，再应用新 attributes |
+| `delete proto.m` | configurable 时删除并释放 recipe；否则按当前删除失败语义处理 |
+| `in`、`hasOwn`、`for...in`、`Object.keys` | 只查询属性或枚举键，不读取 value，不触发物化 |
+| `Object.entries`、spread、序列化取值 | 读取到某个 value 时只物化对应方法；操作中断时不要求其余方法完成物化 |
+| `freeze`、`seal` | 先物化该对象的全部自有惰性方法，再执行现有完整性操作，避免不可配置属性阻断后续内部写回 |
+| `preventExtensions` | 只禁止新增属性；现有惰性方法保持不变，后续仍可物化为同一自有属性 |
+| Proxy/Reflect | 底层目标遵循同一数据属性语义和 invariant 检查 |
 
----
+覆盖或删除必须先发布终态，再释放 recipe。若操作作用于 receiver 而不是实际 holder，不得错误终止 prototype 上的惰性方法。
 
-## 10. 评审检查清单
+## 7. 生命周期与卸载
 
-### 10.1 机制可迁移性
+![环境销毁与未物化资源释放](napi-lazy-binding-unload-flow.svg)
 
-| 检查项 | 结论 | 说明 |
-|--------|------|------|
-| CallInternalGet 分发骨架可复用？ | ✅ | property lookup 慢路径 internal accessor 分支复用 |
-| 静态回调身份模型可复用？ | ❌ 不可 | D1：动态槽位需 payload，三候选中 X1 推荐（§3.3） |
-| ResetLazyInternalAttr 写回可复用？ | ❌ 不可 | D2：prototype 共享 LayoutInfo，必须走 MarkProtoChanged 全链（§4.3） |
-| descriptor 生命周期模型可复用？ | ❌ 需新增 | D3：ClassBindingLifetime + env cleanup 链 |
-| 并发/卸载模型可复用？ | ❌ 需新增 | D4：per-slot 状态机 + DEAD 态 |
+> 可编辑源文件：[napi-lazy-binding-unload-flow.drawio](napi-lazy-binding-unload-flow.drawio)
 
-### 10.2 架构合理性
+`ClassBindingLifetime` 由 NAPI environment cleanup 链管理：
 
-| 检查项 | 结论 | 说明 |
-|--------|------|------|
-| 是否改内建路径？ | ❌ 不改（X1） | 新增类型隔离 |
-| 是否改 NapiFunctionInfo 布局？ | ❌ 不改 | 沿用第 10 轮结论 |
-| VM/NAPI 职责边界清晰？ | ✅ | VM 出惰性 slot 机制 C API；NAPI 管 descriptor 生命周期与注册分叉 |
-| 与 A2 形态二演进兼容？ | ✅ | 形态一的 lifetime/写回/状态机在形态二全部复用，仅 slot 表示从 accessor 换为 attr 位 |
-| 开关与回滚合理？ | ✅ | 注册期分叉，关闭即现状 |
+1. environment teardown 发布 lifetime `DEAD`，阻止新的 lifetime guard 和物化操作；
+2. 等待已取得的 guard 退出，确保没有线程仍读取 recipe；
+3. 对未物化槽发布 `DEAD`，释放剩余独立 recipe block；
+4. 释放 `slotDirectory` 和 registry token；
+5. 已物化的 `JSFunction`、`JSNativePointer` 和 `NapiFunctionInfo` 继续由现有 GC 与 `CommonDeleter` 路径管理；
+6. 不释放 recipe.data 指向的外部资源；
+7. teardown 后的并发属性读取抛出 native binding unavailable 异常，不能返回 `undefined` 或调用已卸载代码。
 
-### 10.3 流程正确性
+清理路径与物化路径共享同一状态机和 guard 协议，避免重复释放、悬空回调和 token 地址复用造成的 ABA 问题。
 
-| 检查项 | 结论 | 说明 |
-|--------|------|------|
-| 注册/首读/写回/卸载流程完整？ | ✅ | §4.1–4.5 |
-| IC 失效链具体化？ | ✅ | §4.3，含验证方法 |
-| 并发与异常路径明确？ | ✅ | §4.2 状态机 |
-| 读取全路径覆盖已证明？ | ⚠️ 未闭合 | V2 待核验，为上线硬前置 |
+## 8. 对象布局与成本口径
 
-### 10.4 遗留与阻塞项
+![native 方法按需绑定对象布局与生命周期](napi-lazy-binding-object-layout-before-after.svg)
 
-| 项 | 状态 | 阻塞什么 |
-|----|------|----------|
-| V1–V4 源码核验 | 未做 | V2 阻塞形态一上线判定 |
-| 24 B → 32 B 口径修订同步 03/04 | 待办 | 收益口径一致性 |
-| A1 模块注册契约设计 | 未设计 | A1 全部 |
-| 插桩 Phase 1/2（收益与选型） | 前置进行中 | 立项排期（既有结论不变） |
+> 可编辑源文件：[napi-lazy-binding-object-layout-before-after.drawio](napi-lazy-binding-object-layout-before-after.drawio)
 
----
+### 8.1 注册期分配变化
 
-## 11. 评审结论
+| 对象 | 当前即时创建 | 按需绑定注册完成且未物化 |
+|------|--------------|--------------------------|
+| `JSFunction` | 每方法创建 | 不创建 |
+| `JSNativePointer` | 每方法创建 | 不创建 |
+| `NapiFunctionInfo` | 每方法创建 | 不创建 |
+| `NapiLazyAccessor` | 无 | 每目标方法一个；32 B 设计值，需目标 ABI 确认 |
+| `NativeLazyMethodRecipe` | 无 | 每未物化方法一个独立 allocation；16 B 逻辑 payload |
+| `slotDirectory` | 无 | 每目标方法一个 8 B entry |
+| `ClassBindingLifetime`/registry | 无 | 每类一个固定成本 |
+| prototype HClass | 注册期按全部 key/attributes 创建 | 相同属性数、capacity、对象尺寸和 identity |
+| prototype `LayoutInfo` | 填充 key、W/E/C、data-property 标志、offset、`TAGGED` representation | 内容相同；不保存 recipe 或 lazy state |
+| prototype property slot | 每目标方法保存 `JSFunction` | 每目标方法保存 `NapiLazyAccessor`；首次读取后同槽改为 `JSFunction` |
 
-### 11.1 评审总结
+`LayoutInfo` 中已有的 key/attributes 和 prototype value slot 是两条路径共有的结构，不计为按需绑定新增分配。
 
-| 维度 | 评分 | 说明 |
-|------|------|------|
-| 机制可迁移性 | ⭐⭐⭐⭐ | 分发骨架与物化范式可复用；身份模型与写回路径必须重造，且本文已给出确定设计 |
-| 架构合理性 | ⭐⭐⭐⭐⭐ | X1 隔离内建路径，VM/NAPI 边界清晰，向形态二演进无返工 |
-| 流程正确性 | ⭐⭐⭐⭐ | 核心流程完整；读取全路径覆盖（V2）未闭合前不能定级为通过 |
-| 兼容性 | ⭐⭐⭐⭐ | 矩阵完整；快照/debugger 适配与 A1 契约为已知缺口 |
-| 风险可控 | ⭐⭐⭐⭐ | 最高风险（R1 写回、R2 读取绕过）均有确定缓解与验证方法 |
-| 可回滚 | ⭐⭐⭐⭐⭐ | 注册期开关，关闭即现状 |
+### 8.2 生命周期成本
 
-### 11.2 对当前方案（01–05）的审查意见
+设类中共有 `N` 个目标方法，在检查点仍有 `U` 个未物化方法：
 
-1. **残留口径需修订**：`03-方案设计.md` §4.2 与 `04-review-log.md` 第 2 轮把 A2 形态一残留记为「每方法 24 B InternalAccessor」，但同一批文档同时确认 `InternalGetFunc` 不接收属性键且 InternalAccessor 无 payload 字段——24 B 布局**装不下 per-slot 身份**。X1 扩展后为 32 B/slot（仍省堆内 83%），建议 03/04 同步修订，避免收益模型偷用 24 B。
-2. **「复用 SetLazyAccessor」表述应收窄**：可复用的是 CallInternalGet 分发骨架与"accessor→数据属性"范式；`SetLazyAccessor` 本身面向全局对象槽位与静态回调，`ResetLazyInternalAttr` 的原地改 attr 在 prototype 场景是明确的反模式（03 §4.5 第 4 点已禁止，本文 §4.3 给出分叉图固化）。
-3. **R2（读取绕过）应升格为与 R1 并列的高风险硬前置**：现有风险表只覆盖「materialize 后 IC 未失效」（写方向）；「惰性 getter 被快路径/IC/AOT 绕过」（读方向）同样致命且尚无核验记录，建议纳入需求 §4 风险表并绑定 V2 核验项。
-4. **A1 的排期估计（10–15 人日）未含模块注册契约设计**：契约是 A1 的前置且涉及对外 API 版本管理，建议在选型决策前单独估计，否则 A1/A2 排期对比失真。
-5. **既有结论维持**：收益以插桩折算为准（61.474 MiB 是上界）、A1/A2 选型待插桩两比例、形态二为 A2 目标形态形态一为过渡、sendable 排除、constructor 分列——本文均不推翻。
+```text
+net_shallow = sum(i in U)(avoided_eager_object_bytes(i)
+                          - lazy_accessor_actual(i)
+                          - recipe_allocator_actual(i))
+              - directory_actual(N)
+              - lifetime_registry_actual
+```
 
-### 11.3 评审建议
+计算与验证必须分开报告：
 
-**机制设计通过（有条件）**。上线前置条件：V2 读取全路径核验闭合；口径修订（32 B）同步；插桩 Phase 1 完成收益封顶。建议实施顺序：V1–V4 核验（1–2 人日）→ 形态一原型（X1 + A2 路径）→ IC 专项 DT → 灰度。
+- recipe 的 16 B 逻辑 payload 与 allocator actual/usable bytes；
+- accessor 的设计大小与最终 ABI 大小；
+- 每类 directory、registry、guard 和 header；
+- GC shallow/live bytes、Region used/committed、RSS/PSS；
+- 首次读取时延、批量物化峰值和清理时延。
 
-### 11.4 评审签字
+不得用逻辑字段大小替代 allocator 实际计费，也不得把 shallow bytes 直接等同于 committed 或 RSS/PSS 收益。
 
-| 角色 | 签字 | 日期 |
-|------|------|------|
-| 方案设计 | Sisyphus | 2026-08-20 |
-| 架构评审 | TBD | |
-| VM/IC 评审 | TBD | |
-| NAPI 评审 | TBD | |
-| 兼容性评审 | TBD | |
+## 9. 兼容性与风险控制
 
----
+| 风险 | 最终控制措施 | 验证要求 |
+|------|--------------|----------|
+| 读取快路径绕过物化 | 所有 lookup/IC/compiler/反射入口统一识别专用惰性槽 | 热解释器、IC、AOT、反射读取均返回函数而非内部对象 |
+| prototype IC 在 HClass 不变时复用旧 handler | 同槽写回后显式进入 prototype invalidation 链，不能依赖 shape transition | 建立惰性 IC 后物化，旧 handler 不得返回内部槽或旧值 |
+| descriptor 输入失效 | 仅复制 method/data；key/attrs 进入 VM 元数据 | define_class 返回后销毁输入缓冲仍可正确物化 |
+| 并发或异常造成重复函数 | CAS 物化权；失败回滚；写回前校验 accessor identity | 多线程首读只发布一个函数；故障注入后可重试 |
+| override/delete 与物化竞争 | 统一状态机；终态发布先于 recipe free | 覆盖、删除、defineProperty 与首读交错无 UAF/双释放 |
+| environment teardown 竞争 | generation-safe token、guard drain、DEAD 后禁止新物化 | worker/env teardown 压测，无悬空 callback/data 读取 |
+| 属性反射暴露内部表示 | descriptor 查询先物化，其他操作按数据属性语义分流 | descriptor、赋值、delete、freeze、proxy 测试通过 |
+| Sendable 跨线程语义变化 | Sendable 类继续即时创建 | Sendable 回归无惰性槽 |
+| 结构成本抵消收益 | 逐类计算真实 allocator 与固定成本，收益不成立时不启用 | clean A/B 分列结构成本和物理内存指标 |
 
-## 12. 附录
+功能默认通过注册期开关受控发布。关闭开关时，目标方法继续执行当前 `NapiNativeCreateFunction` 即时创建链，不改变已发布 NAPI 接口。
 
-### 12.1 术语表
+## 10. 测试设计
+
+### 10.1 功能与属性语义
+
+- 首次读取、重复读取和函数对象身份；
+- string/symbol key 的函数名称与 `length`；
+- own/inherited assignment、严格模式不可写属性；
+- `getOwnPropertyDescriptor`、`defineProperty`、delete、键枚举和值枚举；
+- freeze、seal、preventExtensions、Proxy 与 Reflect；
+- constructor、static、getter、setter、value 和 Sendable 排除路径。
+
+### 10.2 VM 与生命周期
+
+- interpreter、LoadIC/StoreIC、MegaIC、runtime stub、compiler/AOT 全读取路径；
+- 物化前建立 prototype-chain IC，物化后验证旧 handler 失效；
+- 并发首读、异常回滚、override/delete 竞争；
+- worker 创建/销毁、environment teardown、GC 和快照识别；
+- allocator failure、函数创建失败、属性写回失败的完整回滚。
+
+### 10.3 性能与内存
+
+- 同构 clean A/B 的注册耗时、首次读取耗时和稳态吞吐；
+- 每类 `N/U`、accessor actual、recipe allocator actual、directory 与固定头；
+- full-GC 后 shallow/live bytes、Region used/committed 和 RSS/PSS；
+- freeze/serialization 等批量物化场景的峰值时延和瞬时分配。
+
+## 11. 实施工作量与排期
+
+| 阶段 | 内容 | 人日 |
+|------|------|-----:|
+| 设计 | VM/NAPI 接口、对象布局、状态机、属性语义与错误传播定稿 | 4 |
+| 开发 | 注册链与元数据所有权 | 6 |
+| 开发 | VM 槽对象、key-aware lookup 与函数物化 | 8 |
+| 开发 | prototype 写回、IC 失效与反射操作 | 7 |
+| 开发 | lifetime registry、并发状态机与 environment cleanup | 6 |
+| 测试 | 功能、property semantics、Sendable 与回归 DT | 7 |
+| 测试 | IC/AOT、并发、异常、GC 与 teardown | 6 |
+| 测试 | clean A/B、allocator 与物理内存验证 | 4 |
+| **设计小计** |  | **4** |
+| **开发小计** |  | **27** |
+| **测试小计** |  | **17** |
+| **总计** |  | **48 人日** |
+
+按 2 名开发与 1 名测试并行安排，计划 6 周：第 1 周完成接口与布局；第 2-4 周完成注册、物化、属性语义和生命周期；第 3-5 周并行补齐 DT；第 6 周完成全路径回归与 clean A/B。
+
+## 12. 设计结论
+
+最终实现仅改变普通非 Sendable 类的 prototype native method：注册时安装专用惰性方法槽并持久化独立 `{method, data}` 记录，首次读取时复用现有函数创建链，随后写回普通数据属性。constructor 和其他属性类型保持当前流程。
+
+方案成立的必要条件是：专用槽不对 JavaScript 可见、所有读取路径都进入物化、prototype 写回完整触发 IC 失效、每槽元数据按终态物理释放、environment teardown 在释放前排空 lifetime guard。上述条件由功能 DT、VM 全路径测试和 clean A/B 共同验收。
+
+## 附录 A：源码锚点
+
+| 事实 | 源码位置 |
+|------|----------|
+| public API 进入 `NapiDefineClass` | `foundation/arkui/napi/native_engine/native_api.cpp:1643-1674` |
+| property key/attrs 构造和当前即时 value 创建 | `foundation/arkui/napi/native_engine/impl/ark/ark_native_engine.cpp:216-285` |
+| constructor/prototype 创建 | `foundation/arkui/napi/native_engine/impl/ark/ark_native_engine.cpp:288-330` |
+| class registration 入口 | `foundation/arkui/napi/native_engine/impl/ark/ark_native_engine.cpp:333-369` |
+| `NapiFunctionInfo` 分配与 native function 创建 | `foundation/arkui/napi/native_engine/impl/ark/ark_native_engine.cpp:190-213` |
+| `JSFunction`、name 和 extra info 创建 | `arkcompiler/ets_runtime/ecmascript/napi/jsnapi_expo.cpp:3947-3978` |
+| prototype change marker | `arkcompiler/ets_runtime/ecmascript/js_hclass-inl.h:381-405` |
+
+## 附录 B：术语
 
 | 术语 | 含义 |
 |------|------|
-| `InternalAccessor` | 24 B 内建惰性 accessor，getter/setter 为裸函数指针（`accessor_data.h:29`） |
-| `InternalGetFunc` | 惰性 getter 签名，`(JSThread*, JSHandle<JSObject>&)`，不含属性键 |
-| `BuiltinsLazyCallback` | 内建对象逐槽惰性初始化回调集合 |
-| `ResetLazyInternalAttr` | 内建物化写回：槽位 accessor → 数据属性 |
-| `NapiLazyAccessor` | 本设计新增：InternalAccessor + payload（32 B），承载 NAPI 动态槽位身份 |
-| `ClassBindingLifetime` | 本设计新增（03 已列设计名）：堆外 descriptor 深拷贝 + per-slot 状态机 + 卸载所有者 |
-| `NativeLazyDescriptorTable` | lifetime 内按 index 定位的 descriptor 表 |
-| materialize | 首次访问时创建真实 JSFunction 并写回数据属性 |
-| D1–D4 | 内建 vs NAPI 场景四差异（§2.3） |
-| X1–X3 | 槽位身份三候选（§3.3） |
-| V1–V4 | 实施前源码核验项（§8.3） |
-
-### 12.2 图表索引
-
-| 图表 | 章节 |
-|------|------|
-| 内建 InternalAccessor 机制架构图 | 2.1 |
-| NAPI 即时绑定数据流 | 2.2 |
-| 场景差异矩阵 D1–D4 | 2.3 |
-| 迁移后目标架构图 | 3.1 |
-| 身份候选对比 X1–X3 | 3.3 |
-| 组件关系图 | 3.4 |
-| 注册期流程图 | 4.1 |
-| 首次读取 materialize 流程图 | 4.2 |
-| 写回/IC 失效分叉图 | 4.3 |
-| 兼容操作分流图 | 4.4 |
-| module unload 流程 | 4.5 |
-| 首次访问时序图 | 4.6 |
-
-### 12.3 配套文档
-
-- `01-背景.md` — 问题、开销、Bucket C 口径、内建惰性机制先例
-- `02-需求.md` — 收益上界、工作量、风险
-- `03-方案设计.md` — A1/A2 总体设计（本文为其 InternalAccessor 迁移路径的实现设计评审）
-- `04-review-log.md` — 十轮审视记录
-- `05-插桩patch.md` — 收益统计前置（Phase 1/2）
-
-### 12.4 更新历史
-
-| 日期 | 版本 | 作者 | 内容 |
-|------|------|------|------|
-| 2026-08-20 | v1.0 | Sisyphus | 初版：内建机制剖析、D1–D4 差异、X1 迁移设计、V1–V4 核验清单、对 01–05 的五条审查意见 |
+| 目标方法 | 满足本设计适用条件的非 static、非 Sendable prototype native method |
+| 惰性方法槽 | 注册期安装、首次取值时被普通数据属性替换的 VM 内部属性表示 |
+| 按需物化 | 根据回调元数据创建 `JSFunction` 对象图并写回属性的过程 |
+| callback metadata recipe | 物化所需的最小运行时记录 `{method, data}` |
+| slot directory | 每类的原子状态目录，连接 recipe 所有权与方法槽 index |
+| lifetime guard | teardown 释放资源前用于保护在途物化操作的生命周期引用 |
+| generation-safe token | 防止 registry entry 地址复用后旧 accessor 命中新 lifetime 的标识 |

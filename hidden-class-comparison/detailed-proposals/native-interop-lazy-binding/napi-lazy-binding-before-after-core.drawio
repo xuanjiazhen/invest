@@ -1,0 +1,172 @@
+<mxfile host="app.diagrams.net" modified="2026-08-20T00:00:00.000Z" agent="generator" version="24.0.0">
+  <diagram id="core-before-after" name="核心流程对比">
+    <mxGraphModel dx="1700" dy="1490" grid="1" gridSize="10" page="1" pageWidth="1700" pageHeight="1490">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="InternalAccessor 迁移 NAPI：核心流程与数据结构对比（修改前 / 修改后）" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#fbfbfb;strokeColor=#999999;" vertex="1" parent="1">
+          <mxGeometry x="30" y="20" width="1600" height="34" as="geometry"/>
+        </mxCell>
+        <mxCell id="P1" value="修改前：即时绑定（现状路径）" style="swimlane;startSize=30;verticalAlign=top;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#fbfbfb;strokeColor=#999999;" vertex="1" parent="1">
+          <mxGeometry x="30" y="70" width="780" height="830" as="geometry"/>
+        </mxCell>
+        <mxCell id="L1" value="① napi_define_class&#xa;native_api.cpp:1643" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="60" y="130" width="350" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="L2" value="② NapiDefineClass&#xa;ark_native_engine.cpp:333" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="60" y="198" width="350" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="L3" value="③ NapiCreateClassFunction(:288)&#xa;NapiGetKeysAndAttrsFromProps&#xa;遍历 property_count(:250)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="60" y="266" width="350" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="L4" value="④ NapiInitAttrValFromProp(:216)&#xa;每个方法立即执行" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="60" y="350" width="350" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="L5" value="⑤ NapiNativeCreateFunction(:190)&#xa;→ FunctionRef::NewConcurrentWithName&#xa;(jsnapi_expo.cpp:3947)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="60" y="418" width="350" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="L6" value="⑥ prototype 槽位 = 数据属性（JSFunction）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="60" y="498" width="350" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="LN" value="注册即全量创建，与是否被访问无关&#xa;Top13 Bucket C：447,707 方法闭包&#xa;（61.47 MiB 上界）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="60" y="600" width="350" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="LD" value="注册即创建 · 每方法&#xa;（无论是否被访问）&#xa;—&#xa;JSFunction 144 B（堆内）&#xa;JSNativePointer 40 B（堆内）&#xa;NapiFunctionInfo 32–40 B（堆外）&#xa;descriptor 数组用后即弃&#xa;＝ 堆内驻留 184 B/方法" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5cc;strokeColor=#d4a017;" vertex="1" parent="1">
+          <mxGeometry x="440" y="230" width="340" height="210" as="geometry"/>
+        </mxCell>
+        <mxCell id="P2" value="修改后：惰性绑定（迁移路径，06 §3–§4）" style="swimlane;startSize=30;verticalAlign=top;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#fbfbfb;strokeColor=#999999;" vertex="1" parent="1">
+          <mxGeometry x="850" y="70" width="820" height="830" as="geometry"/>
+        </mxCell>
+        <mxCell id="PA" value="A. 注册期（惰性化）" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#fff5cc;strokeColor=#d4a017;" vertex="1" parent="1">
+          <mxGeometry x="880" y="120" width="300" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="R1" value="① napi_define_class → NapiDefineClass&#xa;注册期开关控制惰性化（sendable 排除）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5cc;strokeColor=#d4a017;" vertex="1" parent="1">
+          <mxGeometry x="880" y="152" width="360" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="R2" value="② descriptor 深拷贝 → ClassBindingLifetime&#xa;（堆外）descriptor 表 + slotState 状态机&#xa;+ env cleanup 所有权" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5cc;strokeColor=#d4a017;" vertex="1" parent="1">
+          <mxGeometry x="880" y="220" width="360" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="R3" value="③ prototype 方法槽装 NapiLazyAccessor&#xa;32 B = getter/setter 裸指针 + payload&#xa;（lifetimeId, descIndex）—— 06 §3.3 X1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5cc;strokeColor=#d4a017;" vertex="1" parent="1">
+          <mxGeometry x="880" y="304" width="360" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="PB" value="B. 首次读取 materialize（06 §4.2–4.3）" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="880" y="380" width="380" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="R4" value="④ proto.m 读取 → property lookup 慢路径&#xa;IsInternal() → CallInternalGet&#xa;(object_fast_operator-inl.h:1080-1082)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="880" y="412" width="360" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="R5" value="⑤ getter 解码 payload → 取 descriptor&#xa;slot 状态机 LAZY → MATERIALIZING" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5cc;strokeColor=#d4a017;" vertex="1" parent="1">
+          <mxGeometry x="880" y="492" width="360" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="R6" value="⑥ 复用现行链 NapiNativeCreateFunction&#xa;JSFunction / JSNativePointer /&#xa;NapiFunctionInfo 此刻才创建" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="880" y="560" width="360" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="R7" value="⑦ 写回：SetProperty 等价路径&#xa;+ MarkProtoChanged 原型链失效&#xa;(js_hclass-inl.h:379-399)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="880" y="640" width="360" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="R8" value="⑧ 之后：数据属性 + 正常 IC&#xa;与修改前不可区分" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="880" y="730" width="360" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="RD" value="未访问方法驻留（新）&#xa;—&#xa;NapiLazyAccessor 32 B（堆内）&#xa;descriptor 深拷贝摊派 72–96 B&#xa;（堆外，ClassBindingLifetime）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5cc;strokeColor=#d4a017;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="200" width="370" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="RUN" value="禁止照搬：ResetLazyInternalAttr&#xa;原地改共享 LayoutInfo attr&#xa;（内建场景专属，D2 反模式）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0e0;strokeColor=#c0392b;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="560" width="370" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="RUL" value="module unload：env cleanup 释放&#xa;未物化 descriptor；DEAD 态&#xa;防悬空 getter（06 §4.5）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="680" width="370" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="P3" value="关键数据结构创建对比（06 §5.4 / §7.1）" style="swimlane;startSize=30;verticalAlign=top;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#fbfbfb;strokeColor=#999999;" vertex="1" parent="1">
+          <mxGeometry x="30" y="930" width="1640" height="420" as="geometry"/>
+        </mxCell>
+        <mxCell id="C1T" value="修改前 · 每方法注册即建" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="70" y="975" width="380" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="B1a" value="JSFunction&#xa;144 B（堆内）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="70" y="1008" width="180" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="B1b" value="JSNativePointer&#xa;40 B（堆内）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="260" y="1008" width="180" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="B1c" value="NapiFunctionInfo 32–40 B（堆外，注册即建）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="70" y="1084" width="370" height="52" as="geometry"/>
+        </mxCell>
+        <mxCell id="B1s" value="堆内 184 B/方法 · 堆外 32–40 B/方法" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="70" y="1148" width="370" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="C2T" value="修改后 · 未访问方法驻留" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#fff5cc;strokeColor=#d4a017;" vertex="1" parent="1">
+          <mxGeometry x="520" y="975" width="380" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="B2a" value="NapiLazyAccessor 32 B（堆内）&#xa;Record 8 + getter 8 + setter 8 + payload 8&#xa;payload = Smi(lifetimeId&lt;&lt;16 | descIndex)&#xa;（内建 InternalAccessor 24 B 无 payload）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5cc;strokeColor=#d4a017;" vertex="1" parent="1">
+          <mxGeometry x="520" y="1008" width="380" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="B2b" value="descriptor 深拷贝 72–96 B（堆外，ClassBindingLifetime）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="520" y="1120" width="380" height="52" as="geometry"/>
+        </mxCell>
+        <mxCell id="C3T" value="修改后 · 首次访问后（materialize 完成）" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="960" y="975" width="380" height="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="B3a" value="与修改前完全一致：&#xa;JSFunction + JSNativePointer（堆内 184 B）&#xa;NapiFunctionInfo（堆外）&#xa;写回同一对象（proto.m === proto.m）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#1f6feb;" vertex="1" parent="1">
+          <mxGeometry x="960" y="1008" width="380" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="NET" value="净效果（每未访问方法）：堆内 184 → 32 B（−152 B，−83%）｜堆外 +32–64 B&#xa;descriptor 驻留超过消除量 20% 时，静态存储期契约（零拷贝）转主路径（06 §4.6/§5.4）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5cc;strokeColor=#d4a017;" vertex="1" parent="1">
+          <mxGeometry x="70" y="1210" width="1520" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="LEG" value="图例：蓝＝既有路径/结构（不改动）｜黄＝迁移新增｜红＝禁止照搬（D2 反模式）｜灰＝堆外/native 侧&#xa;源数据：06-InternalAccessor迁移NAPI设计评审.md（冻结基线 ets_runtime@f04900cf）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#999999;" vertex="1" parent="1">
+          <mxGeometry x="30" y="1375" width="1640" height="44" as="geometry"/>
+        </mxCell>
+        <mxCell id="e0" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="L1" target="L2" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="L2" target="L3" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="L3" target="L4" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="L4" target="L5" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="L5" target="L6" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="每方法创建" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="L5" target="LD" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="R1" target="R2" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="R2" target="R3" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="首读触发" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="R3" target="R4" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="R4" target="R5" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="R5" target="R6" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="R6" target="R7" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" value="" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="R7" target="R8" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" value="驻留" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="R3" target="RD" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e14" value="不可照搬" style="endArrow=block;endFill=1;strokeColor=#c0392b;fontSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;" edge="1" source="R7" target="RUN" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e15" value="惰性化" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="B1s" target="B2a" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e16" value="materialize" style="endArrow=block;endFill=1;strokeColor=#1f6feb;fontSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="B2b" target="B3a" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

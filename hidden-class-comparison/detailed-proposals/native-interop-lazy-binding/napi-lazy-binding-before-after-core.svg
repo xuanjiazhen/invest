@@ -1,0 +1,231 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1490" viewBox="0 0 1700 1490" font-family="Helvetica,Arial,’Microsoft YaHei’,sans-serif">
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#333333"/></marker></defs>
+<rect width="1700" height="1490" fill="#ffffff"/>
+<rect x="30" y="20" width="1600" height="34" fill="#fbfbfb" stroke="#999999" rx="6" stroke-width="1.4"/>
+<text x="830" y="33" text-anchor="middle" fill="#333333" font-size="12" font-weight="bold">
+  <tspan x="830" dy="0">InternalAccessor 迁移 NAPI：核心流程与数据结构对比（修改前 / 修改后）</tspan>
+</text>
+<rect x="30" y="70" width="780" height="830" fill="#fbfbfb" stroke="#999999" stroke-width="1.5" rx="4"/>
+<rect x="30" y="70" width="780" height="30" fill="#eef1f4" stroke="#999999" rx="4"/>
+<text x="420" y="80" text-anchor="middle" fill="#333333" font-size="13" font-weight="bold">
+  <tspan x="420" dy="0">修改前：即时绑定（现状路径）</tspan>
+</text>
+<rect x="60" y="130" width="350" height="48" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="235" y="141" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="235" dy="0">① napi_define_class</tspan>
+  <tspan x="235" dy="17">native_api.cpp:1643</tspan>
+</text>
+<rect x="60" y="198" width="350" height="48" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="235" y="209" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="235" dy="0">② NapiDefineClass</tspan>
+  <tspan x="235" dy="17">ark_native_engine.cpp:333</tspan>
+</text>
+<rect x="60" y="266" width="350" height="64" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="235" y="277" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="235" dy="0">③ NapiCreateClassFunction(:288)</tspan>
+  <tspan x="235" dy="17">NapiGetKeysAndAttrsFromProps</tspan>
+  <tspan x="235" dy="17">遍历 property_count(:250)</tspan>
+</text>
+<rect x="60" y="350" width="350" height="48" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="235" y="361" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="235" dy="0">④ NapiInitAttrValFromProp(:216)</tspan>
+  <tspan x="235" dy="17">每个方法立即执行</tspan>
+</text>
+<rect x="60" y="418" width="350" height="60" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="235" y="427" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="235" dy="0">⑤ NapiNativeCreateFunction(:190)</tspan>
+  <tspan x="235" dy="17">→ FunctionRef::NewConcurrentWithName</tspan>
+  <tspan x="235" dy="17">(jsnapi_expo.cpp:3947)</tspan>
+</text>
+<rect x="60" y="498" width="350" height="48" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="235" y="518" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="235" dy="0">⑥ prototype 槽位 = 数据属性（JSFunction）</tspan>
+</text>
+<rect x="60" y="600" width="350" height="60" fill="#f5f5f5" stroke="#666666" rx="6" stroke-width="1.4"/>
+<text x="235" y="609" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="235" dy="0">注册即全量创建，与是否被访问无关</tspan>
+  <tspan x="235" dy="17">Top13 Bucket C：447,707 方法闭包</tspan>
+  <tspan x="235" dy="17">（61.47 MiB 上界）</tspan>
+</text>
+<rect x="440" y="230" width="340" height="210" fill="#fff5cc" stroke="#d4a017" rx="6" stroke-width="1.4"/>
+<text x="610" y="271" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="610" dy="0">注册即创建 · 每方法</tspan>
+  <tspan x="610" dy="17">（无论是否被访问）</tspan>
+  <tspan x="610" dy="17">—</tspan>
+  <tspan x="610" dy="17">JSFunction 144 B（堆内）</tspan>
+  <tspan x="610" dy="17">JSNativePointer 40 B（堆内）</tspan>
+  <tspan x="610" dy="17">NapiFunctionInfo 32–40 B（堆外）</tspan>
+  <tspan x="610" dy="17">descriptor 数组用后即弃</tspan>
+  <tspan x="610" dy="17">＝ 堆内驻留 184 B/方法</tspan>
+</text>
+<rect x="850" y="70" width="820" height="830" fill="#fbfbfb" stroke="#999999" stroke-width="1.5" rx="4"/>
+<rect x="850" y="70" width="820" height="30" fill="#eef1f4" stroke="#999999" rx="4"/>
+<text x="1260" y="80" text-anchor="middle" fill="#333333" font-size="13" font-weight="bold">
+  <tspan x="1260" dy="0">修改后：惰性绑定（迁移路径，06 §3–§4）</tspan>
+</text>
+<rect x="880" y="120" width="300" height="26" fill="#fff5cc" stroke="#d4a017" rx="6" stroke-width="1.4"/>
+<text x="1030" y="129" text-anchor="middle" fill="#333333" font-size="11" font-weight="bold">
+  <tspan x="1030" dy="0">A. 注册期（惰性化）</tspan>
+</text>
+<rect x="880" y="152" width="360" height="48" fill="#fff5cc" stroke="#d4a017" rx="6" stroke-width="1.4"/>
+<text x="1060" y="163" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1060" dy="0">① napi_define_class → NapiDefineClass</tspan>
+  <tspan x="1060" dy="17">注册期开关控制惰性化（sendable 排除）</tspan>
+</text>
+<rect x="880" y="220" width="360" height="64" fill="#fff5cc" stroke="#d4a017" rx="6" stroke-width="1.4"/>
+<text x="1060" y="231" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1060" dy="0">② descriptor 深拷贝 → ClassBindingLifetime</tspan>
+  <tspan x="1060" dy="17">（堆外）descriptor 表 + slotState 状态机</tspan>
+  <tspan x="1060" dy="17">+ env cleanup 所有权</tspan>
+</text>
+<rect x="880" y="304" width="360" height="56" fill="#fff5cc" stroke="#d4a017" rx="6" stroke-width="1.4"/>
+<text x="1060" y="311" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1060" dy="0">③ prototype 方法槽装 NapiLazyAccessor</tspan>
+  <tspan x="1060" dy="17">32 B = getter/setter 裸指针 + payload</tspan>
+  <tspan x="1060" dy="17">（lifetimeId, descIndex）—— 06 §3.3 X1</tspan>
+</text>
+<rect x="880" y="380" width="380" height="26" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="1070" y="389" text-anchor="middle" fill="#333333" font-size="11" font-weight="bold">
+  <tspan x="1070" dy="0">B. 首次读取 materialize（06 §4.2–4.3）</tspan>
+</text>
+<rect x="880" y="412" width="360" height="60" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="1060" y="421" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1060" dy="0">④ proto.m 读取 → property lookup 慢路径</tspan>
+  <tspan x="1060" dy="17">IsInternal() → CallInternalGet</tspan>
+  <tspan x="1060" dy="17">(object_fast_operator-inl.h:1080-1082)</tspan>
+</text>
+<rect x="880" y="492" width="360" height="48" fill="#fff5cc" stroke="#d4a017" rx="6" stroke-width="1.4"/>
+<text x="1060" y="503" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1060" dy="0">⑤ getter 解码 payload → 取 descriptor</tspan>
+  <tspan x="1060" dy="17">slot 状态机 LAZY → MATERIALIZING</tspan>
+</text>
+<rect x="880" y="560" width="360" height="60" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="1060" y="569" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1060" dy="0">⑥ 复用现行链 NapiNativeCreateFunction</tspan>
+  <tspan x="1060" dy="17">JSFunction / JSNativePointer /</tspan>
+  <tspan x="1060" dy="17">NapiFunctionInfo 此刻才创建</tspan>
+</text>
+<rect x="880" y="640" width="360" height="60" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="1060" y="649" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1060" dy="0">⑦ 写回：SetProperty 等价路径</tspan>
+  <tspan x="1060" dy="17">+ MarkProtoChanged 原型链失效</tspan>
+  <tspan x="1060" dy="17">(js_hclass-inl.h:379-399)</tspan>
+</text>
+<rect x="880" y="730" width="360" height="48" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="1060" y="741" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1060" dy="0">⑧ 之后：数据属性 + 正常 IC</tspan>
+  <tspan x="1060" dy="17">与修改前不可区分</tspan>
+</text>
+<rect x="1250" y="200" width="370" height="150" fill="#fff5cc" stroke="#d4a017" rx="6" stroke-width="1.4"/>
+<text x="1435" y="237" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1435" dy="0">未访问方法驻留（新）</tspan>
+  <tspan x="1435" dy="17">—</tspan>
+  <tspan x="1435" dy="17">NapiLazyAccessor 32 B（堆内）</tspan>
+  <tspan x="1435" dy="17">descriptor 深拷贝摊派 72–96 B</tspan>
+  <tspan x="1435" dy="17">（堆外，ClassBindingLifetime）</tspan>
+</text>
+<rect x="1250" y="560" width="370" height="90" fill="#ffe0e0" stroke="#c0392b" rx="6" stroke-width="1.4"/>
+<text x="1435" y="584" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1435" dy="0">禁止照搬：ResetLazyInternalAttr</tspan>
+  <tspan x="1435" dy="17">原地改共享 LayoutInfo attr</tspan>
+  <tspan x="1435" dy="17">（内建场景专属，D2 反模式）</tspan>
+</text>
+<rect x="1250" y="680" width="370" height="90" fill="#f5f5f5" stroke="#666666" rx="6" stroke-width="1.4"/>
+<text x="1435" y="704" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1435" dy="0">module unload：env cleanup 释放</tspan>
+  <tspan x="1435" dy="17">未物化 descriptor；DEAD 态</tspan>
+  <tspan x="1435" dy="17">防悬空 getter（06 §4.5）</tspan>
+</text>
+<rect x="30" y="930" width="1640" height="420" fill="#fbfbfb" stroke="#999999" stroke-width="1.5" rx="4"/>
+<rect x="30" y="930" width="1640" height="30" fill="#eef1f4" stroke="#999999" rx="4"/>
+<text x="850" y="940" text-anchor="middle" fill="#333333" font-size="13" font-weight="bold">
+  <tspan x="850" dy="0">关键数据结构创建对比（06 §5.4 / §7.1）</tspan>
+</text>
+<rect x="70" y="975" width="380" height="26" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="260" y="984" text-anchor="middle" fill="#333333" font-size="11" font-weight="bold">
+  <tspan x="260" dy="0">修改前 · 每方法注册即建</tspan>
+</text>
+<rect x="70" y="1008" width="180" height="64" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="160" y="1027" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="160" dy="0">JSFunction</tspan>
+  <tspan x="160" dy="17">144 B（堆内）</tspan>
+</text>
+<rect x="260" y="1008" width="180" height="64" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="350" y="1027" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="350" dy="0">JSNativePointer</tspan>
+  <tspan x="350" dy="17">40 B（堆内）</tspan>
+</text>
+<rect x="70" y="1084" width="370" height="52" fill="#f5f5f5" stroke="#666666" rx="6" stroke-width="1.4"/>
+<text x="255" y="1106" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="255" dy="0">NapiFunctionInfo 32–40 B（堆外，注册即建）</tspan>
+</text>
+<rect x="70" y="1148" width="370" height="40" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="255" y="1164" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="255" dy="0">堆内 184 B/方法 · 堆外 32–40 B/方法</tspan>
+</text>
+<rect x="520" y="975" width="380" height="26" fill="#fff5cc" stroke="#d4a017" rx="6" stroke-width="1.4"/>
+<text x="710" y="984" text-anchor="middle" fill="#333333" font-size="11" font-weight="bold">
+  <tspan x="710" dy="0">修改后 · 未访问方法驻留</tspan>
+</text>
+<rect x="520" y="1008" width="380" height="100" fill="#fff5cc" stroke="#d4a017" rx="6" stroke-width="1.4"/>
+<text x="710" y="1028" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="710" dy="0">NapiLazyAccessor 32 B（堆内）</tspan>
+  <tspan x="710" dy="17">Record 8 + getter 8 + setter 8 + payload 8</tspan>
+  <tspan x="710" dy="17">payload = Smi(lifetimeId&lt;&lt;16 | descIndex)</tspan>
+  <tspan x="710" dy="17">（内建 InternalAccessor 24 B 无 payload）</tspan>
+</text>
+<rect x="520" y="1120" width="380" height="52" fill="#f5f5f5" stroke="#666666" rx="6" stroke-width="1.4"/>
+<text x="710" y="1142" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="710" dy="0">descriptor 深拷贝 72–96 B（堆外，ClassBindingLifetime）</tspan>
+</text>
+<rect x="960" y="975" width="380" height="26" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="1150" y="984" text-anchor="middle" fill="#333333" font-size="11" font-weight="bold">
+  <tspan x="1150" dy="0">修改后 · 首次访问后（materialize 完成）</tspan>
+</text>
+<rect x="960" y="1008" width="380" height="100" fill="#dae8fc" stroke="#1f6feb" rx="6" stroke-width="1.4"/>
+<text x="1150" y="1028" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="1150" dy="0">与修改前完全一致：</tspan>
+  <tspan x="1150" dy="17">JSFunction + JSNativePointer（堆内 184 B）</tspan>
+  <tspan x="1150" dy="17">NapiFunctionInfo（堆外）</tspan>
+  <tspan x="1150" dy="17">写回同一对象（proto.m === proto.m）</tspan>
+</text>
+<rect x="70" y="1210" width="1520" height="64" fill="#fff5cc" stroke="#d4a017" rx="6" stroke-width="1.4"/>
+<text x="830" y="1229" text-anchor="middle" fill="#333333" font-size="12">
+  <tspan x="830" dy="0">净效果（每未访问方法）：堆内 184 → 32 B（−152 B，−83%）｜堆外 +32–64 B</tspan>
+  <tspan x="830" dy="17">descriptor 驻留超过消除量 20% 时，静态存储期契约（零拷贝）转主路径（06 §4.6/§5.4）</tspan>
+</text>
+<rect x="30" y="1375" width="1640" height="44" fill="#fbfbfb" stroke="#999999" rx="6" stroke-width="1.4"/>
+<text x="850" y="1385" text-anchor="middle" fill="#333333" font-size="11">
+  <tspan x="850" dy="0">图例：蓝＝既有路径/结构（不改动）｜黄＝迁移新增｜红＝禁止照搬（D2 反模式）｜灰＝堆外/native 侧</tspan>
+  <tspan x="850" dy="16">源数据：06-InternalAccessor迁移NAPI设计评审.md（冻结基线 ets_runtime@f04900cf）</tspan>
+</text>
+<line x1="235" y1="178" x2="235" y2="198" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="235" y1="246" x2="235" y2="266" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="235" y1="330" x2="235" y2="350" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="235" y1="398" x2="235" y2="418" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="235" y1="478" x2="235" y2="498" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="410" y1="448" x2="440" y2="335" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="391" y="382" width="68" height="16" fill="#ffffff" fill-opacity="0.85" stroke="none"/>
+<text x="425" y="396" text-anchor="middle" font-size="10" fill="#1f6feb">每方法创建</text>
+<line x1="1060" y1="200" x2="1060" y2="220" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="1060" y1="284" x2="1060" y2="304" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="1060" y1="360" x2="1060" y2="412" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="1026" y="377" width="68" height="16" fill="#ffffff" fill-opacity="0.85" stroke="none"/>
+<text x="1060" y="390" text-anchor="middle" font-size="10" fill="#1f6feb">首读触发</text>
+<line x1="1060" y1="472" x2="1060" y2="492" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="1060" y1="540" x2="1060" y2="560" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="1060" y1="620" x2="1060" y2="640" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="1060" y1="700" x2="1060" y2="730" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="1240" y1="332" x2="1250" y2="275" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="1211" y="294" width="68" height="16" fill="#ffffff" fill-opacity="0.85" stroke="none"/>
+<text x="1245" y="308" text-anchor="middle" font-size="10" fill="#1f6feb">驻留</text>
+<line x1="1240" y1="670" x2="1250" y2="605" stroke="#c0392b" stroke-width="1.6" stroke-dasharray="7 5" marker-end="url(#arr)"/>
+<rect x="1211" y="628" width="68" height="16" fill="#ffffff" fill-opacity="0.85" stroke="none"/>
+<text x="1245" y="642" text-anchor="middle" font-size="10" fill="#c0392b">不可照搬</text>
+<line x1="440" y1="1168" x2="520" y2="1058" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="446" y="1104" width="68" height="16" fill="#ffffff" fill-opacity="0.85" stroke="none"/>
+<text x="480" y="1117" text-anchor="middle" font-size="10" fill="#1f6feb">惰性化</text>
+<line x1="900" y1="1146" x2="960" y2="1058" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#arr)"/>
+<rect x="896" y="1093" width="68" height="16" fill="#ffffff" fill-opacity="0.85" stroke="none"/>
+<text x="930" y="1106" text-anchor="middle" font-size="10" fill="#1f6feb">materialize</text>
+</svg>
