@@ -94,6 +94,12 @@
 
 `CELL_0/1/N` 只表示同 slot 的复用级别，不影响裁槽计算；三个类型的现存对象均按相同的 `8N/16N` 口径计入。Region 碎片、GC 扫描和 RSS/PSS 留待实现后 A/B。
 
+## 第 8 轮：字段外存备选路线（表 A + B2）
+
+**人工意见**：参考 V8 等竞品，将 MachineCode 与 Handle 基于弱表外存（不整体外存 cell），给出表设计并落入方案。
+
+**闭环结论**：03 新增 §4.7 备选路线——表 A `CellCodeCacheTable`（per-VM 开放寻址双弱关系表，16 B/entry，分片锁，GC 双弱清理、无 ephemeron 不动点，API 对应安装/复位/诊断三触点，业界对位 JSDispatchTable 与旧 SFI optimized_code_map）；`Handle` 取 B2 堆外会话表（`(Method*, slotId)` 键、GC 零参与、会话结束丢弃，V8 CPU profiler 同款），否决 B1 弱表方案（相同的 stub→runtime 后果、无增量收益）。定位为通用构建统一 16 B 的备选（`16N`，前台 1.037 MiB / 后台 0.881 MiB，表成本 ≤2 MiB）；≤6G 档与裁槽等价，维持裁槽首选。§3 业界边界补外存先例引用，§4.6 利弊表与 §8 结论同步，02 新增 §1.1 指针。
+
 ## 审视结论汇总
 
 当前方案只保留两个编译期裁槽阶段：阶段一删除 JIT-only `MachineCode`（32→24 B），阶段二在显式 PGO-free 构建中再删除 `Handle`（24→16 B）。字段消费者、能力闭包、布局、兼容、GC/工具、收益和 55 人日工作量已形成闭环；阶段二唯一产品前置是冻结 PGO-free 构建。
