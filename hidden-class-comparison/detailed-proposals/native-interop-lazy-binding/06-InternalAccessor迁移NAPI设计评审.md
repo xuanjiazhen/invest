@@ -33,10 +33,20 @@
 
 - 通过 `napi_define_class` 注册；
 - `property.method != nullptr`；
-- 未设置 `NATIVE_STATIC`；
+- 未设置 `NATIVE_STATIC`（即 prototype 方法）；
 - 类不是 Sendable 类。
 
-constructor、static method、getter、setter、普通 value 属性以及 Sendable 类保持当前即时创建流程。
+以下属性保持当前即时创建流程：
+
+| 排除项 | 原因 |
+|--------|------|
+| static method | 装在构造器上（`CreateClassFuncHClass` 路径），数量通常 2-5 个/类，收益远小于 prototype 方法（20-134 个/类） |
+| constructor | 类身份锚点，必须即时创建 |
+| getter/setter | 走 `CreateAccessorData` + `writable=false` 路径，与 method 的数据属性语义不同；惰性化需处理 accessor-to-data transition |
+| 纯 value 属性 | 无 native 回调，无函数图可省 |
+| Sendable 类 | 跨线程共享，需即时路径 |
+
+**只 lazy 非 static method 的量化依据**：Top13 kuaishou 单应用 216 个类，prototype 平均 20-134 个方法（WIDE 档），static 通常只有 2-5 个——prototype method 覆盖 >95% 的方法闭包人口。static 路径装在构造器上，构造器本身必须即时创建，额外惰性化 static 收益极低。
 
 ## 2. 当前创建流程
 
@@ -113,13 +123,81 @@ flowchart TB
 
 | 阶段 | 当前行为 | 产生的数据 |
 |------|----------|------------|
-| `NapiGetKeysAndAttrsFromProps` | 遍历所有 descriptor，区分 static 与 prototype 属性，构造 VM key 和 `PropertyAttribute` | 临时 `keys[]`、`attrs[]` |
-| `NapiInitAttrValFromProp` | getter/setter 创建 accessor；method 直接创建 native 函数；value 直接转换 | 每个 method 的 `JSFunction` 引用 |
+| `NapiGetKeysAndAttrsFromProps` | 五件事：①static/非static 双向分区重排 ②key 物化（堆分配） ③W/E/C 三位提取 ④逐属性构造值 ⑤placement-new 到裸数组 | 临时 `keys[]`、`attrs[]` |
+| `NapiInitAttrValFromProp` | 按优先级分流：getter/setter → AccessorData + 强制 writable=false；method → 创建 native 函数；value → 透传 | 每个 method 的 `JSFunction` 引用 |
 | `NapiNativeCreateFunction` | 分配并初始化 `NapiFunctionInfo` | `{callback, data, env, scopeId}` |
 | `FunctionRef::NewConcurrentWithName` | 创建 `JSFunction`，并通过 extra info 关联 `JSNativePointer` 和 `NapiFunctionInfo` | 完整 native 函数对象图 |
 | `NewConcurrentClassFunctionWithName` | 创建 constructor/prototype，并安装 static 与 prototype 属性 | prototype 数据属性强引用 `JSFunction` |
 
 `napi_property_descriptor[]`、`utf8name` 和 `napi_value name` 都属于调用方输入。`napi_define_class` 返回后，按需路径不得继续引用这些临时数据。
+
+#### 2.2.1 `NapiGetKeysAndAttrsFromProps` 完整行为
+
+源码 `ark_native_engine.cpp:250-286`，做五件事：
+
+**① static/非static 双向分区重排**。`NATIVE_STATIC` 位（`1<<10`）仅在此消费一次：
+
+```text
+keys/attrs 数组物理布局：
+[static_0, static_1, ..., static_N-1 | nonStatic_M, ..., nonStatic_1, nonStatic_0]
+ ↑ 正序填充（curStaticPropIdx++）     ↑ 逆序填充（curNonStaticPropIdx--）
+```
+
+返回值 `staticPropCount` 是两区唯一分界——下游运行时全靠这一个整数区分安装目标。
+
+**② key 物化**。`utf8name != nullptr` → `StringRef::NewFromUtf8`（GC 堆分配新字符串）；否则直接重解释 `napi_value name`（可能是 String **或 Symbol**，此处不校验类型）。
+
+**③ W/E/C 三位提取**。仅取 `NATIVE_WRITABLE / ENUMERABLE / CONFIGURABLE` 三个位转 bool。`NATIVE_STATIC` 已被分区消费。其余位（`NATIVE_INSTANCE`、`NATIVE_KEY_*` 等）在此路径全部忽略。
+
+**④ 逐属性调 `NapiInitAttrValFromProp` 构造值**（按优先级）：
+
+```text
+getter/setter（最高优先级） → 创建 1-2 个 native 函数 + 包装 AccessorData
+                               → writable 被强制改写为 false
+method                       → NapiNativeCreateFunction 创建完整函数图
+value（兜底）                 → 直接透传 property.value（不做 null 检查）
+```
+
+getter/setter 的函数名有历史怪癖：单 getter 名为 `"getter"`，getter+setter 名为 `"gettersetter"`（fullName 累加），单 setter 名为 `"setter"`——与方法名无关。
+
+**⑤ placement-new `PropertyAttribute` 到裸数组**。调用方传入未初始化的栈/malloc 裸内存，此函数逐项 placement-new。析构延迟到运行时 `DestructAttr`——生命周期跨 NAPI/VM 两层。
+
+#### 2.2.2 static 与非 static 的处理差异
+
+| 维度 | static（`NATIVE_STATIC`） | 非 static（prototype，默认） |
+|------|---------------------------|------------------------------|
+| 分区方式 | keys/attrs 前段正序 | 后段逆序 |
+| 安装目标 | 构造器 JSFunction 自身 inlined props | prototype JSObject inlined props |
+| HClass | `CreateClassFuncHClass`（JS_FUNCTION） | `CreateClassFuncProtoHClass`（JS_OBJECT，proto = Object.prototype） |
+| 首个内联属性 | `"name"`（writable=false, enumerable=false, configurable=true） | `"constructor"`（指回构造器，writable=true, enumerable=false, configurable=true） |
+| 值构造 | 完全相同（不区分 static） | 完全相同 |
+| 溢出处理 | 无条件循环逐项 `DefinePropertyOrThrow` | 条件 `> MAX_FAST_PROPS_CAPACITY` 才走慢路径（存在上游 gap：属性数在 maxInl 与 1023 之间的中段可能遗漏） |
+| 慢路径触发 | Symbol key / 重复 key / 溢出 | 同左 |
+
+### 2.3 惰性化后必须在物化前完成的事项与风险
+
+以下事项**不可推迟到物化时**，必须在注册期完成：
+
+| 事项 | 原因 | 风险 |
+|------|------|------|
+| key 物化 + intern | LayoutInfo 需注册期确定属性数/偏移；`TryAddOriKeyAndOriAttrToHClass` 对非 interned 字符串做 `factory->InternString` | 推迟 key 创建则 LayoutInfo 无法注册期确定，违反"LayoutInfo 不变"承诺 |
+| W/E/C 三位标志 | LayoutInfo 的 `PropertyAttributes` 需此三值确定 data-property 标志 | 无风险，照搬现状 |
+| Symbol key 检测与慢路径分流 | `TryAddOriKeyAndOriAttrToHClass` 返回 false（Symbol/duplicate key）时走 `DefinePropertyOrThrow` | 惰性 accessor 经此路径装入时需验证 `DefinePropertyOrThrow` 对非 JSFunction 值的包容性 |
+| prototype HClass/LayoutInfo 全部填充 | `Object.keys(proto)` 等不物化但需 LayoutInfo | 无额外风险 |
+| `NapiLazyAccessor` 创建并装入 slot | 替代 JSFunction 作为 prototype slot 的值 | 需确保 `IsAccessor` 不置位（06 §4.2 已明确） |
+| `NativeLazyMethodRecipe {method, data}` 深拷贝 | descriptor 数组是调用方栈上的，返回后失效 | 全部设计的硬约束 |
+| `slotDirectory` + lifetime + token 创建 | 物化时状态机和并发保护依赖 | 无风险 |
+
+**风险矩阵**：
+
+| 风险 | 严重度 | 说明 |
+|------|--------|------|
+| accessor 属性误判 | 高 | `NapiInitAttrValFromProp` 对 getter/setter 走 `CreateAccessorData` 并强制 writable=false。若惰性化不慎让 `NapiLazyAccessor` 进入 accessor 分支，首次物化将被迫做 accessor-to-data HClass transition，改变可观察 descriptor 语义 |
+| Symbol key 慢路径 | 中 | Symbol key 不走 inline fast path，走 `DefinePropertyOrThrow`；惰性 accessor 经此装入需验证包容性 |
+| 重复 key TypeError 被吞 | 低 | 重复 key 在慢路径 throw TypeError——`NapiDefineClass` 会 `GetAndClearUncaughtException` 吞掉并返回可能部分构建的类。惰性化不影响此行为但测试需覆盖 |
+| >32 属性 malloc 失败 FATAL | 低 | `NewConcurrentClassFunctionWithName` 里 >32 路径 malloc 失败 `LOG_FULL(FATAL)` 直接 abort 进程。惰性化不改变此行为，但新增 lifetime/directory 分配也走此路径 |
+| 函数名物化时重建 | 低 | `NapiNativeCreateFunction` 需要函数名字符串，惰性化后需物化时从 recipe 关联的 key 重建；Symbol description → ToString 路径需覆盖 |
+| recipeIndex 与 slot 安装序对齐 | 低 | 非 static 属性在 keys/attrs 中逆序排列，`NewClassFuncProtoWithProperties` 用 `(propertyCount-1)-i` 逆序消费恢复声明序；recipe 的 index 分配序需与 slot 实际安装序对齐 |
 
 ## 3. 最终架构
 
