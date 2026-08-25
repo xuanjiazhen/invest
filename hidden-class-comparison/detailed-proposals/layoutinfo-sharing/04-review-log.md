@@ -39,3 +39,21 @@
 不进入正式方案：跨 VM、SharedHeap、prefix-chain、PropertyAttributes packing、ConstantPool 和 Native Interop。
 
 尚未关闭的正确性、GC、COW 成本、性能和物理内存问题已统一列在 [03-方案设计.md](03-方案设计.md)“风险与关闭证据”中，不再保留独立验证章节。
+
+
+## 第 11 轮：精确结构键方案替换 Hash128（人工意见驱动）
+
+**人工意见**：Hash128 的成本代价太大；hash 冲突在长时间执行的 VM 中不可忽略；提供运行时 HClass Dump 打点数据作为新证据。
+
+**闭环结论**：方案核心从 Hash128 canonical 表替换为**精确结构键匹配表**——
+
+1. **键设计**：(NumberOfProps, key 指针有序元组, attr word 有序元组, capacity)。key 指针是 VM 内 interned 字符串/Symbol 的对象指针，同文本属性名 = 同指针，确定性比较、零碰撞、零 hash 计算。
+2. **表结构**：分层查找——按属性数分桶 → 按首 key 指针子桶（利用 interned string 已有 hashcode，零新增 hash）→ 候选内精确比较 key 指针序列 + attr word + capacity。
+3. **收益重估**：补充 HClass Dump #22 运行时打点数据——冗余 Layout 23,692 个 / 冗余 HClass 23,528 个，条件净 ~2.0-5.5 MB（保守口径），TOP13 快照 65.61 MiB 为理论上界。
+4. **风险消除**：R4（hash 冲突错误收敛）从风险矩阵移除——精确键方案下碰撞不存在，是设计保证而非概率保证。
+5. **GC 稳定性**：key 指针随移动 GC 更新即同步——消除 P1（stale hash）问题。
+6. **新增 R10**：非 interned key 指针参与比较的语义风险——debug 构建断言 key IsInterned。
+
+工作量预估调整：省去 hash 基础设施与碰撞处理（~15 人日），预计 ~50 人日（原 67 人日）。
+
+01/02/03 同步更新；05/06 数据文件不变。
