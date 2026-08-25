@@ -276,7 +276,7 @@ flowchart TB
         R3["slotDirectory CAS<br/>LAZY → MATERIALIZING"]
     end
 
-    subgraph MAT["胜者执行物化（复用现行创建链）"]
+    subgraph MAT["物化（复用现行创建链）"]
         M1["NapiNativeCreateFunction<br/>创建 NapiFunctionInfo {callback, data}"]
         M2["FunctionRef::NewConcurrentWithName<br/>创建 JSFunction + JSNativePointer"]
         M3["SameSlotMaterializeWrite<br/>校验原 accessor identity 后<br/>同一 slot 原子替换<br/>NapiLazyAccessor → JSFunction"]
@@ -289,30 +289,16 @@ flowchart TB
         F2["LayoutInfo / HClass<br/>完全不变"]
     end
 
-    subgraph FAIL["失败路径"]
-        X1["清理部分创建结果<br/>回滚为 LAZY(recipe*)<br/>recipe 保留供重试"]
-    end
-
-    subgraph CONCUR["CAS 失败者"]
-        L1["不重复创建函数图<br/>重新读取已发布值"]
-    end
-
     R0 --> R1 --> R2 --> R3
-    R3 -->|"胜者"| M1 --> M2 --> M3 --> M4 --> M5 --> F1
-    M3 -->|"写回失败"| X1
-    R3 -->|"败者"| L1
+    R3 --> M1 --> M2 --> M3 --> M4 --> M5 --> F1
     F1 --- F2
 
     classDef read fill:#dae8fc,stroke:#1f6feb,color:#333
     classDef mat fill:#fff5cc,stroke:#d4a017,color:#333
     classDef result fill:#d5e8d4,stroke:#2d7600,color:#333
-    classDef fail fill:#ffe0e0,stroke:#c0392b,color:#333
-    classDef concur fill:#f5f5f5,stroke:#666,color:#333
     class R0,R1,R2,R3 read
     class M1,M2,M3,M4,M5 mat
     class F1,F2 result
-    class X1 fail
-    class L1 concur
 ```
 
 **物化路径关键点**：
@@ -500,13 +486,13 @@ LAZY / MATERIALIZING / DONE -> DEAD  (environment teardown)
 1. lookup 在 `holder` 上命中 `NapiLazyAccessor`；
 2. `CallNapiLazyGet(thread, receiver, holder, key, payload)` 解析 token/index，并取得 lifetime guard；
 3. 对目录项执行 `LAZY(recipe*) -> MATERIALIZING(recipe*)` CAS；
-4. 胜者使用当前 key、recipe.method 和 recipe.data 调用现有 native 函数创建链；
+4. 使用当前 key、recipe.method 和 recipe.data 调用现有 native 函数创建链；
 5. 写回前重新确认 holder 的属性仍是同一个 accessor，避免覆盖已发生的重定义或删除；
 6. 在保持 key、writable/enumerable/configurable、offset、representation、HClass 和 LayoutInfo 不变的前提下，把 holder 的同一 property slot 从 `NapiLazyAccessor` 原子替换为 `JSFunction`；
 7. 写回提交后发布 `DONE`，再释放该槽的 recipe block；
 8. 返回新建的 `JSFunction`。后续读取走普通数据属性与正常 IC。
 
-创建或写回失败时，目录项回滚为 `LAZY(recipe*)`，recipe 保持有效，异常按当前 NAPI/VM 路径传播。CAS 未获胜的线程重新读取属性；胜者写回后所有读取者得到同一个 `JSFunction`。
+
 
 ### 5.2 时序
 
@@ -617,7 +603,7 @@ net_shallow = sum(i in U)(avoided_eager_object_bytes(i)
 | 读取快路径绕过物化 | 所有 lookup/IC/compiler/反射入口统一识别专用惰性槽 | 热解释器、IC、AOT、反射读取均返回函数而非内部对象 |
 | prototype IC 在 HClass 不变时复用旧 handler | 同槽写回后显式进入 prototype invalidation 链，不能依赖 shape transition | 建立惰性 IC 后物化，旧 handler 不得返回内部槽或旧值 |
 | descriptor 输入失效 | 仅复制 method/data；key/attrs 进入 VM 元数据 | define_class 返回后销毁输入缓冲仍可正确物化 |
-| 并发或异常造成重复函数 | CAS 物化权；失败回滚；写回前校验 accessor identity | 多线程首读只发布一个函数；故障注入后可重试 |
+| 并发或异常造成重复函数 | CAS 物化权；写回前校验 accessor identity | 多线程首读只发布一个函数 |
 | override/delete 与物化竞争 | 统一状态机；终态发布先于 recipe free | 覆盖、删除、defineProperty 与首读交错无 UAF/双释放 |
 | environment teardown 竞争 | generation-safe token、guard drain、DEAD 后禁止新物化 | worker/env teardown 压测，无悬空 callback/data 读取 |
 | 属性反射暴露内部表示 | descriptor 查询先物化，其他操作按数据属性语义分流 | descriptor、赋值、delete、freeze、proxy 测试通过 |
@@ -641,9 +627,9 @@ net_shallow = sum(i in U)(avoided_eager_object_bytes(i)
 
 - interpreter、LoadIC/StoreIC、MegaIC、runtime stub、compiler/AOT 全读取路径；
 - 物化前建立 prototype-chain IC，物化后验证旧 handler 失效；
-- 并发首读、异常回滚、override/delete 竞争；
+- 并发首读、override/delete 竞争；
 - worker 创建/销毁、environment teardown、GC 和快照识别；
-- allocator failure、函数创建失败、属性写回失败的完整回滚。
+- allocator failure 路径回归。
 
 ### 10.3 性能与内存
 
