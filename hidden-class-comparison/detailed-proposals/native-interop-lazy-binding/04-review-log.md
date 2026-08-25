@@ -164,6 +164,106 @@ Kuaishou strict A2 证据已重生为 schema v4。下表的“乐观中间值”
 
 ## 第 11 轮：人工意见（2026-08-20，背景补写 InternalAccessor）
 
-**人工意见**：结合真实的示例代码，在背景中解释介绍 InternalAccessor 的作用（配套 `06-InternalAccessor迁移NAPI设计评审.md`）。
+**人工意见**：结合真实的示例代码，在背景中解释介绍 InternalAccessor 的作用（配套 `06-NAPI-Prototype-Native方法按需绑定设计方案.md`）。
 
 **闭环结论**：01-背景 §5 重写为三个小节——§5.1 对象布局（`accessor_data.h:29-46` 真实定义：24 B、getter/setter 裸函数指针、native 字段不进 GC 扫描）；§5.2 以 Date 为例的完整生命周期，四段真实源码（安装 `builtins.cpp:1078-1087`、分发 `object_fast_operator-inl.h:1080-1082`、回调与物化 `builtins_lazy_callback.cpp:23-36`）配 JS 侧首读/再读行为；§5.3 对本方案的复用边界（范式与分发骨架可复用；身份模型 D1 与写回路径 D2 不可平移，链接 06 §2.3/§3.3/§4.3）。参考文档补 06 链接。既有结论与口径不变。
+
+## 第 13 轮：C1 简化架构与总体流程可读性审视（2026-08-24）
+
+**审视范围**：`03-方案设计.md` 的 C1 直接 strong-reference 设计、总体流程图及其与第 6、10、12 轮已归档结论的一致性。
+
+### 结论
+
+C1 不可作为无条件实现结论。它可以保留为降低常驻元数据的候选，但必须先通过 GC 类型、key-aware 读取分发、环境卸载和 IC 写回四项准入验证；任一项失败时采用第 12 轮固定的 C2（最小 VM-owned recipe + slot directory + lifetime guard）或保持 eager。
+
+### 主要问题
+
+| 优先级 | 问题 | 依据 | 处理结论 |
+|---|---|---|---|
+| 阻塞 | C1 把 `JSNativePointer` 放入拟新增 `InternalAccessor` subtype 的 tagged 字段，却尚未证明该 subtype 的 visitor、verifier、dump 和 snapshot 全链路可用。 | 第 6、11 轮确认现有 `InternalAccessor` 是裸函数指针布局，native 字段不参与 GC 扫描。 | C1 需要独立 GC 类型 PoC；不能证明则使用 C2，禁止保存裸 native/handle。 |
+| 阻塞 | `CallInternalGet` 当前不携带 property key；C1 需要 key 才能以 VM String 创建函数名。 | 第 6 轮已确认现有函数签名限制；本轮正文 §6.1 也记录此缺口。 | 必须覆盖解释器、IC、AOT 与 descriptor 读取路径并证明统一汇聚；否则使用 C2 的外置 recipe。 |
+| 高 | C1 声称不需要 registry、generation 或 guard，但没有证明未物化槽在环境卸载、slot 覆盖/删除和 GC 交错时仍能安全终结。 | 第 10、12 轮已将 lifecycle guard 和终态管理作为 Release 基线的一部分。 | C1 必须完成未物化/已物化/覆盖/删除/卸载组合验证；失败转 C2。 |
+| 高 | 只替换 slot value 不能保证旧 prototype IC handler 失效。 | 第 6 轮已要求走既有原型变更通知链；本轮 C1 仍需实测 listener 与 MegaIC。 | `NotifyAccessorChanged` 的实际覆盖范围必须以热 IC 用例验证，不得以名称推断。 |
+
+### 可读性修订
+
+- `03` 的总体流程为自上而下的 10 节点主闭环；最长节点标签限制为 37 字符。
+- eager 回退、语义边界、IC 规则和延迟对象在图下表表达；失败与属性分支由后续章节表达。
+- 既有 `napi-lazy-binding-target-architecture.svg` 含 22 个文本块并包含 token/guard 模型，不作为本节替换图。
+
+### 方案比较
+
+| 方案 | 收益来源 | 主要成本与风险 | 评审定位 |
+|---|---|---|---|
+| C1：直接 strong reference | 不创建 `JSFunction`、函数名 String；不常驻 recipe/directory。 | 新 GC subtype、全读取路径传 key、卸载安全均待证明。 | 有闸门的候选。 |
+| C2：最小 VM-owned recipe | 同样延迟函数对象；复用现有 accessor 分发和明确的终态管理。 | recipe、directory、guard 的常驻成本会抵扣收益。 | 已归档的实现基线。 |
+| C3：eager | 无延迟访问与新生命周期成本。 | 不减少启动期函数对象。 | 兼容性和收益下限基线。 |
+
+### 闭环要求
+
+1. 用目标 Release 源码完成 C1 的 GC subtype 和 key-aware 分发 PoC。
+2. 对 C1 与 C2 以相同 bundle、操作序列和 allocator actual 复测净收益及首读 P50/P95/P99。
+3. 覆盖热 IC、minor/full/compact GC、slot 覆盖/删除和环境销毁；其中任何一项不通过即停止 C1。
+
+## 第 14 轮：C1 阻塞点目标 Release 源码核验（2026-08-24）
+
+**核验基线**：`arkcompiler_ets_runtime@f04900cf951c66c2ea18b2bab5b591d5336c34b9`。
+
+### 源码事实
+
+| 核验项 | 源码事实 | 对 C1 的影响 |
+|---|---|---|
+| strong reference 载体 | `ecmascript/accessor_data.h` 中 `InternalAccessor` 为 `final`，仅含 getter/setter 两个 native 函数指针，并以 `DECL_VISIT_NATIVE_FIELD` 标注；`object_factory.cpp:2839-2848` 的 `NewInternalAccessor` 只分配既有 `InternalAccessorClass` 并写入这两个裸指针。 | 不能在现有对象中保存 GC 强引用的 `JSNativePointer`；继承扩字段与复用 factory 均不可行。 |
+| property key | `ObjectFastOperator::CallGetter` 的签名仅含 `(thread, receiver, holder, value)`，其 internal 分支调用 `CallInternalGet(thread, objHandle)`；`JSObject::GetProperty` 慢路径可从 `ObjectOperator::GetKey()` 取得 key，但调用同样不传 key。 | C1 不能只新增 `CallInternalGet` 参数；fast operator 上游、慢路径和所有编译入口都必须传递已定位 key，或提供能识别当前 lazy slot 的专用分发。 |
+| prototype 失效 | `js_hclass-inl.h:382-424` 的 `MarkProtoChanged` 只设置当前 HClass marker；`NoticeThroughChain` 才递归通知 prototype listener。 | 原槽写回至少要走 `NoticeThroughChain`；只调用 `MarkProtoChanged` 不足以证明依赖 prototype 的 IC 已失效。 |
+| 生命周期 | 现有 `InternalAccessor` 不保存 per-slot owned metadata；本轮未找到可将未物化 slot 与 environment teardown、覆盖、删除统一终结的既有协议。 | C1 的"无 registry/guard/cleanup"没有 Release 源码依据；不能作为生命周期实现。 |
+
+### 可解性判断
+
+| 阻塞点 | 是否可通过工程改动解决 | 结论 |
+|---|---|---|
+| GC strong reference | 可新增独立 `JSType`、factory、visitor、verifier、dump 与 snapshot 支持。 | 这不再是 C1 的小范围 accessor 改动，且需要专用读取分发；实现形态收敛为 C2。 |
+| key-aware 首读 | 可扩展 fast operator 及慢路径的调用契约，或让专用 lazy 分发取得当前 lazy slot 后定位 key。 | 需要解释器、IC、AOT、descriptor 与反射入口的完整覆盖验证；C1 不能保持现状。 |
+| IC 失效 | 可复用 `NoticeThroughChain`。 | 需要通过热 LoadIC、StoreIC 与 MegaIC 用例验证；不能仅以 API 存在作为闭环。 |
+| 卸载与终态 | 可由 slot directory、guard、`DEAD` 终态和 cleanup 协议解决。 | 这正是 C2 的 lifetime 模型；C1 的无 guard 约束不可保留。 |
+
+### 审视结论
+
+C1 不能在其既定约束下解决阻塞点，因此不进入开发。技术上可通过新增专用 lazy 对象、key-aware 分发、prototype 通知和生命周期协议实现按需绑定，但这些构成 C2 的 VM-owned recipe 方案，而非 C1 的直接 strong-reference 方案。
+
+C2 仍有四项实施前置验证：全读取入口 key 传递或 slot 定位、`NoticeThroughChain` 后的热 IC 行为、新对象 GC/snapshot 全链路、environment cleanup 与 `DEAD` 竞态。任一项不通过时保持 eager。
+
+## 第 15 轮：仅堆外分量方向核验（2026-08-24）
+
+### 审视诉求
+
+在 C2（堆内 + 堆外全量惰性）与 C3（eager）之间寻找一个只作用于堆外 `NapiFunctionInfo`、修改面更小的独立方向，评估其可行性与收益上限。
+
+### 源码事实
+
+| 核验项 | 源码事实 | 结论影响 |
+|---|---|---|
+| 堆外结构尺寸 | `native_value.h:54-63` 的 `NapiFunctionInfo` 含 `callback`、`data`、`isSendable`、`env`，容器场景另有 `scopeId`；合计 32 B / 40 B，每函数一次独立 `new`。 | 堆外分量按方法 447,707 个计为 13.663–17.079 MiB。 |
+| 元数据来源 | `callback` 与 `data` 来自调用方 `napi_property_descriptor`，NAPI 不保证该数组在 `napi_define_class` 返回后存活。 | 这 16 B 必须在注册期复制保留，不能延迟到首次访问或首次调用；严格的"堆外惰性"不成立。 |
+| 消费点集合 | 解引用点仅五处：`ark_native_engine.cpp:1180-1188`、`native_api.cpp:1402-1405`、`native_api.cpp:1281-1284`、`ark_native_engine.cpp:422-424`、`ark_native_engine.cpp:1440-1446`，全部位于 `arkui_napi` 内。 | 结构体可在不动公开 ABI 的前提下替换为按类连续分配的回调表。 |
+| `scopeId` 消费条件 | `native_api.cpp:1280` 的读取被 `if (!function->IsConcurrentFunction(vm))` 保护，而目标两条创建路径均以 `Concurrent::YES` 建立函数（`jsnapi_expo.cpp:3668`、`3754`）。 | `scopeId` 可按类共享，无需每方法保存。 |
+| extra info 空闲字段 | `JSFunction::SetFunctionExtraInfo`（`js_function.cpp:1072-1080`）把 `nativeFunc` 写入 `JSNativePointer::ExternalPointer`；`NewConcurrentWithName` 与 `NewConcurrentClassFunctionWithName` 传入 `nullptr`，`NewConcurrent` 传入实际函数指针。 | prototype 方法与 constructor 路径的 `ExternalPointer` 空闲，可承载表基址；`napi_create_function` 路径不可，故排除在范围外。 |
+| 释放契约 | `JSNativePointer::DeleteExternalPointer`（`js_native_pointer.cpp:43-51`）已把 `externalPointer` 与 `data` 同时交给 deleter，`CommonDeleter` 签名匹配。 | 引用计数递减无需新增运行时接口。 |
+
+### 可行性判断
+
+| 子方向 | 判断 |
+|---|---|
+| 堆外真正惰性（首次访问或首次调用时才分配） | 不成立。`callback` 与 `data` 在注册期后不可再次获得。 |
+| 按类连续分配回调表（E1 主方案） | 可行。每方法 16–24 B 取代 32–40 B 独立分配，同时消除 44 万次独立分配的记账开销。 |
+| 保留 `NapiFunctionInfo` 并延迟到首次调用重建 | 否决。已调用方法同时占用 Entry 与 `NapiFunctionInfo`，总量高于主方案。 |
+| 仅换分配器、结构体不动 | 否决。结构性收益为零，生命周期复杂度与主方案相同。 |
+
+### 审视结论
+
+存在一个与 C2 正交的独立方向 E1：属性槽语义、属性查找路径、IC 失效与 GC visitor 全部不改，只把堆外回调元数据由每方法独立分配收敛为按类一次连续分配。C2 的四项未决闸门中，key 传递、热 IC 与 GC 三项在 E1 下不存在。
+
+E1 可比口径收益为 3.4–10.2 MiB（对应 Bucket C 方法分量 447,707 个，浅层字节数，不等于 committed/RSS/PSS），显著低于 C2 的 61.474 MiB 堆内目标上界。两者作用于不同分量，可叠加，E1 可独立先行。
+
+E1 有两项准入前提未核验：目标路径 `ExternalPointer` 的读取侧是否确实无其他消费者，以及 `NapiFunctionInfo` 是否无跨仓使用者。设计与完整闸门清单见 [07-堆外回调元数据压缩方案.md](07-堆外回调元数据压缩方案.md)。
+
