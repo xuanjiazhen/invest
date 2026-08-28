@@ -4,7 +4,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | v1.0 |
+| 文档版本 | v1.1 |
 | 归档日期 | 2026-08-28 |
 | 方案范围 | 普通 LocalHeap、fast-mode、interpreter-created class prototype HClass |
 | 评审维度 | 架构、流程、数据结构、兼容性、性能、风险、测试、回滚 |
@@ -51,7 +51,7 @@ structural HClass + parentPrototype -> proto-transition HClass
 - 仅 `ClassHelper::DefineClassFromExtractor` 的普通 interpreter-created prototype 准入；凡进入 `DefineClassWithIHClass` 的完整或部分 AOT 路径均排除；
 - VM 配置必须保证整个生命周期不启用 runtime/JIT PGO；
 - `2 <= nonStaticKeys.length <= MAX_FAST_PROPS_CAPACITY`；
-- 固定 constructor 前缀、非 computed 的 literal string 普通方法/命名方法/accessor；
+- 固定 constructor 前缀、且由方案级 provenance 明确证明全部 non-static key 来自非 computed literal string 的普通方法/命名方法/accessor；
 - capacity root registry、property transition tree、proto transition 隔离；
 - Feature Flag、统计、GC、测试与回滚。
 
@@ -114,6 +114,8 @@ NewOldSpaceJSObject(prototypeHClass)
 
 constructor 固定处于 index 0。方法值和 accessor 对象不进入 transition key；runtime transition 字典以 key 与 property metadata 匹配。C 的 representation 固定为 TAGGED，作为 child 创建不变量与命中后 debug 断言；不把它表述为字典键。
 
+冻结 `ClassInfoExtractor` 只保留求值后的 `nonStaticKeys`/`nonStaticProperties`，其 BitField 只有 `NonStaticWithElements` 与 `StaticWithElements`。`NonStaticWithElements` 仅表示字符串 key 可转换为 element index，不能证明 key 是否来自 computed name。因此 runtime 不能从已归一化的 string identity 反推 literal/computed 来源。首阶段新增版本化 abc 可选元数据 `ClassLiteralKeyProvenance`，由前端按 class-literal EntityId 产生，loader 写入 `JSPandaFile` native side table；取值为 `UNKNOWN`、`LITERAL_ONLY`、`HAS_DYNAMIC_KEY`。只有 `LITERAL_ONLY` 准入，旧格式、缺失记录、未知 producer 和 `HAS_DYNAMIC_KEY` 均整类回退。该元数据、side table 与读取接口均为方案级待实现，不是冻结源码已有能力；不修改 `ClassLiteral`、`ClassInfoExtractor` 或其他 GC 对象布局。
+
 ### 2.3 现有架构问题
 
 | 问题 | 影响 |
@@ -123,6 +125,7 @@ constructor 固定处于 index 0。方法值和 accessor 对象不进入 transit
 | transition root 未区分 capacity | 可能改变 object size、inlined property 数与 offset 解释 |
 | 继承设置原地写 HClass prototype | 共享 structural HClass 后会跨 class 串扰 |
 | AOT/Sendable/dictionary 语义不同 | 不能共用普通 LocalHeap 入口 |
+| extractor 不保留 property-name 来源 | 无法仅靠运行时 string key 排除 computed name |
 | 终态相同组无创建路径标签 | 无法仅凭 dump 证明来自 class extractor |
 
 ---
@@ -182,9 +185,11 @@ constructor 固定处于 index 0。方法值和 accessor 对象不进入 transit
 |---|---|---|
 | GlobalEnv / GlobalEnvConstants | 持有 per-VM capacity root registry | 增加一个 GC 可见根 |
 | ClassPrototypeShapeRootRegistry | 按 target capacity 返回/创建 `{constructor}` root | 方案级新增组件 |
-| ClassInfoExtractor | 构造精确 Attr，逐属性查找/创建 transition | 替换准入 case 的一次性 Layout 构造 |
+| 前端 / abc writer | 产生按 class-literal EntityId 索引的三态来源摘要 | 方案级新增可选 metadata 记录 |
+| JSPandaFile / loader | 解析记录到 native side table；缺失时返回 `UNKNOWN` | 方案级新增非 GC 数据与 getter |
+| ClassInfoExtractor | 接收 provenance、构造精确 Attr，逐属性查找/创建 transition | 增加 fail-closed 参数与准入分支 |
 | JSHClass | 复用 `FindTransitions`、`AddTransitions`、`TransitionProto` | 增加 extractor 专用 persistent transition builder |
-| RuntimeSetClassInheritanceRelationship | 对 prototype object 执行 proto transition 并切换 HClass | 禁止准入 case 原地 `SetPrototype` |
+| `RuntimeCreateClassWithBuffer` / `RuntimeSetClassInheritanceRelationship` | 以当前调用栈中的显式 fast-path 结果选择 proto transition 并切换 HClass | 增加内部参数；禁止按 HClass identity 猜测 |
 | ObjectFactory | 创建 capacity root 与 prototype 对象 | 增加 root factory helper |
 | JSOptions / FeatureConfig | build/runtime 双开关 | 默认关闭 |
 | 统计模块 | root/transition/proto 命中与创建 | 汇总输出 |
@@ -203,7 +208,8 @@ CreatePrototypeHClass(keys, properties, extractorContext)
   +-- AOT supplied prototype/HClass ----------> 现有 AOT 路径
   +-- VM 不满足 lifetime PGO-off 约束 ---------> 现有 extractor 路径
   +-- withElements ---------------------------> 首阶段现有路径
-  +-- symbol / computed property name --------> 现有 extractor 路径
+  +-- provenance 缺失或非 literal-only -------> 现有 extractor 路径
+  +-- 任一 key 为 symbol ----------------------> 现有 extractor 路径
   +-- length < 2 或 length > MAX_FAST --------> 方案 A/现有/dictionary 路径
   +-- key[0] != canonical constructor --------> 现有路径
   +-- 任一 key 非 PropertyKey ----------------> 保持现有异常/断言语义
@@ -213,7 +219,7 @@ CreatePrototypeHClass(keys, properties, extractorContext)
         -> 返回 structural HClass
 ```
 
-准入按整次 class 定义决定；中途不允许在已创建半棵 transition 后切到一次性 HClass 并混合两种 offset 规则。
+准入按整次 class 定义决定；中途不允许在已创建半棵 transition 后切到一次性 HClass 并混合两种 offset 规则。provenance 必须在调用 `GetOrCreateRoot` 之前验证；旧 abc、热补丁或 translator 未提供可信摘要时按“存在 computed name”处理并回退。
 
 ### 4.2 Capacity Root 创建流程
 
@@ -277,7 +283,7 @@ AddTransitions(parent, child, key, attr)
 return child
 ```
 
-每条新边拥有自己的固定最终 capacity=N Layout，parent Layout 不被原地追加。root 的自身 Layout 只强引用 canonical `constructor`；transition dictionary 对 child 使用 weak value，但 key 槽是强引用，dead child 的 key 直到后续 grow/rehash 才被过滤。首阶段因此只接收非 computed 的 literal string key，不接收 symbol 或 computed key。该 helper 是方案级待实现能力；`AddTransitions` 当前为 JSHClass 私有方法，实现时在 JSHClass 内封装，不从 extractor 绕过可见性。
+每条新边拥有自己的固定最终 capacity=N Layout，parent Layout 不被原地追加。root 的自身 Layout 只强引用 canonical `constructor`；transition dictionary 对 child 使用 weak value，但 key 槽是强引用，dead child 的 key 直到后续 grow/rehash 才被过滤。首阶段因此只接收 provenance 已证明的 literal string key，不接收 symbol 或 computed key。该 helper 与 provenance 接口均为方案级待实现能力；`AddTransitions` 当前为 JSHClass 私有方法，实现时在 JSHClass 内封装，不从 extractor 绕过可见性。
 
 ### 4.4 Prototype 对象和值写入流程
 
@@ -321,6 +327,8 @@ prototype.SynchronizedTransitionClass(final)
 
 assert final.prototype == parentPrototype
 ```
+
+是否执行该分支必须由本次 `DefineClassFromExtractor` 返回的显式 `prototypeShapeShared` 结果决定。`RuntimeCreateClassWithBuffer` 将该栈上布尔值传给紧随其后的 `RuntimeSetClassInheritanceRelationship`；AOT、interface、clone、`RuntimeResolveClass` 和拒绝路径固定传 `false`。不得通过 `prototype.GetJSHClass() == registry root/child` 或 HClass flags 猜测，因为普通对象可能经其他 transition 到达相同字段状态，且 weak child 重建会改变 identity。
 
 不得执行：
 
@@ -391,6 +399,8 @@ build flag on + runtime flag false
   -> RuntimeSetClassInheritanceRelationship 原地 SetPrototype
 build flag on + runtime flag true
   -> 准入 case 使用 structural transition tree
+  -> DefineClassFromExtractor 返回 prototypeShapeShared=true
+  -> 当前 RuntimeCreateClassWithBuffer 调用把该值传给继承设置
   -> 继承设置使用 proto transition + object HClass switch
 拒绝 case -> 从创建开始完整执行现有路径
 ```
@@ -411,7 +421,7 @@ public:
 };
 ```
 
-建议物理表示为 GC 管理的稀疏 TaggedArray：
+物理表示固定为 GC 管理的稀疏 TaggedArray：
 
 ```text
 Registry
@@ -446,6 +456,21 @@ JSHandle<JSHClass> ClassInfoExtractor::BuildPrototypeHClassByTransitions(
 PropertyAttributes ClassInfoExtractor::BuildPrototypePropertyAttr(
     JSThread *thread, JSTaggedValue property, uint32_t index);
 
+// 方案级 provenance；冻结 JSPandaFile/ClassInfoExtractor 当前没有该信息。
+enum class ClassLiteralKeyProvenance : uint8_t {
+    UNKNOWN,
+    LITERAL_ONLY,
+    HAS_DYNAMIC_KEY,
+};
+
+ClassLiteralKeyProvenance JSPandaFile::GetClassLiteralKeyProvenance(
+    EntityId literalId) const;
+
+JSHandle<JSFunction> ClassHelper::DefineClassFromExtractor(
+    ...,
+    ClassLiteralKeyProvenance provenance,
+    bool &prototypeShapeShared);
+
 JSHandle<JSHClass> JSHClass::CreatePersistentClassPrototypeTransition(
     JSThread *thread,
     const JSHandle<JSHClass> &parent,
@@ -457,9 +482,16 @@ JSHandle<JSHClass> JSHClass::GetOrCreateClassPrototypeProtoTransition(
     JSThread *thread,
     const JSHandle<JSHClass> &structural,
     const JSHandle<JSTaggedValue> &parentPrototype);
+
+JSTaggedValue RuntimeStubs::RuntimeSetClassInheritanceRelationship(
+    JSThread *thread,
+    const JSHandle<JSTaggedValue> &ctor,
+    const JSHandle<JSTaggedValue> &base,
+    ClassKind kind,
+    bool prototypeShapeShared);
 ```
 
-`BuildPrototypePropertyAttr` 必须与现有 `CreatePrototypeHClass` 共用一个实现，防止两条路径的 Attr 规则漂移。
+`BuildPrototypePropertyAttr` 必须与现有 `CreatePrototypeHClass` 共用一个实现，防止两条路径的 Attr 规则漂移。abc metadata 是版本化可选记录，不改变 class literal 数组 trailer；loader 对没有该记录的旧 abc 返回 `UNKNOWN`，热补丁沿用各自 JSPandaFile side table，AOT snapshot 不复制或合成 provenance。`RuntimeCreateClassWithBuffer` 的 `literalId` 是常量池索引，必须先通过当前 unshared constant pool 的 `GetEntityId(literalId)` 取得 class-literal EntityId，再查询当前 `JSPandaFile` side table并传入 extractor；禁止把常量池索引直接作为 side-table key。`prototypeShapeShared` 仅存在于当前 C++ 调用栈，不写入 JSFunction/JSHClass，不改变 GC 对象布局或 snapshot schema。
 
 ### 5.3 Transition Identity
 
@@ -495,9 +527,13 @@ final HClass identity：
 | `class_proto_transition_hit` | `(shape, parentPrototype)` 命中数 |
 | `class_proto_transition_create` | proto-domain HClass 创建数 |
 | `class_shape_fallback[]` | elements/AOT/dictionary/flag 等拒绝数 |
+| `class_shape_fallback_provenance` | 缺失、旧格式或包含 computed non-static key 的拒绝数 |
 | `class_shape_fallback_pgo` | VM 不满足 lifetime PGO-off 约束的拒绝数 |
 | `class_shape_late_pgo_enable_reject` | C 已开启后拒绝 late PGO/JIT-PGO 的次数 |
 | `class_shape_proto_inplace_violation` | 非零即阻断放行 |
+| `class_transition_dead_entry_seen` | full GC 后 weak value 已清空的 entry 数 |
+| `class_transition_rehash` | C root/child transition dictionary rehash 次数 |
+| `class_transition_retained_key_after_rehash` | rehash 后仍无 live weak value 却保留 key 的 entry 数；必须为 0 |
 
 只输出汇总；不得在 class method 循环或 transition 查找中逐事件打印。
 
@@ -511,7 +547,7 @@ final HClass identity：
 |---|---|---|
 | 普通 class methods | key/metadata transition；TAGGED rep 固定 | 中 |
 | getter/setter | accessor metadata 分支 | 中 |
-| computed property name | 首阶段排除，执行现有 extractor 路径 | 无新增风险 |
+| computed property name | provenance 非 literal-only，整次执行现有 extractor 路径；缺失 provenance 同样回退 | 无新增风险 |
 | symbol method | 首阶段排除，避免常驻 root dictionary 保留 symbol key | 无新增风险 |
 | `class B extends A` | parentPrototype proto transition | 高 |
 | `class B extends null` | null proto transition | 中 |
@@ -536,9 +572,10 @@ final HClass identity：
 4. 不同 parentPrototype 不共享 final HClass；
 5. 继承设置不对 shared structural HClass 原地写；
 6. prototype 对象和所有属性值逐 class 独立；
-7. AOT、Sendable、dictionary 与 elements case 保持现有路径；
-8. base getter 的时序、异常和调用次数不改变。
-9. constructor FunctionKind/`__proto__`、detector、AOT proto-marker 与 profile 处理保持。
+7. AOT、Sendable、dictionary、elements、computed 与 provenance 缺失 case 保持现有路径；
+8. base getter 的时序、异常和调用次数不改变；
+9. constructor FunctionKind/`__proto__`、detector、AOT proto-marker 与 profile 处理保持；
+10. proto-transition 分流只使用本次调用栈上的显式结果，不根据 HClass identity 或 flags 推断。
 
 ---
 
@@ -593,6 +630,7 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 - 应用冷启动 P50 不回退超过 1%，P95 不回退超过 2%；
 - registry + root + prefix + proto-domain shallow 全部纳入净值；
 - `class_shape_proto_inplace_violation == 0`；
+- full GC 触发后 `class_transition_retained_key_after_rehash == 0`，dead-entry/rehash 计数与 dump 抽样一致；
 - Region used/committed、RSS/PSS 与 shallow 分列，不从对象数推算物理收益。
 
 ---
@@ -614,6 +652,8 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 | C-R9 | 组 8 被错误计入收益 | 中 | 中 | 必须有 constructor 前缀和 extractor 标签 | 收益报告不含组 8 |
 | C-R10 | C 对 B 形成隐式依赖 | 低 | 中 | 保留当前 proto Layout copy；单独开关测试 | B off/C on 全测试与净收益通过 |
 | C-R11 | weak prefix/structural 节点被 GC 后缓存链断开 | 中 | 中 | 沿用弱 transition；允许重建；不增加强 parent 链 | GC 前后命中率、重建数与净收益达标 |
+| C-R12 | extractor 从已求值 string 误判 computed 来源 | 中 | 高 | translator provenance fail-closed；旧/缺失摘要回退 | computed/symbol/旧 abc 的 C hit=0 |
+| C-R13 | 继承入口把普通 HClass 误判为 C structural HClass | 低 | 高 | 栈上 `prototypeShapeShared` 显式传递；其他调用点固定 false | 所有 `RuntimeSetClassInheritanceRelationship` 调用点分流测试通过 |
 
 ### 8.2 关键风险深入分析
 
@@ -624,6 +664,8 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 **时序**：基类可能为 Proxy，`base.prototype` 读取可执行用户代码并抛异常。方案只替换 HClass 设置动作，不提前读取或缓存该值。
 
 **弱缓存生命周期**：PGO-off 的 `AddTransitions`/`AddProtoTransitions` 不设置 child `Parent`，transition value 是 weak ref。final proto-domain HClass 存活不保证 property prefix/structural 节点存活。C 保持该语义，不建立强 parent 链；full GC 后允许 cache miss 和等价路径重建。dictionary key 是强槽，dead child key 在后续 grow/rehash 时才被过滤，因此首阶段排除 symbol/computed key，收益与 retained-key 门槛覆盖 GC 前后两个稳态窗口。
+
+**provenance 与分流**：冻结 extractor 没有 computed 来源位，冻结继承入口也没有 C 命中参数。方案以 JSPandaFile native side table 提供三态来源摘要并 fail-closed；fast-path 结果只沿当前 `RuntimeCreateClassWithBuffer` 栈传递。任一 producer/caller 未适配时只能走现有路径，不能通过运行时 key 或 HClass identity 猜测。
 
 ---
 
@@ -641,7 +683,8 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 | `PropertyTransitionDifferentOrder` | 顺序隔离 | `{a,b}` 与 `{b,a}` 不同 |
 | `PropertyTransitionAccessorIsolation` | metadata 隔离 | data/getter/setter 不误命中 |
 | `PropertyTransitionSymbolRejected` | key 保留边界 | symbol method 整次走现有 extractor 路径 |
-| `PropertyTransitionComputedRejected` | key 保留边界 | computed property name 整次走现有 extractor 路径 |
+| `PropertyTransitionComputedRejected` | provenance 边界 | computed property name 整次走现有 extractor 路径，C transition 计数不变 |
+| `PropertyTransitionLegacyLiteralRejected` | fail-closed | 无 provenance 的旧 abc/热补丁记录整次回退 |
 | `PropertyTransitionRebuildAfterGC` | 弱缓存生命周期 | 中间节点回收后可重建等价 Shape，无悬挂或语义差异 |
 | `PrototypeValuesIndependent` | 值隔离 | 方法函数、homeObject、lexenv 均属于各自 class |
 | `ProtoTransitionSameParentHit` | final HClass 复用 | 同 Shape 同 parent identity 相同 |
@@ -650,6 +693,7 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 | `BaseOwnPropertiesNotInheritedIntoShape` | base Shape 隔离 | 子类 own Layout 不含 base own key |
 | `BasePrototypeGetterOrder` | 可观察时序 | getter 次数、顺序、异常与 flag off 一致 |
 | `InheritanceSideEffectsPreserved` | 非 Shape 副作用 | FunctionKind、detector、AOT proto-marker/profile 与 flag off 一致 |
+| `InheritanceExplicitFastPathRouting` | 分流来源 | 仅本次 C 命中传 true；AOT/interface/clone/resolve/拒绝路径均传 false |
 | `AOTSuppliedRejected` | AOT 边界 | 不进入 registry/tree |
 | `PGOEnabledRejected` | ProfileType 隔离 | PGO-capable VM 从初始化起不进入 registry/tree |
 | `LatePGOEnableRejected` | 生命周期互斥 | C 已开启时拒绝 post-fork JIT-PGO enable |
@@ -664,7 +708,7 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 | 同属性不同 base class | parentPrototype 分域与继承查询 |
 | 深继承链 / 多 sibling | own Shape 不串、proto chain 正确 |
 | literal string getter/setter | descriptor、顺序、transition identity |
-| computed/symbol | fallback 计数与现有 extractor 行为一致 |
+| computed/symbol/旧 abc | provenance fallback 计数与现有行为一致，C transition 计数不变 |
 | Proxy base / throwing prototype getter | 调用时点、异常、未暴露对象回收 |
 | 多 Realm / 多 context | parentPrototype identity 分域，不跨 VM |
 | PGO off/on、AOT on/off、JIT-free | lifetime PGO-off 共享；PGO-capable VM 从初始化起回退；late-enable 被拒绝 |
@@ -674,6 +718,7 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 ### 9.3 回归测试
 
 - Test262 class definition、method definition、accessor、computed name、extends、Proxy、descriptor 全套 100%；
+- abc producer/consumer 版本矩阵、热补丁、class-literal cache 与 AOT snapshot 对 provenance 的 fail-closed 行为 100%；
 - `JSPandaFileTest` 新增 extractor transition 用例并 100% 通过；
 - `JS_Hclass_Test` 新增 property/proto transition、capacity 与 GC 用例并 100% 通过；
 - `JS_LayoutInfo_Test`、AOT/PGO、serializer/snapshot、GC verifier 100%；
@@ -719,7 +764,7 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 
 | 检查项 | 结论 |
 |---|---|
-| AOT/Sendable/dictionary/elements 是否隔离 | 是 |
+| AOT/Sendable/dictionary/elements/computed/旧格式是否隔离 | 是；provenance 缺失即回退 |
 | object size/inlined offset 是否不变 | 是 |
 | PGO/JIT-free 是否分别覆盖 | 是；VM-lifetime 互斥，JIT-free 仍检查 PGO 配置 |
 | 组 8 是否排除 | 是 |
@@ -740,7 +785,7 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 
 ### 11.1 设计结论
 
-本方案可实施的最终结构是“capacity root registry + property transition tree + parentPrototype proto transition”。直接从基类 prototype 的 HClass 生长会继承基类 own Shape，不是合法实现；在共享 structural HClass 上原地 `SetPrototype` 也不是合法实现。方案只覆盖普通 interpreter-created fast-mode class prototype，constructor static Shape 与其他对象类型保持现状。
+本方案可实施的最终结构是“fail-closed literal provenance + capacity root registry + property transition tree + 显式 fast-path 分流 + parentPrototype proto transition”。直接从基类 prototype 的 HClass 生长会继承基类 own Shape，不是合法实现；在共享 structural HClass 上原地 `SetPrototype` 也不是合法实现。方案只覆盖普通 interpreter-created fast-mode class prototype，constructor static Shape 与其他对象类型保持现状。
 
 ### 11.2 放行条件
 
@@ -761,11 +806,11 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 | Capacity root registry 与 GC 根 | 2 | 4 | 3 | 9 |
 | Attr builder 统一与 property transition extractor | 2 | 5 | 4 | 11 |
 | proto transition 继承设置与时序保持 | 3 | 5 | 6 | 14 |
-| AOT/Sendable/elements 边界、Flag 与统计 | 1 | 3 | 3 | 7 |
+| provenance、AOT/Sendable/elements 边界、Flag 与统计 | 2 | 5 | 4 | 11 |
 | PGO/GC/serializer/真机性能验证 | 1 | 2 | 6 | 9 |
-| **合计** | **9** | **19** | **22** | **50 人日** |
+| **合计** | **10** | **21** | **23** | **54 人日** |
 
-两名开发并行排期约 5 周：第 1 周完成 registry/root 与 Attr 统一；第 2 周完成 property transition；第 3 周完成 proto transition 与异常时序；第 4 周完成 AOT/PGO/GC/serializer 回归；第 5 周完成真机 clean A/B、收益归因与评审关闭证据。
+两名开发并行排期约 6 周：第 1 周完成 provenance producer/consumer 契约；第 2 周完成 registry/root 与 Attr 统一；第 3 周完成 property transition；第 4 周完成显式分流、proto transition 与异常时序；第 5 周完成 AOT/PGO/GC/serializer/旧格式回归；第 6 周完成真机 clean A/B、收益归因与评审关闭证据。
 
 ### 11.4 归档状态
 
@@ -806,6 +851,8 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 |---|---|
 | extractor 当前一次性创建 prototype Layout/HClass | `ecmascript/jspandafile/class_info_extractor.cpp:206-245` |
 | Attr 为 W/C、accessor 标志、inlined、TAGGED、offset=index | `ecmascript/jspandafile/class_info_extractor.cpp:214-229` |
+| extractor BitField 仅有 static/non-static elements 标志，不保留 literal/computed 来源 | `ecmascript/jspandafile/class_info_extractor.h:82-99`；`ecmascript/jspandafile/class_info_extractor.cpp:131-203` |
+| class-literal cache 从常量池索引取得 EntityId 后提取 literal | `ecmascript/jspandafile/program_object.cpp:20-52` |
 | fast/dictionary 分界 | `ecmascript/jspandafile/class_info_extractor.cpp:214-241` |
 | 普通 DefineClass 调用 prototype/constructor HClass 创建 | `ecmascript/jspandafile/class_info_extractor.cpp:392-411` |
 | prototype slot 与函数值逐对象写入 | `ecmascript/jspandafile/class_info_extractor.cpp:413-432` |
@@ -825,6 +872,8 @@ net_shallow          = avoided_final_layout + avoided_final_hclass
 | child `Parent` 仅在 PGO profiler enabled 时由 `UpdateRootHClass` 设置 | `ecmascript/js_hclass-inl.h:330-336` |
 | 继承设置解析 base/parentPrototype | `ecmascript/stubs/runtime_stubs-inl.h:1167-1213` |
 | 现有路径原地写 constructor/prototype HClass proto | `ecmascript/stubs/runtime_stubs-inl.h:1215-1219` |
+| 普通 class 创建后立即调用继承设置，适合传递当前栈上的显式 C 命中结果 | `ecmascript/stubs/runtime_stubs-inl.h:1023-1059` |
+| `RuntimeCreateClassWithBuffer` 的 `literalId` 参数用于访问 constant pool cache | `ecmascript/stubs/runtime_stubs-inl.h:1004-1040` |
 | prototype 更新后执行 detector、AOT proto-marker 与 profile 处理 | `ecmascript/stubs/runtime_stubs-inl.h:1220-1246` |
 | `TransitionProto` 查找/创建 proto transition | `ecmascript/js_hclass.cpp:449-481` |
 | `Clone` 支持指定 inlined property 数并复用 Layout | `ecmascript/js_hclass.cpp:227-269` |
@@ -866,4 +915,4 @@ total  = 89024 B = 86.9375 KiB
 
 | 日期 | 版本 | 内容 |
 |---|---|---|
-| 2026-08-28 | v1.0 | 独立方案归档；按 inlined capacity 建立 root并复用 canonical `{constructor}` Layout；每条新边用 persistent builder 创建私有固定 capacity=N Layout；property transition 与 parentPrototype proto transition 分阶段复用；排除 base HClass 起点、共享 HClass 原地 SetPrototype、组 8、AOT/Sendable/dictionary/elements 路径 |
+| 2026-08-28 | v1.1 | 最终归档：三态 abc provenance + JSPandaFile side table fail-closed；capacity root 与 persistent property transition；栈上显式继承分流；parentPrototype proto transition；覆盖 PGO、GC、旧格式、收益与工作量闭环 |
