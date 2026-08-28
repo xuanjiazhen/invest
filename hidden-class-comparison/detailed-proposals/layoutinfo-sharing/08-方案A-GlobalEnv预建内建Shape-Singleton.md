@@ -150,28 +150,278 @@ class prototype 精确准入
 
 ### 4.1 Class Prototype 准入流程
 
+#### 4.1.1 冻结源码现有流程
+
+以下代码均来自冻结 revision `f04900cf951c66c2ea18b2bab5b591d5336c34b9`。现有实现没有方案 A 的 Feature Flag、lifetime PGO-off、精确 `{constructor}` 或完整 HClass 等价判断，也不会从 `CreatePrototypeHClass` 返回 `ClassPrototypeClass`。现有 class 创建主流程（含 HybridVM interface 入口）如下：
+
 ```text
-CreatePrototypeHClass(keys, properties)
-  |
-  +-- flag 关闭 ------------------------------> 现有创建路径
-  |
-  +-- 非 local / Sendable / AOT supplied ------> 现有创建路径
-  |
-  +-- VM 不满足 lifetime PGO-off 约束 ---------> 现有创建路径
-  |
-  +-- keys.length != 1 ------------------------> 现有创建路径
-  |
-  +-- key[0] identity != constructorString ----> 现有创建路径
-  |
-  +-- value[0] 是 accessor --------------------> 现有创建路径
-  |
-  +-- 目标 HClass 语义不等价 ------------------> 现有创建路径
-  |
-  `-- 全部满足
-        -> 返回 GlobalConstants.ClassPrototypeClass structural root
-        -> 不分配 HClass
-        -> 不分配 LayoutInfo
+RuntimeCreateClassWithBuffer
+  -> NewClassInfoExtractor
+  -> HybridVM interface metadata?
+       true  -> DefineInterfaceTypeOwnProperty
+                  -> BuildClassInfoExtractorFromLiteral(implementLength=1)
+                  -> EntranceForDefineClass
+                       -> AOT: DefineClassWithIHClass
+                       -> non-AOT: DefineClassFromExtractor
+       false -> BuildClassInfoExtractorFromLiteral(full literal length)
+                  -> ShouldUseAOTHClass?
+                       true  -> DefineClassWithIHClass
+                       false -> DefineClassFromExtractor
+                             -> CreatePrototypeHClass（无方案 A 准入判断）
+                             -> 每次分配 prototype HClass/Layout
+                             -> 分配独立 prototype 对象并写属性值
+  -> RuntimeSetClassInheritanceRelationship
+       -> 对 constructor HClass 原地 SetPrototype(parent)
+       -> 对 prototype HClass 原地 SetPrototype(parentPrototype)
 ```
+
+**入口、interface 与 AOT 分流**：`RuntimeCreateClassWithBuffer` 先创建 `ClassInfoExtractor`，再检查 `instance->IsHybridVm() && MaybeHasInterfacesType(thread, arrayHandle)`。interface 分支由 `DefineInterfaceTypeOwnProperty` 按 `implementLength=1` 构建 extractor，并经 `EntranceForDefineClass` 选择 AOT 或普通路径；非 interface 分支才按完整 literal 长度构建 extractor，再依据 `ShouldUseAOTHClass` 选择 AOT 或普通路径，最后统一设置继承关系。对应 `ecmascript/stubs/runtime_stubs-inl.h:1036-1059`：
+
+```cpp
+JSHandle<ClassInfoExtractor> extractor = factory->NewClassInfoExtractor(method);
+auto instance = ecmascript::Runtime::GetInstance();
+ASSERT(instance != nullptr);
+if (instance->IsHybridVm() && MaybeHasInterfacesType(thread, arrayHandle)) {
+    DefineInterfaceTypeOwnProperty(thread, cls, base, lexenv, extractor, ihc, chc, arrayHandle, classLiteral);
+} else {
+    auto literalLength = arrayHandle->GetLength();
+    ClassInfoExtractor::BuildClassInfoExtractorFromLiteral(thread, extractor, arrayHandle, literalLength);
+    if (ShouldUseAOTHClass(ihc, chc, classLiteral)) {
+        classLiteral->SetIsAOTUsed(true);
+        cls = ClassHelper::DefineClassWithIHClass(thread, base, extractor, lexenv, ihc, chc);
+    } else {
+        cls = ClassHelper::DefineClassFromExtractor(thread, base, extractor, lexenv);
+    }
+}
+
+RETURN_EXCEPTION_IF_ABRUPT_COMPLETION(thread);
+RuntimeSetClassInheritanceRelationship(thread, JSHandle<JSTaggedValue>(cls), base);
+```
+
+interface 判定不是 `ClassInfoExtractor` 内部状态，而是运行时全局 HybridVM 状态与 literal buffer 尾项的组合条件；对应 `ecmascript/stubs/runtime_stubs-inl.h:961-964`：
+
+```cpp
+bool RuntimeStubs::MaybeHasInterfacesType(JSThread *thread, const JSHandle<TaggedArray> &arrayHandle)
+{
+    return arrayHandle->GetLength() != 0 &&
+           arrayHandle->Get(thread, arrayHandle->GetLength() - 1).IsString();
+}
+```
+
+interface 分支由两个真实函数串接：`DefineInterfaceTypeOwnProperty` 负责构建 extractor、调用入口并定义 interface symbol 属性；`EntranceForDefineClass` 负责 AOT/普通二选一。两段代码分别对应 `ecmascript/stubs/runtime_stubs-inl.h:967-985` 和 `988-1001`：
+
+```cpp
+// DefineInterfaceTypeOwnProperty: runtime_stubs-inl.h:977-985
+ClassInfoExtractor::BuildClassInfoExtractorFromLiteral(
+    thread, extractor, arrayHandle, arrayHandle->GetLength(), ClassKind::NON_SENDABLE, 1);
+cls = EntranceForDefineClass(thread, base, lexenv, extractor, ihc, chc, classLiteral);
+JSHandle<GlobalEnv> env = thread->GetEcmaVM()->GetGlobalEnv();
+JSHandle<JSTaggedValue> interfaceTypeSymbol = env->GetInterfaceTypeSymbol();
+JSHandle<JSTaggedValue> interfaceTypeValue(thread, arrayHandle->Get(thread, arrayHandle->GetLength() - 1));
+PropertyDescriptor desc(thread, interfaceTypeValue, false, false, false);
+JSObject::DefineOwnProperty(thread, JSHandle<JSObject>::Cast(cls), interfaceTypeSymbol, desc);
+```
+
+```cpp
+// EntranceForDefineClass: runtime_stubs-inl.h:996-1001
+if (ShouldUseAOTHClass(ihc, chc, classLiteral)) {
+    classLiteral->SetIsAOTUsed(true);
+    return ClassHelper::DefineClassWithIHClass(thread, base, extractor, lexenv, ihc, chc);
+}
+return ClassHelper::DefineClassFromExtractor(thread, base, extractor, lexenv);
+```
+
+方案 A 首阶段只允许上面的普通非 AOT、非 interface 分支；interface 分支即使最终调用 `DefineClassFromExtractor` 也固定不准入。
+
+**现有流程节点与代码对应关系**：
+
+| 流程节点 | 冻结源码实现 | 结论 |
+|---|---|---|
+| 创建 extractor | `runtime_stubs-inl.h:1040` | 先创建空的 `ClassInfoExtractor` |
+| HybridVM interface 判定 | `runtime_stubs-inl.h:1043`；条件定义于 `runtime_stubs-inl.h:961-964` | 不是 extractor 内部准入状态 |
+| interface extractor 构建 | `runtime_stubs-inl.h:977-979` | `ClassKind::NON_SENDABLE`，`implementLength=1` |
+| interface AOT/普通分流 | `runtime_stubs-inl.h:988-1001` | 通过 `EntranceForDefineClass`；两条路径均不属于方案 A fast path |
+| 普通 extractor 构建 | `runtime_stubs-inl.h:1046-1047` | 以完整 literal 长度构建 |
+| 普通 AOT/非 AOT 分流 | `runtime_stubs-inl.h:1049-1053` | AOT 走 `DefineClassWithIHClass`，非 AOT 走 `DefineClassFromExtractor` |
+| prototype HClass/Layout 创建 | `class_info_extractor.cpp:400-405`、`206-245` | 当前非 AOT extractor 路径每次创建 |
+| 继承关系调用 | `runtime_stubs-inl.h:1057-1058` | 创建返回后统一进入 `RuntimeSetClassInheritanceRelationship` |
+| 继承 proto 写入 | `runtime_stubs-inl.h:1215-1218` | constructor/prototype HClass 当前均原地 `SetPrototype` |
+
+**Sendable 边界**：Sendable class 不进入上述普通分支。它由 `RuntimeCreateSharedClass` 调用 `BuildClassInfoExtractorFromLiteral(..., ClassKind::SENDABLE)` 和 `DefineSendableClassFromExtractor`，对应 `ecmascript/stubs/runtime_stubs-inl.h:1105-1155`；其 HClass 由 `CreateSendableHClass` 在 shared heap 创建，对应 `ecmascript/jspandafile/class_info_extractor.cpp:348-389`。因此 Sendable 是入口级范围隔离，不是 `CreatePrototypeHClass` 内已有的拒绝分支。
+
+**`{constructor}` key 的来源**：extractor 根据 literal 中的非静态成员数分配数组，并无条件在下标 0 写入全局 canonical `constructor` string。无其他 prototype 成员时，`nonStaticKeys.length == NON_STATIC_RESERVED_LENGTH == 1`。对应 `ecmascript/jspandafile/class_info_extractor.h:43-50` 与 `ecmascript/jspandafile/class_info_extractor.cpp:35-74`：
+
+```cpp
+static constexpr uint8_t NON_STATIC_RESERVED_LENGTH = 1;
+static constexpr uint8_t CONSTRUCTOR_INDEX = 0;
+
+nonStaticKeys = factory->NewOldSpaceTaggedArray(nonStaticNum + NON_STATIC_RESERVED_LENGTH);
+nonStaticProperties = factory->NewOldSpaceTaggedArray(nonStaticNum + NON_STATIC_RESERVED_LENGTH);
+nonStaticKeys->Set(thread, CONSTRUCTOR_INDEX, globalConst->GetConstructorString());
+// ...提取其余 non-static keys/properties...
+extractor->SetNonStaticKeys(thread, nonStaticKeys);
+extractor->SetNonStaticProperties(thread, nonStaticProperties);
+```
+
+**现有 prototype HClass 创建**：`DefineClassFromExtractor` 无条件调用 `CreatePrototypeHClass`，然后分配 prototype 对象。对应 `ecmascript/jspandafile/class_info_extractor.cpp:392-405`：
+
+```cpp
+JSHandle<TaggedArray> nonStaticKeys(thread, extractor->GetNonStaticKeys(thread));
+JSHandle<TaggedArray> nonStaticProperties(thread, extractor->GetNonStaticProperties(thread));
+JSHandle<JSHClass> prototypeHClass = ClassInfoExtractor::CreatePrototypeHClass(
+    thread, nonStaticKeys, nonStaticProperties);
+
+JSHandle<JSObject> prototype = factory->NewOldSpaceJSObject(prototypeHClass);
+```
+
+`CreatePrototypeHClass` 现有唯一结构分支是 fast/dictionary 分界。fast 分支每次新建 Layout 和 HClass；accessor 只改变当前 Layout 的 Attr，不触发回退。对应 `ecmascript/jspandafile/class_info_extractor.cpp:206-245`：
+
+```cpp
+uint32_t length = keys->GetLength();
+if (LIKELY(length <= PropertyAttributes::MAX_FAST_PROPS_CAPACITY)) {
+    JSHandle<LayoutInfo> layout = factory->CreateLayoutInfo(
+        length, MemSpaceType::OLD_SPACE, GrowMode::KEEP);
+    for (uint32_t index = 0; index < length; ++index) {
+        key.Update(keys->Get(thread, index));
+        PropertyAttributes attributes = PropertyAttributes::Default(true, false, true);
+        if (UNLIKELY(properties->Get(thread, index).IsAccessor())) {
+            attributes.SetIsAccessor(true);
+        }
+        attributes.SetIsInlinedProps(true);
+        attributes.SetRepresentation(Representation::TAGGED);
+        attributes.SetOffset(index);
+        layout->AddKey(thread, index, key.GetTaggedValue(), attributes);
+    }
+    hclass = factory->NewEcmaHClass(JSObject::SIZE, JSType::JS_OBJECT, length);
+    hclass->SetLayout(thread, layout);
+    hclass->SetNumberOfProps(length);
+} else {
+    hclass = factory->NewEcmaHClass(JSObject::SIZE, JSType::JS_OBJECT, 0);
+    hclass->SetIsDictionaryMode(true);
+    hclass->SetNumberOfProps(0);
+}
+hclass->SetClassPrototype(true);
+hclass->SetIsPrototype(true);
+```
+
+**现有 canonical root**：VM 初始化已经创建与单属性 `{constructor}` 目标 Shape 对应的 `ClassPrototypeClass`，但普通 extractor 当前不读取它。对应 `ecmascript/global_env_constants.cpp:512-516` 与 `ecmascript/object_factory.cpp:2099-2116`：
+
+```cpp
+SetConstant(ConstantIndex::CLASS_PROTOTYPE_HCLASS_INDEX,
+            factory->CreateDefaultClassPrototypeHClass(hClass));
+
+uint32_t size = ClassInfoExtractor::NON_STATIC_RESERVED_LENGTH;
+JSHandle<LayoutInfo> layout = CreateLayoutInfo(size, MemSpaceType::OLD_SPACE, GrowMode::KEEP);
+PropertyAttributes attributes = PropertyAttributes::Default(true, false, true);
+attributes.SetIsInlinedProps(true);
+attributes.SetRepresentation(Representation::TAGGED);
+attributes.SetOffset(ClassInfoExtractor::CONSTRUCTOR_INDEX);
+layout->AddKey(thread_, ClassInfoExtractor::CONSTRUCTOR_INDEX,
+    thread_->GlobalConstants()->GetConstructorString(), attributes);
+JSHandle<JSHClass> defaultHClass = NewEcmaHClass(hclass, JSObject::SIZE, JSType::JS_OBJECT, size);
+defaultHClass->SetLayout(thread_, layout);
+defaultHClass->SetNumberOfProps(size);
+defaultHClass->SetClassPrototype(true);
+defaultHClass->SetIsPrototype(true);
+```
+
+**现有继承写入**：普通 class 创建后，constructor HClass 和 prototype HClass 均被原地写 proto。对应 `ecmascript/stubs/runtime_stubs-inl.h:1191-1219`：
+
+```cpp
+// 1191-1213：根据 base 解析 parent 和 parentPrototype，保留异常语义。
+ctor->GetTaggedObject()->GetClass()->SetPrototype(thread, parent);
+
+JSHandle<JSObject> clsPrototype(thread, JSHandle<JSFunction>(ctor)->GetFunctionPrototype(thread));
+clsPrototype->GetClass()->SetPrototype(thread, parentPrototype);
+```
+
+#### 4.1.2 方案 A 的新增准入与代码落点
+
+方案 A 在现有 `DefineClassFromExtractor` 调用 `CreatePrototypeHClass` 的位置增加 `GetOrCreatePrototypeHClass`，而不是修改现有 `CreatePrototypeHClass` 的语义。调用者必须显式提供 `allowPrototypeShapeSharing`：仅 `RuntimeCreateClassWithBuffer` 的普通非 AOT、非 interface 分支传 `true`；interface 分支传 `false`。AOT 和 Sendable 使用各自现有创建函数，不调用该 helper。其余判断均为方案级待实现：
+
+```text
+DefineClassFromExtractor(nonStaticKeys, nonStaticProperties)
+  |
+  `-- GetOrCreatePrototypeHClass                         [方案新增]
+        |
+        +-- Feature Flag 关闭 --------------------------> CreatePrototypeHClass（现有）
+        +-- VM 不满足 lifetime PGO-off -----------------> CreatePrototypeHClass（现有）
+        +-- keys.length != NON_STATIC_RESERVED_LENGTH --> CreatePrototypeHClass（现有）
+        +-- key[0] identity != constructorString -------> CreatePrototypeHClass（现有）
+        +-- canonical root 一次性字段校验未通过 -------> CreatePrototypeHClass（现有）
+        `-- 全部满足
+              -> 返回 GlobalConstants.ClassPrototypeClass structural root
+              -> prototypeShapeShared = true
+              -> 本次不分配 prototype HClass/LayoutInfo
+```
+
+对应的方案级伪代码如下；函数名与 Flag API 均为待实现接口，不得视为冻结源码已有实现：
+
+```cpp
+JSHandle<JSHClass> ClassInfoExtractor::GetOrCreatePrototypeHClass(
+    JSThread *thread,
+    JSHandle<TaggedArray> &keys,
+    JSHandle<TaggedArray> &properties,
+    bool allowPrototypeShapeSharing,
+    bool &prototypeShapeShared)
+{
+    prototypeShapeShared = false;
+    if (!allowPrototypeShapeSharing ||
+        !IsClassPrototypeSingletonEnabled(thread) ||
+        !IsPgoDisabledForVmLifetime(thread) ||
+        keys->GetLength() != NON_STATIC_RESERVED_LENGTH ||
+        !JSTaggedValue::SameValue(thread, keys->Get(thread, CONSTRUCTOR_INDEX),
+                                  thread->GlobalConstants()->GetConstructorString()) ||
+        !IsValidatedDefaultClassPrototypeRoot(thread)) {
+        return CreatePrototypeHClass(thread, keys, properties);
+    }
+
+    prototypeShapeShared = true;
+    return JSHandle<JSHClass>(thread->GlobalConstants()->GetHandledClassPrototypeClass());
+}
+```
+
+`IsValidatedDefaultClassPrototypeRoot` 在 VM 初始化完成后对 `JSType`、object size、inlined capacity、`NumberOfProps`、Layout key/Attr、class-prototype/prototype/dictionary/AOT/shared/elements flags 和初始 internal prototype 做一次完整校验并缓存结果；热路径不得先创建一份目标 HClass 再比较。当前 extractor 的 `keys.length == 1` 已排除其他 prototype 方法/accessor；constructor 值在 HClass 创建后才写回 `nonStaticProperties[0]`，因此不存在在 `GetOrCreatePrototypeHClass` 阶段检查 accessor 的独立分支。对应 `ecmascript/jspandafile/class_info_extractor.cpp:400-415`：
+
+```cpp
+JSHandle<JSHClass> prototypeHClass = ClassInfoExtractor::CreatePrototypeHClass(
+    thread, nonStaticKeys, nonStaticProperties);
+JSHandle<JSObject> prototype = factory->NewOldSpaceJSObject(prototypeHClass);
+// ...创建 constructor...
+nonStaticProperties->Set(thread, 0, constructor);
+```
+
+`key[0]` identity 检查仍作为未来 literal/extractor 变更的 fail-closed 防线。
+
+`DefineClassFromExtractor` 增加 `allowPrototypeShapeSharing` 入参和 `prototypeShapeShared` out-param，把本次命中结果沿当前 C++ 调用栈返回给 `RuntimeCreateClassWithBuffer`。方案接口与普通调用点如下；这些参数和返回通道均为方案级待实现：
+
+```cpp
+JSHandle<JSFunction> ClassHelper::DefineClassFromExtractor(
+    JSThread *thread,
+    const JSHandle<JSTaggedValue> &base,
+    JSHandle<ClassInfoExtractor> &extractor,
+    const JSHandle<JSTaggedValue> &lexenv,
+    bool allowPrototypeShapeSharing,
+    bool &prototypeShapeShared);
+
+bool prototypeShapeShared = false;
+if (ShouldUseAOTHClass(ihc, chc, classLiteral)) {
+    classLiteral->SetIsAOTUsed(true);
+    cls = ClassHelper::DefineClassWithIHClass(thread, base, extractor, lexenv, ihc, chc);
+} else {
+    cls = ClassHelper::DefineClassFromExtractor(
+        thread, base, extractor, lexenv, true, prototypeShapeShared);
+}
+
+RuntimeSetClassInheritanceRelationship(
+    thread, JSHandle<JSTaggedValue>(cls), base, ClassKind::NON_SENDABLE, prototypeShapeShared);
+```
+
+interface 分支的 `EntranceForDefineClass` 在 non-AOT 路径调用 `DefineClassFromExtractor(..., false, prototypeShapeShared)`，且 out-param 进入前必须为 `false`、返回后必须仍为 `false`。这对应现有 `runtime_stubs-inl.h:967-1001` 的参数扩展。该分支当前实际使用原始 `DefineClassFromExtractor` 四参数接口；`false` 和 out-param 是方案新增参数，不是冻结源码现状。
+
+继承入口只在显式结果为 `true` 时使用 `TransitionProto`，其他路径保持现有原地写入。上述最后一次调用对应现有 `runtime_stubs-inl.h:1057-1059` 的参数扩展；`prototypeShapeShared == true` 时，用 `TransitionProto` 和 `SynchronizedTransitionClass` 替换 `runtime_stubs-inl.h:1217-1218` 对 prototype HClass 的原地 `SetPrototype`，constructor HClass 的 `SetPrototype(parent)` 以及 `runtime_stubs-inl.h:1220-1248` 的 detector、AOT marker 和后处理保持原有顺序。
+
+`RuntimeSetClassInheritanceRelationship` 的其他现有调用点不得推断或继承该布尔值，全部显式传 `false`：`RuntimeResolveClass`（`runtime_stubs-inl.h:886-898`）、`RuntimeCloneClassFromTemplate`（`runtime_stubs-inl.h:916-947`）、Sendable class（`runtime_stubs-inl.h:1105-1155`）、解释器 slow-runtime 转发（`ecmascript/interpreter/slow_runtime_stub.cpp:1171-1174`）以及其他非本次 `DefineClassFromExtractor` 创建路径。这样只有当前一次普通 class 创建命中可以进入 shared-prototype 继承分支。
 
 ### 4.2 完整 HClass 等价谓词
 
@@ -291,7 +541,7 @@ JSTaggedValue RuntimeStubs::RuntimeSetClassInheritanceRelationship(
 |---|---|
 | `class_proto_singleton_hit` | 完整 HClass fast path 命中数 |
 | `class_proto_singleton_reject_key` | key/长度不匹配 |
-| `class_proto_singleton_reject_attr` | accessor/Attr 不匹配 |
+| `class_proto_singleton_reject_attr` | canonical root Attr 不匹配（当前 `keys.length == 1` 路径无独立 accessor 分支） |
 | `class_proto_singleton_reject_state` | HClass/proto/heap 状态不匹配 |
 | `class_proto_singleton_reject_pgo` | VM 不满足 lifetime PGO-off 约束 |
 | `class_proto_transition_hit` | 同 parentPrototype final HClass 命中数 |
@@ -311,7 +561,7 @@ JSTaggedValue RuntimeStubs::RuntimeSetClassInheritanceRelationship(
 | 普通非继承 class | structural root 后命中 Object.prototype 分域 HClass | 中 |
 | `class B extends A` | 按 A.prototype identity 命中或创建 proto transition | 高 |
 | `class B extends null` | 独立验证 null prototype | 中 |
-| computed method / accessor | 不满足固定 Shape 时拒绝 | 低 |
+| computed method / extra prototype property | `keys.length != 1` 时拒绝 | 低 |
 | static 属性 | constructor HClass 不在本方案范围 | 无 |
 | AOT supplied HClass | 不进入本方案 | 无 |
 | lifetime PGO-off | 可执行 A 准入 | 中 |
@@ -406,7 +656,6 @@ self_size = 16 + 16 * capacity
 |---|---|---|
 | `DefaultClassPrototypeExactHit` | 固定 Shape 命中 | extractor 返回全局 structural root；继承后对象持有对应 final HClass |
 | `DefaultClassPrototypeValueIsolation` | constructor 值不共享 | 两个 prototype slot[0] 指向各自 constructor |
-| `DefaultClassPrototypeRejectAccessor` | accessor 拒绝 | 返回独立 HClass |
 | `DefaultClassPrototypeRejectExtraKey` | 用户方法拒绝 A fast path | 走常规/方案 C 路径 |
 | `DefaultClassPrototypeDifferentBase` | proto 隔离 | 两类读取各自 base prototype |
 | `DefaultClassPrototypeExtendsNull` | null 继承 | internal prototype 为 null，其他类不受影响 |
@@ -560,6 +809,9 @@ self_size = 16 + 16 * capacity
 | GlobalEnvConstants 已声明 `ClassPrototypeClass` | `ecmascript/global_env_constants.h:150-158` |
 | VM 初始化创建默认 class-prototype HClass | `ecmascript/global_env_constants.cpp:510-516` |
 | 默认 HClass 的 `{constructor}` Layout、size、type、flags | `ecmascript/object_factory.cpp:2099-2116` |
+| `RuntimeCreateClassWithBuffer` 创建 extractor、检查 HybridVM interface 并执行普通/AOT 分流 | `ecmascript/stubs/runtime_stubs-inl.h:1036-1059` |
+| interface metadata 判定条件 | `ecmascript/stubs/runtime_stubs-inl.h:961-964` |
+| interface 分支按 `implementLength=1` 构建 extractor，并经 `EntranceForDefineClass` 分流 | `ecmascript/stubs/runtime_stubs-inl.h:977-1001` |
 | 本地 object HClass 初始化默认引用全局 `EmptyLayoutInfo` | `ecmascript/js_hclass.cpp:197-203` |
 | extractor 当前逐次创建 prototype Layout/HClass | `ecmascript/jspandafile/class_info_extractor.cpp:206-245` |
 | 普通 class 路径调用 `CreatePrototypeHClass` 并分配 prototype 对象 | `ecmascript/jspandafile/class_info_extractor.cpp:392-405` |
