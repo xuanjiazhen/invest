@@ -1,693 +1,233 @@
-# NAPI Prototype Native 方法按需绑定设计方案
+# NAPI Prototype Native 方法按需绑定技术方案评审提案
 
 | 项目 | 内容 |
 |------|------|
-| 文档用途 | 最终设计方案 |
-| 文档日期 | 2026-08-21 |
+| 文档日期 | 2026-08-28 |
 | 源码基线 | `OpenHarmony-7.0-Release@4ad97323...`；`arkcompiler_ets_runtime@f04900cf`；`foundation/arkui/napi@464170c9` |
-| 设计范围 | `napi_define_class` 的 prototype native 方法注册、首次读取、属性语义、并发、卸载、GC 与 IC 正确性 |
+| 设计范围 | `napi_define_class` 注册的 prototype native method |
+| 方案状态 | 设计评审； |
 
-## 1. 目标与范围
+## 一、摘要（Executive Summary）
 
-`napi_define_class` 当前在类注册期间为每个 native prototype 方法创建完整的 JavaScript 函数对象。即使方法从未被读取，这些对象仍由 prototype 属性强引用。
+本方案针对 `napi_define_class` 注册期间为未读取的 prototype native method 在实际使用前提前创建完整 JavaScript 函数对象图的问题，目标是减少注册期的无效对象创建。
 
-本设计将普通、非 Sendable 类的 prototype `method` 改为按需绑定：
+方案仅对普通、非 Sendable 类的非 static prototype method 安装 VM 内部惰性方法槽，注册期保存 `{method, data}`，首次读取时复用现有 `NapiNativeCreateFunction` 和 `FunctionRef::NewConcurrentWithName` 创建链，并在同一 property slot 写回 `JSFunction`。
 
-1. 注册期创建 constructor、prototype、属性键和属性标志，但不创建目标方法的 `JSFunction`、`JSNativePointer` 与 `NapiFunctionInfo`；
-2. 每个目标方法安装一个 VM 管理的 `NapiLazyAccessor`，并保存一个运行时自有的最小回调元数据记录 `{method, data}`；
-3. 首次读取该属性时创建现有 native 函数对象图，将 prototype 属性写回为普通数据属性；
-4. 后续读取、调用和 IC 行为与当前即时创建路径一致。
+设计容量收益为每个未物化方法避免一组注册期函数对象，但 `NapiLazyAccessor`、recipe、状态目录和生命周期管理的实际计费尚未测量。目标验收值为：注册 P95 相对基线回退不超过 1%，首次读取 P95 增量不超过 `0.10 ms/方法`，稳态吞吐不低于基线 99%；RSS/PSS 收益必须通过 clean A/B 实测确认。
 
-### 1.1 设计目标
+## 二、背景与现状（仅面向开发者视角）
 
-- 未读取的方法不创建 native 函数对象图；
-- 不改变公开 NAPI API、`napi_define_class` 签名或字节码格式；
-- 函数名称、`length`、对象身份、属性标志和严格模式行为与当前实现一致；
-- 属性写回保持 prototype HClass、`LayoutInfo` 和属性标志不变，并显式失效依赖惰性槽的 prototype/IC 缓存；
-- 每个方法的回调元数据可在物化、覆盖或删除后单独释放；
-- 环境销毁时不留下可调用的 native 回调或悬空 `data` 指针。
+### 2.1 业务痛点
 
-### 1.2 适用范围
+开发者使用 Node-API 注册包含大量 prototype native method 的类时，`napi_define_class` 返回前会创建所有目标方法的 `JSFunction`、`JSNativePointer` 和 `NapiFunctionInfo`。即使业务代码从未读取某个方法，prototype property slot 仍然持有该函数对象。
 
-按需绑定仅用于同时满足以下条件的属性：
+当前证据显示，Top13 应用 method closure population 为 447,707 个、占用约 61.474 MiB；快手为 175,025 个、约 24.035 MiB。上述数据是快照对象关系统计，不是创建侧的 eligible method census，不能直接作为本方案已实现收益。
 
-- 通过 `napi_define_class` 注册；
-- `property.method != nullptr`；
-- 未设置 `NATIVE_STATIC`（即 prototype 方法）；
-- 类不是 Sendable 类。
+开发者可观察的影响包括：类注册阶段的分配次数增加，未使用方法的函数对象进入 prototype 可达图，以及首次页面或模块加载阶段出现与方法数量相关的注册工作。注册耗时、RSS/PSS 和首次读取时延的基线数值目前为 `[待核实：请在此处补充同一产品、同一操作序列下的 clean A/B 基线数据]`。
 
-以下属性保持当前即时创建流程：
+### 2.2 现有架构局限性
 
-| 排除项 | 原因 |
-|--------|------|
-| static method | 装在构造器上（`CreateClassFuncHClass` 路径），数量通常 2-5 个/类，收益远小于 prototype 方法（20-134 个/类） |
-| constructor | 类身份锚点，必须即时创建 |
-| getter/setter | 走 `CreateAccessorData` + `writable=false` 路径，与 method 的数据属性语义不同；惰性化需处理 accessor-to-data transition |
-| 纯 value 属性 | 无 native 回调，无函数图可省 |
-| Sendable 类 | 跨线程共享，需即时路径 |
-
-**只 lazy 非 static method 的量化依据**：Top13 kuaishou 单应用 216 个类，prototype 平均 20-134 个方法（WIDE 档），static 通常只有 2-5 个——prototype method 覆盖 >95% 的方法闭包人口。static 路径装在构造器上，构造器本身必须即时创建，额外惰性化 static 收益极低。
-
-## 2. 当前创建流程
-
-### 2.1 当前创建流程与数据结构
-
-#### 调用链（源码行号）
+当前调用链为：
 
 ```text
-napi_define_class                                  native_api.cpp:1643-1674
-  -> NapiDefineClass                              ark_native_engine.cpp:333-369
-     -> NapiCreateClassFunction                   ark_native_engine.cpp:288-330
-        -> NapiGetKeysAndAttrsFromProps           ark_native_engine.cpp:250-285
-           -> NapiInitAttrValFromProp             ark_native_engine.cpp:216-247
-              -> NapiNativeCreateFunction         ark_native_engine.cpp:190-213
-                 -> FunctionRef::NewConcurrentWithName
-                                                    jsnapi_expo.cpp:3947-3978
+napi_define_class
+  -> NapiDefineClass
+  -> NapiCreateClassFunction
+  -> NapiGetKeysAndAttrsFromProps
+  -> NapiInitAttrValFromProp
+  -> NapiNativeCreateFunction
+  -> FunctionRef::NewConcurrentWithName
 ```
 
-#### 流程图：注册期全量创建（现状）
+源码位置：
 
-```mermaid
-flowchart TB
-    subgraph CALLER["调用方（native 模块）"]
-        D["napi_property_descriptor[]<br/>（栈上临时，返回后失效）"]
-    end
+- `D:\docker\invest\foundation\arkui\napi\native_engine\native_api.cpp:1643-1674`
+- `D:\docker\invest\foundation\arkui\napi\native_engine\impl\ark\ark_native_engine.cpp:190-369`
+- `D:\docker\invest\arkcompiler\ets_runtime\ecmascript\napi\jsnapi_expo.cpp:3947-4039`
 
-    subgraph NAPI["NAPI / ArkNativeEngine"]
-        A1["napi_define_class<br/>native_api.cpp:1643"]
-        A2["NapiDefineClass<br/>ark_native_engine.cpp:333"]
-        A3["NapiCreateClassFunction<br/>:288"]
-        A4["NapiGetKeysAndAttrsFromProps<br/>遍历 property_count<br/>ark_native_engine.cpp:250"]
-        A5["NapiInitAttrValFromProp<br/>每个 method 立即执行<br/>ark_native_engine.cpp:216"]
-    end
+`NapiNativeCreateFunction` 当前为每个目标 method 创建 `NapiFunctionInfo`；目标方案冻结版本的 AArch64 record-layout probe 给出 `NapiFunctionInfo` 为 32 B 或 40 B，`JSFunction` 设计值为 144 B，`JSNativePointer` 设计值为 40 B。malloc usable size、Region committed、RSS/PSS 尚未测量。
 
-    subgraph CREATE["方法创建链（每方法全量执行）"]
-        B1["NapiNativeCreateFunction<br/>ark_native_engine.cpp:190"]
-        B2["FunctionRef::NewConcurrentWithName<br/>jsnapi_expo.cpp:3947"]
-    end
+prototype HClass/LayoutInfo 记录属性 key、`PropertyAttributes`、offset 和 `TAGGED` representation；当前 prototype slot 保存 `JSFunction`。惰性方案必须保持这些属性元数据不变。涉及当前 property lookup、IC、反射入口是否全部可拦截的事实，标记为 `[待核实：请在此处补充源码文件绝对路径 + 行号]`。
 
-    subgraph DS["注册期创建的数据结构（每方法，无论是否被访问）"]
-        C1["NapiFunctionInfo<br/>{callback, data, env, scopeId}<br/>32–40 B（堆外）"]
-        C2["JSFunction<br/>144 B（堆内）"]
-        C3["JSNativePointer<br/>40 B（堆内）"]
-    end
+## 三、需求目标与红线（Goals & Non-Goals）
 
-    subgraph PROTO["prototype 持久状态"]
-        P1["LayoutInfo<br/>key + W/E/C + offset + TAGGED"]
-        P2["prototype slot<br/>= JSFunction（数据属性）"]
-    end
+### 3.1 核心目标
 
-    D --> A1 --> A2 --> A3 --> A4 --> A5
-    A5 -->|"每个 method"| B1 --> B2
-    B1 --> C1
-    B2 --> C2
-    B2 --> C3
-    C2 --> P2
-    P1 --- P2
+1. **注册期目标**：对符合条件的 prototype method 不创建 `JSFunction`、`JSNativePointer` 和 `NapiFunctionInfo`；注册 P95 相对基线回退不得超过 1%，超过即关闭开关。
+2. **运行期目标**：首次读取返回与即时路径等价的 `JSFunction`，首次读取 P95 增量不得超过 `0.10 ms/方法`；稳态吞吐不得低于基线 99%。
+3. **语义目标**：公开 Node-API ABI、函数 identity/name/length、数据属性 W/E/C、反射、GC 和 Sendable 行为与基线一致；出现 UAF、double-free、未捕获崩溃或属性语义差异时自动回滚。
 
-    classDef caller fill:#f5f5f5,stroke:#666,color:#333
-    classDef napi fill:#dae8fc,stroke:#1f6feb,color:#333
-    classDef create fill:#dae8fc,stroke:#1f6feb,color:#333
-    classDef ds fill:#ffebe6,stroke:#c0392b,color:#333
-    classDef proto fill:#d5e8d4,stroke:#2d7600,color:#333
-    class D caller
-    class A1,A2,A3,A4,A5 napi
-    class B1,B2 create
-    class C1,C2,C3 ds
-    class P1,P2 proto
-```
+### 3.2 非目标
 
-**关键事实**：红色框（C1/C2/C3）在注册期即全量创建——每个 prototype method 无论后续是否被访问，都在 `napi_define_class` 返回前完成了完整的 native 函数对象图。这是本方案要消除的驻留。
+- 不修改公开 `napi_define_class` 签名、`napi_property_descriptor` ABI 或字节码格式。
+- 不修改 `JSFunction`、`JSNativePointer`、HClass、LayoutInfo、GC 对象布局、snapshot schema、IC/AOT 编译器数据结构。
+- 不处理 constructor、static method、getter/setter、纯 value property 和 Sendable 类；这些路径继续即时创建。
+- 不承诺消除 `JSFunction` 或 `JSNativePointer` 的创建；首次读取后它们仍按现有生命周期存在。
+- 不承诺修复动态库卸载后的 callback 地址有效性；module pin 需要独立方案。
 
-### 2.2 当前各阶段的职责
+## 四、方案选型与决策依据（剔除垃圾讨论）
 
-| 阶段 | 当前行为 | 产生的数据 |
-|------|----------|------------|
-| `NapiGetKeysAndAttrsFromProps` | 五件事：①static/非static 双向分区重排 ②key 物化（堆分配） ③W/E/C 三位提取 ④逐属性构造值 ⑤placement-new 到裸数组 | 临时 `keys[]`、`attrs[]` |
-| `NapiInitAttrValFromProp` | 按优先级分流：getter/setter → AccessorData + 强制 writable=false；method → 创建 native 函数；value → 透传 | 每个 method 的 `JSFunction` 引用 |
-| `NapiNativeCreateFunction` | 分配并初始化 `NapiFunctionInfo` | `{callback, data, env, scopeId}` |
-| `FunctionRef::NewConcurrentWithName` | 创建 `JSFunction`，并通过 extra info 关联 `JSNativePointer` 和 `NapiFunctionInfo` | 完整 native 函数对象图 |
-| `NewConcurrentClassFunctionWithName` | 创建 constructor/prototype，并安装 static 与 prototype 属性 | prototype 数据属性强引用 `JSFunction` |
+### 4.1 备选方案对比
 
-`napi_property_descriptor[]`、`utf8name` 和 `napi_value name` 都属于调用方输入。`napi_define_class` 返回后，按需路径不得继续引用这些临时数据。
+| 方案 | 核心思路 | 否决原因或适用边界 |
+| :--- | :--- | :--- |
+| **C2（最终采用）** | 首次读取时创建 prototype method 函数对象图，并写回普通数据属性 | 修改 property lookup、反射、IC 失效、GC 可见性和生命周期；实现范围最大，但能减少未读取方法的函数对象驻留 |
+| B1 | 首次调用时创建并回写 `NapiFunctionInfo` | 需要保存等价 cold record，存在首调分配、并发和 old/new metadata 同时驻留问题 |
+| B2 | 复用 `JSNativePointer` 指针槽保存冷态信息 | 无法同时保存 callback、data、env 和 scopeId，且同一 VM 可有多个 environment |
+| B3 | 按类 arena 分配完整函数 metadata | 可减少 allocation 次数，但不减少完整结构字节；适合生命周期 PoC |
+| D1 | 每类 compact native metadata table | 仅改变堆外 metadata，不提供未创建 `JSFunction` 的收益；作为独立次方向，不与 C2 收益相加 |
 
-#### 2.2.1 `NapiGetKeysAndAttrsFromProps` 完整行为
+### 4.2 最终方案设计
 
-源码 `ark_native_engine.cpp:250-286`，做五件事：
-
-**① static/非static 双向分区重排**。`NATIVE_STATIC` 位（`1<<10`）仅在此消费一次：
-
-```text
-keys/attrs 数组物理布局：
-[static_0, static_1, ..., static_N-1 | nonStatic_M, ..., nonStatic_1, nonStatic_0]
- ↑ 正序填充（curStaticPropIdx++）     ↑ 逆序填充（curNonStaticPropIdx--）
-```
-
-返回值 `staticPropCount` 是两区唯一分界——下游运行时全靠这一个整数区分安装目标。
-
-**② key 物化**。`utf8name != nullptr` → `StringRef::NewFromUtf8`（GC 堆分配新字符串）；否则直接重解释 `napi_value name`（可能是 String **或 Symbol**，此处不校验类型）。
-
-**③ W/E/C 三位提取**。仅取 `NATIVE_WRITABLE / ENUMERABLE / CONFIGURABLE` 三个位转 bool。`NATIVE_STATIC` 已被分区消费。其余位（`NATIVE_INSTANCE`、`NATIVE_KEY_*` 等）在此路径全部忽略。
-
-**④ 逐属性调 `NapiInitAttrValFromProp` 构造值**（按优先级）：
-
-```text
-getter/setter（最高优先级） → 创建 1-2 个 native 函数 + 包装 AccessorData
-                               → writable 被强制改写为 false
-method                       → NapiNativeCreateFunction 创建完整函数图
-value（兜底）                 → 直接透传 property.value（不做 null 检查）
-```
-
-getter/setter 的函数名有历史怪癖：单 getter 名为 `"getter"`，getter+setter 名为 `"gettersetter"`（fullName 累加），单 setter 名为 `"setter"`——与方法名无关。
-
-**⑤ placement-new `PropertyAttribute` 到裸数组**。调用方传入未初始化的栈/malloc 裸内存，此函数逐项 placement-new。析构延迟到运行时 `DestructAttr`——生命周期跨 NAPI/VM 两层。
-
-#### 2.2.2 static 与非 static 的处理差异
-
-| 维度 | static（`NATIVE_STATIC`） | 非 static（prototype，默认） |
-|------|---------------------------|------------------------------|
-| 分区方式 | keys/attrs 前段正序 | 后段逆序 |
-| 安装目标 | 构造器 JSFunction 自身 inlined props | prototype JSObject inlined props |
-| HClass | `CreateClassFuncHClass`（JS_FUNCTION） | `CreateClassFuncProtoHClass`（JS_OBJECT，proto = Object.prototype） |
-| 首个内联属性 | `"name"`（writable=false, enumerable=false, configurable=true） | `"constructor"`（指回构造器，writable=true, enumerable=false, configurable=true） |
-| 值构造 | 完全相同（不区分 static） | 完全相同 |
-| 溢出处理 | 无条件循环逐项 `DefinePropertyOrThrow` | 条件 `> MAX_FAST_PROPS_CAPACITY` 才走慢路径（存在上游 gap：属性数在 maxInl 与 1023 之间的中段可能遗漏） |
-| 慢路径触发 | Symbol key / 重复 key / 溢出 | 同左 |
-
-### 2.3 惰性化后必须在物化前完成的事项与风险
-
-以下事项**不可推迟到物化时**，必须在注册期完成：
-
-| 事项 | 原因 | 风险 |
-|------|------|------|
-| key 物化 + intern | LayoutInfo 需注册期确定属性数/偏移；`TryAddOriKeyAndOriAttrToHClass` 对非 interned 字符串做 `factory->InternString` | 推迟 key 创建则 LayoutInfo 无法注册期确定，违反"LayoutInfo 不变"承诺 |
-| W/E/C 三位标志 | LayoutInfo 的 `PropertyAttributes` 需此三值确定 data-property 标志 | 无风险，照搬现状 |
-| Symbol key 检测与慢路径分流 | `TryAddOriKeyAndOriAttrToHClass` 返回 false（Symbol/duplicate key）时走 `DefinePropertyOrThrow` | 惰性 accessor 经此路径装入时需验证 `DefinePropertyOrThrow` 对非 JSFunction 值的包容性 |
-| prototype HClass/LayoutInfo 全部填充 | `Object.keys(proto)` 等不物化但需 LayoutInfo | 无额外风险 |
-| `NapiLazyAccessor` 创建并装入 slot | 替代 JSFunction 作为 prototype slot 的值 | 需确保 `IsAccessor` 不置位（06 §4.2 已明确） |
-| `NativeLazyMethodRecipe {method, data}` 深拷贝 | descriptor 数组是调用方栈上的，返回后失效 | 全部设计的硬约束 |
-| `slotDirectory` + lifetime + token 创建 | 物化时状态机和并发保护依赖 | 无风险 |
-
-**风险矩阵**：
-
-| 风险 | 严重度 | 说明 |
-|------|--------|------|
-| accessor 属性误判 | 高 | `NapiInitAttrValFromProp` 对 getter/setter 走 `CreateAccessorData` 并强制 writable=false。若惰性化不慎让 `NapiLazyAccessor` 进入 accessor 分支，首次物化将被迫做 accessor-to-data HClass transition，改变可观察 descriptor 语义 |
-| Symbol key 慢路径 | 中 | Symbol key 不走 inline fast path，走 `DefinePropertyOrThrow`；惰性 accessor 经此装入需验证包容性 |
-| 重复 key TypeError 被吞 | 低 | 重复 key 在慢路径 throw TypeError——`NapiDefineClass` 会 `GetAndClearUncaughtException` 吞掉并返回可能部分构建的类。惰性化不影响此行为但测试需覆盖 |
-| >32 属性 malloc 失败 FATAL | 低 | `NewConcurrentClassFunctionWithName` 里 >32 路径 malloc 失败 `LOG_FULL(FATAL)` 直接 abort 进程。惰性化不改变此行为，但新增 lifetime/directory 分配也走此路径 |
-| 函数名物化时重建 | 低 | `NapiNativeCreateFunction` 需要函数名字符串，惰性化后需物化时从 recipe 关联的 key 重建；Symbol description → ToString 路径需覆盖 |
-| recipeIndex 与 slot 安装序对齐 | 低 | 非 static 属性在 keys/attrs 中逆序排列，`NewClassFuncProtoWithProperties` 用 `(propertyCount-1)-i` 逆序消费恢复声明序；recipe 的 index 分配序需与 slot 实际安装序对齐 |
-
-## 3. 最终架构
-
-### 3.1 方法级生命周期（三个阶段）
-
-#### 阶段一：注册与填充（修改前 vs 修改后）
-
-```mermaid
-flowchart TB
-    subgraph BEFORE["修改前：注册期全量创建"]
-        direction TB
-        OLD_D["descriptor[]（调用方栈上）"]
-        OLD_A["NapiGetKeysAndAttrsFromProps<br/>遍历全部属性"]
-        OLD_B["NapiInitAttrValFromProp<br/>每个 method 立即创建"]
-        OLD_C["NapiNativeCreateFunction<br/>+ NewConcurrentWithName"]
-        OLD_DS["每方法创建：<br/>JSFunction 144 B + JSNativePointer 40 B<br/>+ NapiFunctionInfo 32–40 B<br/>━━━ 堆内 184 B/方法 ━━━"]
-        OLD_SLOT["prototype.slot[i]<br/>= JSFunction"]
-        OLD_D --> OLD_A --> OLD_B --> OLD_C --> OLD_DS --> OLD_SLOT
-    end
-
-    subgraph AFTER["修改后：注册期仅创建占位"]
-        direction TB
-        NEW_D["descriptor[]（调用方栈上）"]
-        NEW_A["NapiGetKeysAndAttrsFromProps<br/>遍历全部属性"]
-        NEW_R["RegisterLazyClass（新增）<br/>创建 ClassBindingLifetime<br/>+ slotDirectory[N]"]
-        NEW_RECIPE["每方法分配<br/>NativeLazyMethodRecipe<br/>{method, data} = 16 B（堆外）"]
-        NEW_ACC["创建 NapiLazyAccessor<br/>32 B（堆内）<br/>payload = {token, recipeIndex}"]
-        NEW_FILL["AddInlinedPropToHClass<br/>LayoutInfo 填充 key + W/E/C + offset<br/>（与现状完全相同）"]
-        NEW_SLOT["prototype.slot[i]<br/>= NapiLazyAccessor<br/>（数据属性，非 accessor）"]
-        NEW_DIR["slotDirectory[j]<br/>= LAZY(recipe*)"]
-        NEW_D --> NEW_A
-        NEW_A -->|"目标 method"| NEW_R
-        NEW_R --> NEW_RECIPE --> NEW_ACC
-        NEW_A -->|"LayoutInfo 填充"| NEW_FILL
-        NEW_ACC --> NEW_SLOT
-        NEW_FILL --- NEW_SLOT
-        NEW_R --> NEW_DIR
-    end
-
-    OLD_DS ==>|"堆内 184→32 B（−83%）"| NEW_ACC
-
-    classDef oldds fill:#ffebe6,stroke:#c0392b,color:#333
-    classDef newds fill:#fff5cc,stroke:#d4a017,color:#333
-    classDef proto fill:#d5e8d4,stroke:#2d7600,color:#333
-    classDef gray fill:#f5f5f5,stroke:#666,color:#333
-    class OLD_D,OLD_A,OLD_B,OLD_C gray
-    class OLD_DS oldds
-    class OLD_SLOT proto
-    class NEW_D,NEW_A gray
-    class NEW_R,NEW_RECIPE,NEW_ACC,NEW_DIR newds
-    class NEW_FILL,NEW_SLOT proto
-```
-
-**注册期数据结构变化**：
-
-| 结构 | 修改前 | 修改后 | 性质 |
-|------|--------|--------|------|
-| `JSFunction`（堆内 144 B） | 注册即创建 | ❌ 不创建 | 消除 |
-| `JSNativePointer`（堆内 40 B） | 注册即创建 | ❌ 不创建 | 消除 |
-| `NapiFunctionInfo`（堆外 32–40 B） | 注册即创建 | ❌ 不创建 | 消除 |
-| `NapiLazyAccessor`（堆内 32 B） | — | ✅ 新增，装 prototype slot | 替代品 |
-| `NativeLazyMethodRecipe`（堆外 16 B） | — | ✅ 新增 `{method, data}` | 替代品 |
-| `slotDirectory`（堆外 8 B/项） | — | ✅ 新增，状态机 | 新增 |
-| `LayoutInfo`（key + W/E/C + offset） | 注册期填充 | **完全不变** | 不变 |
-| prototype HClass | 注册期创建 | **完全不变** | 不变 |
-| constructor / static / getter / setter | 注册即创建 | **完全不变**（保持即时路径） | 不变 |
-
-#### 阶段二：首次读取与物化
-
-```mermaid
-flowchart TB
-    subgraph READ["首次读取 proto.m"]
-        R0["receiver.m 读取<br/>property lookup 慢路径"]
-        R1["命中 NapiLazyAccessor<br/>→ CallNapiLazyGet"]
-        R2["解析 payload {token, recipeIndex}<br/>→ LazyMethodRegistry::LookupAndAcquireGuard"]
-        R3["slotDirectory CAS<br/>LAZY → MATERIALIZING"]
-    end
-
-    subgraph MAT["物化（复用现行创建链）"]
-        M1["NapiNativeCreateFunction<br/>创建 NapiFunctionInfo {callback, data}"]
-        M2["FunctionRef::NewConcurrentWithName<br/>创建 JSFunction + JSNativePointer"]
-        M3["SameSlotMaterializeWrite<br/>校验原 accessor identity 后<br/>同一 slot 原子替换<br/>NapiLazyAccessor → JSFunction"]
-        M4["MarkProtoChanged / NoticeThroughChain<br/>显式失效原型链 IC"]
-        M5["发布 DONE，释放 recipe"]
-    end
-
-    subgraph RESULT["物化完成"]
-        F1["prototype.slot[i]<br/>= JSFunction（数据属性）<br/>与修改前逐字段一致"]
-        F2["LayoutInfo / HClass<br/>完全不变"]
-    end
-
-    R0 --> R1 --> R2 --> R3
-    R3 --> M1 --> M2 --> M3 --> M4 --> M5 --> F1
-    F1 --- F2
-
-    classDef read fill:#dae8fc,stroke:#1f6feb,color:#333
-    classDef mat fill:#fff5cc,stroke:#d4a017,color:#333
-    classDef result fill:#d5e8d4,stroke:#2d7600,color:#333
-    class R0,R1,R2,R3 read
-    class M1,M2,M3,M4,M5 mat
-    class F1,F2 result
-```
-
-**物化路径关键点**：
-1. **复用现行创建链**——`NapiNativeCreateFunction` → `NewConcurrentWithName` 不做任何修改，只是执行时机从注册期推迟到首读；
-2. **SameSlot 写回**——只替换 prototype slot 的 value（一次带屏障的原子写），HClass / LayoutInfo / key / W/E/C / offset 全部不变；
-3. **显式 IC 失效**——`MarkProtoChanged` 必须手动调用（因为没有 HClass transition 来自动触发）；这是与内建 `ResetLazyInternalAttr` 原地改 attr 的关键分叉（D2）。
-
-#### 阶段三：物化后、覆盖/删除、卸载
-
-```mermaid
-flowchart TB
-    subgraph STEADY["物化后稳态"]
-        S1["prototype.slot[i] = JSFunction<br/>普通数据属性 + 正常 IC<br/>与修改前不可区分"]
-    end
-
-    subgraph OPS["属性操作"]
-        O1["receiver.m = value<br/>（自有槽覆盖）"]
-        O2["Object.defineProperty<br/>指定 value / accessor"]
-        O3["delete proto.m"]
-        O4["freeze / seal<br/>先物化全部自有惰性方法"]
-    end
-
-    subgraph TERM["终态发布 → recipe 释放"]
-        T1["发布终态<br/>DONE / OVERWRITTEN / DELETED"]
-        T2["释放该槽 recipe block<br/>（data 指针不释放，归模块）"]
-    end
-
-    subgraph UNLOAD["environment / module unload"]
-        U1["发布 DEAD<br/>阻止新 guard / 物化"]
-        U2["等待在途 guard 排空"]
-        U3["释放剩余 LAZY/MATERIALIZING recipe<br/>+ slotDirectory + token + lifetime"]
-    end
-
-    S1
-    O1 --> T1
-    O2 --> T1
-    O3 --> T1
-    O4 -->|"物化后"| S1
-    T1 --> T2
-    U1 --> U2 --> U3
-
-    classDef steady fill:#d5e8d4,stroke:#2d7600,color:#333
-    classDef ops fill:#dae8fc,stroke:#1f6feb,color:#333
-    classDef term fill:#fff5cc,stroke:#d4a017,color:#333
-    classDef unload fill:#f5f5f5,stroke:#666,color:#333
-    class S1 steady
-    class O1,O2,O3,O4 ops
-    class T1,T2 term
-    class U1,U2,U3 unload
-```
-
-**生命周期保证**：
-- 已物化函数图 → 现有 GC / CommonDeleter 生命周期（与即时创建完全一致）；
-- 未物化 recipe → 终态发布后单独释放（覆盖/删除/物化任一即释放）；
-- `data` 指针 → 非拥有引用，不由 recipe/lifetime 释放（归 native 模块）；
-- environment teardown → DEAD → guard 排空 → 剩余资源批量释放。
-
-### 3.2 组件关系
-
-
-
-
-
-| 组件 | 职责 |
-|------|------|
-| NAPI class registration | 分类属性、建立最小回调元数据、创建 constructor/prototype、安装惰性方法槽 |
-| VM property lookup | 识别 `NapiLazyAccessor`，传递 holder、receiver 和当前 VM key |
-| Lazy method registry | 用 generation-safe token 定位 `ClassBindingLifetime`，返回受保护的 lifetime guard |
-| Native function factory | 复用 `NapiNativeCreateFunction` 与 `FunctionRef::NewConcurrentWithName` 创建最终函数 |
-| Property update path | 在同一 property slot 中把惰性值替换为 `JSFunction`，保持 HClass/LayoutInfo 不变并失效旧 IC handler |
-| Environment cleanup | 发布 `DEAD`，等待在途 guard，释放未物化记录、状态目录和 registry token |
-
-## 4. 注册期设计
-
-### 4.1 流程修改
-
-
-
-`NapiCreateClassFunction` 的属性准备与类对象填充阶段改为以下顺序：
-
-1. 扫描 descriptor，统计目标 prototype method 数量并保持现有 static/prototype 排序规则；
-2. 若数量非零，创建一个 `ClassBindingLifetime`、一个 `slotDirectory[N]` 和 generation-safe registry token；
-3. 对每个属性按现有规则创建 VM String/Symbol key，并填充临时 `PropertyAttribute` 的 writable、enumerable、configurable；
-4. 对目标 prototype method 单独分配 `NativeLazyMethodRecipe {method, data}`，创建 payload 为 `{token, recipeIndex}` 的 `NapiLazyAccessor`，并将其写入临时 `PropertyAttribute.value`；其他属性继续调用当前 `NapiInitAttrValFromProp` 创建即时值；
-5. `NewConcurrentClassFunctionWithName` 将 `PropertyAttribute[]` 转成临时 `PropertyDescriptor[]`；两条路径都产生普通数据属性 descriptor，区别仅是目标方法的 `value` 为 `JSFunction` 或 `NapiLazyAccessor`；
-6. `AddInlinedPropToHClass` 按相同顺序把 key、writable/enumerable/configurable、data-property 标志、inline/out-of-line 位置、slot offset 和 `TAGGED` representation 填入 prototype HClass/LayoutInfo；
-7. `NewJSObjectWithInit` 按该 HClass 创建 prototype；随后 `SetPropertyInlinedProps` 或 `DefinePropertyOrThrow` 把 descriptor value 写入对应 property slot；
-8. 将目录项发布为 `LAZY(recipe*)`。注册成功后，目标 property slot 保存 `NapiLazyAccessor`；当前即时路径则保存 `JSFunction`；
-9. 任一步骤失败时，撤销已发布 token，并释放已分配的 recipe、目录和 lifetime，再沿当前异常路径返回。
-
-注册成功后，调用方 descriptor、临时名称、`keys[]`/`attrs[]`/`PropertyDescriptor[]` 容器和 handle 均不进入持久状态。VM String/Symbol key、`PropertyAttributes` 和 prototype property slot 已复制到 VM 管理对象中。
-
-### 4.2 注册期填充前后差异
-
-注册期必须区分临时转换数据、HClass/LayoutInfo 属性元数据和 prototype 属性值。`LayoutInfo` 不保存 property value、callback、recipe 或 directory entry。
-
-| 填充位置 | 当前即时创建 | 按需绑定注册完成 | 差异性质 |
-|----------|--------------|------------------|----------|
-| 调用方 `napi_property_descriptor` | 提供 name、method、data、attributes | 输入结构与 ABI 相同 | 不变；返回后均不再引用 |
-| 临时 `keys[]` | 每属性创建 VM String/Symbol key | 相同 key、数量和 static/prototype 排序 | 不变 |
-| 临时 `PropertyAttribute[]` 的 W/E/C | 从 descriptor attributes 填充 | 相同 | 不变 |
-| 目标方法的 `PropertyAttribute.value` | 注册期创建并填入 `JSFunction` | 填入 `NapiLazyAccessor` | value 创建方式改变 |
-| 临时 `PropertyDescriptor[]` | 普通数据属性；value 为 `JSFunction` | 普通数据属性；value 为 `NapiLazyAccessor` | 仅临时 value 不同 |
-| prototype HClass | 加入全部 prototype key，确定属性数、inline capacity 和对象尺寸 | 相同 | HClass 填充内容不变 |
-| prototype `LayoutInfo` | `key + PropertyAttributes` | 相同 key、W/E/C、`IsAccessor=false`、offset、inline 标志和 `TAGGED` representation | 属性元数据不变 |
-| prototype property slot | 写入 `JSFunction` 引用 | 写入 `NapiLazyAccessor` 引用 | 持久 value 不同 |
-| callback metadata | 创建 `JSNativePointer + NapiFunctionInfo` | 保存独立 `{method, data}` recipe、directory state 和 accessor payload | 持久回调表示改变 |
-
-目标方法从注册完成起就是一个普通数据属性。`NapiLazyAccessor` 只是该数据属性 value slot 中的 VM 内部惰性值；它不得使 `JSTaggedValue::IsAccessor()` 返回 true，也不得使 `PropertyAttributes::IsAccessor` 置位。否则类创建中的 `PropertyAttributes(PropertyDescriptor)` 会把目标方法填成 accessor property，首次物化将被迫执行 accessor-to-data HClass transition，并改变可观察 descriptor 语义。
-
-两条路径的注册完成状态为：
-
-```text
-当前即时创建：
-  LayoutInfo[i] = { key: "m", attrs: data + W/E/C + offset + TAGGED }
-  prototype.slot[i] = JSFunction
-
-按需绑定：
-  LayoutInfo[i] = { key: "m", attrs: data + W/E/C + offset + TAGGED }
-  prototype.slot[i] = NapiLazyAccessor
-  slotDirectory[j] = LAZY(NativeLazyMethodRecipe { method, data })
-```
-
-### 4.3 新增数据结构
+**注册阶段**：`NapiGetKeysAndAttrsFromProps` 继续创建 VM String/Symbol key 和 `PropertyAttributes`，并保持 static/prototype 分区及声明顺序。目标 prototype method 不调用即时函数创建链，而是保存以下新增记录：
 
 ```cpp
 struct NativeLazyMethodRecipe {
     NapiNativeCallback method;
-    void *data;
+    void *data;  // non-owning
 };
 ```
 
-在 64 位 ABI 下，该记录包含两个指针，逻辑 payload 为 16 B、对齐为 8 B。每个未物化方法拥有一个独立 allocator block；`data` 是非拥有指针，释放 recipe 时不得释放 `data` 指向的资源。
+每个目标方法的 prototype slot 写入 VM 内部 `NapiLazyAccessor`，payload 保存 generation-safe token 和 recipe index。每类创建 `ClassBindingLifetime` 与原子 `slotDirectory`，状态至少包括 `LAZY`、`MATERIALIZING`、`DONE`、`DEAD`。recipe 只复制 callback/data 指针，不拥有 `data` 指向的资源。
 
 ```cpp
 class NapiLazyAccessor : public Record {
     NativeReadEntry readEntry;
     NativeWriteEntry writeEntry;
-    TaggedPayload payload;  // generation-safe token + recipe index
+    TaggedPayload payload;
 };
 ```
 
-`NapiLazyAccessor` 是 VM 管理的专用惰性方法槽对象，不依赖内建对象初始化类型。设计目标为 32 B；最终对象大小、GC visitor 范围和 factory 分配大小必须由目标 ABI probe 共同确认。
+`NapiLazyAccessor` 是 VM 内部普通 data property value，不得使 `JSTaggedValue::IsAccessor()` 或 `PropertyAttributes::IsAccessor` 置位。其最终 ABI 大小和 GC visitor 范围为 `[待核实：请在此处补充目标 ABI probe 文件路径与结果]`。
 
-```cpp
-struct ClassBindingLifetime {
-    std::unique_ptr<std::atomic<uintptr_t>[]> slotDirectory;
-    uint32_t slotCount;
-    uint32_t lazyCount;
-    GenerationSafeToken token;
-};
-```
+**首次读取阶段**：
 
-每个目录项占一个机器字，在 64 位目标上为 8 B，编码以下状态：
+1. property lookup 在实际 holder 上命中 `NapiLazyAccessor`，保存 receiver、holder 和当前 VM key。
+2. 解析 token/index，获取 `ClassBindingLifetime` guard。
+3. 以 CAS 将 `LAZY` 转为 `MATERIALIZING`；其他线程等待已发布结果或按失败协议返回。
+4. 使用当前 key、recipe.method 和 recipe.data，复用 `NapiNativeCreateFunction` 与 `FunctionRef::NewConcurrentWithName` 创建 `JSFunction`、`JSNativePointer` 和 `NapiFunctionInfo`。
+5. 写回前确认 holder 的 slot 仍保存相同 accessor；若已被覆盖或删除，释放新建函数图并按终态处理。
+6. 通过带写屏障的专用路径在同一 slot 写入 `JSFunction`，保持 HClass、LayoutInfo、key、W/E/C、offset 和 `TAGGED` representation 不变。
+7. 调用正式的 prototype change/IC invalidation API，发布 `DONE`，释放 recipe，并返回 `JSFunction`。
 
-```text
-LAZY(recipe*) -> MATERIALIZING(recipe*) -> DONE
-       |                    |
-       +---- failure -------+
+prototype 原位写回对应的正式 API、所有 LoadIC/StoreIC/runtime stub/AOT 读取入口及其源码路径为 `[待核实：请在此处补充源码文件绝对路径 + 行号]`。
 
-LAZY / MATERIALIZING / DONE -> DEAD  (environment teardown)
-```
+**属性行为**：首次读取和 `Object.getOwnPropertyDescriptor` 只物化必要方法；`in`、`hasOwn`、键枚举不读取 value。prototype 自有槽的覆盖、删除、`defineProperty`、`freeze` 和 `seal` 必须先发布终态，再释放 recipe。receiver 自有属性覆盖不得误终止 prototype 上的 recipe。不可写、不可配置、Proxy/Reflect、Symbol key、重复 key 和严格模式行为必须与即时路径一致。
 
-具体 tag 编码必须满足 recipe 指针对齐要求。目录项是 recipe block 的唯一所有者；只有在终态发布后才能释放 recipe。
+**生命周期**：environment teardown 先发布 `DEAD`，阻止新 guard 和新物化，等待在途 guard 排空，再释放未物化 recipe、目录和 token。已物化函数图继续由现有 GC/CommonDeleter 管理。cleanup hook 的完整顺序为 `[待核实：请在此处补充源码文件绝对路径 + 行号]`。recipe 不释放外部 `data`，table/registry 不提前释放 callback 所属动态库。
 
-### 4.4 字段来源与所有权
+### 4.3 成本模型与已知收益边界
 
-| 数据 | 来源 | 持久位置 | 所有权与生命周期 |
-|------|------|----------|------------------|
-| property key / function name | `utf8name` 或 `napi_value name` | VM String/Symbol 与属性元数据 | VM 管理；物化时从当前 key 重建函数名 |
-| writable/enumerable/configurable | descriptor attributes | `PropertyAttributes` | VM 管理；始终作为数据属性语义解释 |
-| `method` | descriptor | `NativeLazyMethodRecipe` | 复制指针值；recipe 独立拥有该副本 |
-| `data` | descriptor | `NativeLazyMethodRecipe` | 复制非拥有指针值；资源仍归 native 模块 |
-| recipe identity | 注册顺序 | accessor payload 与 `slotDirectory` | token 防地址复用，index 在 lifetime 内稳定 |
-| materialization state | registration/runtime | `slotDirectory[index]` | 原子发布；environment cleanup 统一终止 |
-
-## 5. 首次读取与写回
-
-### 5.1 首次读取流程
-
-
-
-读取 `receiver.m` 时，属性查找必须保留实际持有属性的 `holder` 和当前 VM key：
-
-1. lookup 在 `holder` 上命中 `NapiLazyAccessor`；
-2. `CallNapiLazyGet(thread, receiver, holder, key, payload)` 解析 token/index，并取得 lifetime guard；
-3. 对目录项执行 `LAZY(recipe*) -> MATERIALIZING(recipe*)` CAS；
-4. 使用当前 key、recipe.method 和 recipe.data 调用现有 native 函数创建链；
-5. 写回前重新确认 holder 的属性仍是同一个 accessor，避免覆盖已发生的重定义或删除；
-6. 在保持 key、writable/enumerable/configurable、offset、representation、HClass 和 LayoutInfo 不变的前提下，把 holder 的同一 property slot 从 `NapiLazyAccessor` 原子替换为 `JSFunction`；
-7. 写回提交后发布 `DONE`，再释放该槽的 recipe block；
-8. 返回新建的 `JSFunction`。后续读取走普通数据属性与正常 IC。
-
-
-
-### 5.2 时序
-
-
-
-### 5.3 Prototype value 写回与 IC 失效
-
-
-
-物化不增加、删除或重定义属性，也不修改共享 `LayoutInfo`。惰性值和最终 `JSFunction` 都是 `TAGGED` value，因此正常物化不需要 HClass transition：
-
-1. 根据现有 HClass/LayoutInfo 取得目标 key、attributes 和 slot offset；
-2. 校验 slot 仍保存当前 `NapiLazyAccessor`，然后通过带写屏障的专用路径替换同一 slot value；
-3. prototype HClass identity、LayoutInfo identity、key、W/E/C、`IsAccessor=false`、offset 和 representation 保持不变；
-4. 显式调用 `JSHClass::MarkProtoChanged`/`NoticeThroughChain` 并刷新 prototype users，因为不能依靠 HClass transition 自动失效依赖旧值的缓存；
-5. 依赖惰性读取 handler 的 LoadIC、StoreIC 和 MegaIC 条目失效，新读取建立普通数据属性 handler。
-
-物化专用写回不应被记录为一次 JavaScript 用户属性写入。若复用普通写入入口，必须验证 PGO `TrackType` 不会产生与即时创建路径不同的更新；否则应由专用写回跳过该 profiling 更新。
-
-必须覆盖解释器、IC、runtime stub、compiler/AOT 和反射入口，保证任何读取路径都不会把 `NapiLazyAccessor` 本身作为 JavaScript 可观察值返回。
-
-## 6. 属性语义
-
-
-
-`NapiLazyAccessor` 只是 VM 内部表示，对 JavaScript 必须表现为普通数据属性。
-
-| 操作 | 最终行为 |
-|------|----------|
-| `receiver.m` | 首次读取物化 holder 上的方法；返回 `JSFunction` |
-| `Object.getOwnPropertyDescriptor(proto, "m")` | 先物化，再返回包含真实函数 value 的数据属性 descriptor |
-| `holder.m = value` | `m` 是 holder 自有惰性槽时，writable 则直接用 value 替换并释放 recipe；不可写时沿当前严格/非严格模式处理 |
-| `instance.m = value` | prototype 属性 writable 时在 receiver 上创建自有数据属性；prototype 惰性槽保持不变；不可写时沿当前失败语义处理 |
-| `Object.defineProperty` 指定 value 或 accessor | 直接重定义并释放原 recipe |
-| `Object.defineProperty` 仅修改 attributes | 先物化以保留原函数 value，再应用新 attributes |
-| `delete proto.m` | configurable 时删除并释放 recipe；否则按当前删除失败语义处理 |
-| `in`、`hasOwn`、`for...in`、`Object.keys` | 只查询属性或枚举键，不读取 value，不触发物化 |
-| `Object.entries`、spread、序列化取值 | 读取到某个 value 时只物化对应方法；操作中断时不要求其余方法完成物化 |
-| `freeze`、`seal` | 先物化该对象的全部自有惰性方法，再执行现有完整性操作，避免不可配置属性阻断后续内部写回 |
-| `preventExtensions` | 只禁止新增属性；现有惰性方法保持不变，后续仍可物化为同一自有属性 |
-| Proxy/Reflect | 底层目标遵循同一数据属性语义和 invariant 检查 |
-
-覆盖或删除必须先发布终态，再释放 recipe。若操作作用于 receiver 而不是实际 holder，不得错误终止 prototype 上的惰性方法。
-
-## 7. 生命周期与卸载
-
-
-
-`ClassBindingLifetime` 由 NAPI environment cleanup 链管理：
-
-1. environment teardown 发布 lifetime `DEAD`，阻止新的 lifetime guard 和物化操作；
-2. 等待已取得的 guard 退出，确保没有线程仍读取 recipe；
-3. 对未物化槽发布 `DEAD`，释放剩余独立 recipe block；
-4. 释放 `slotDirectory` 和 registry token；
-5. 已物化的 `JSFunction`、`JSNativePointer` 和 `NapiFunctionInfo` 继续由现有 GC 与 `CommonDeleter` 路径管理；
-6. 不释放 recipe.data 指向的外部资源；
-7. teardown 后的并发属性读取抛出 native binding unavailable 异常，不能返回 `undefined` 或调用已卸载代码。
-
-清理路径与物化路径共享同一状态机和 guard 协议，避免重复释放、悬空回调和 token 地址复用造成的 ABA 问题。
-
-## 8. 对象布局与成本口径
-
-(对象布局对比图见附录)
-
-### 8.1 注册期分配变化
-
-| 对象 | 当前即时创建 | 按需绑定注册完成且未物化 |
-|------|--------------|--------------------------|
-| `JSFunction` | 每方法创建 | 不创建 |
-| `JSNativePointer` | 每方法创建 | 不创建 |
-| `NapiFunctionInfo` | 每方法创建 | 不创建 |
-| `NapiLazyAccessor` | 无 | 每目标方法一个；32 B 设计值，需目标 ABI 确认 |
-| `NativeLazyMethodRecipe` | 无 | 每未物化方法一个独立 allocation；16 B 逻辑 payload |
-| `slotDirectory` | 无 | 每目标方法一个 8 B entry |
-| `ClassBindingLifetime`/registry | 无 | 每类一个固定成本 |
-| prototype HClass | 注册期按全部 key/attributes 创建 | 相同属性数、capacity、对象尺寸和 identity |
-| prototype `LayoutInfo` | 填充 key、W/E/C、data-property 标志、offset、`TAGGED` representation | 内容相同；不保存 recipe 或 lazy state |
-| prototype property slot | 每目标方法保存 `JSFunction` | 每目标方法保存 `NapiLazyAccessor`；首次读取后同槽改为 `JSFunction` |
-
-`LayoutInfo` 中已有的 key/attributes 和 prototype value slot 是两条路径共有的结构，不计为按需绑定新增分配。
-
-### 8.2 生命周期成本
-
-设类中共有 `N` 个目标方法，在检查点仍有 `U` 个未物化方法：
+未物化方法的逻辑收益可写为：
 
 ```text
-net_shallow = sum(i in U)(avoided_eager_object_bytes(i)
-                          - lazy_accessor_actual(i)
-                          - recipe_allocator_actual(i))
-              - directory_actual(N)
+net_shallow = sum(avoided_eager_object_bytes
+                  - lazy_accessor_actual
+                  - recipe_allocator_actual)
+              - directory_actual
               - lifetime_registry_actual
 ```
 
-计算与验证必须分开报告：
+该公式只用于测试数据归因。`NativeLazyMethodRecipe` 的 16 B 是逻辑 payload，不是 allocator actual；`NapiLazyAccessor` 的 32 B 是设计值，不是已确认对象大小。Top13 的 61.474 MiB 和快手的 24.035 MiB 是 closure 存量，不得写成 C2 已实现收益。实际 native usable bytes、JS heap shallow、RSS/PSS 需要 clean A/B。
 
-- recipe 的 16 B 逻辑 payload 与 allocator actual/usable bytes；
-- accessor 的设计大小与最终 ABI 大小；
-- 每类 directory、registry、guard 和 header；
-- GC shallow/live bytes、Region used/committed、RSS/PSS；
-- 首次读取时延、批量物化峰值和清理时延。
+## 五、实施计划与灰度退出机制
 
-不得用逻辑字段大小替代 allocator 实际计费，也不得把 shallow bytes 直接等同于 committed 或 RSS/PSS 收益。
+### 5.1 实施计划
 
-## 9. 兼容性与风险控制
+| 阶段 | 内容 | 预计人日 |
+|------|------|---------:|
+| 设计 | VM/NAPI 接口、对象布局、状态机、属性语义和错误传播定稿 | 4 |
+| 开发 | 注册链、recipe、惰性槽、函数物化和 prototype 写回 | 21 |
+| 开发 | lifetime、并发、cleanup、IC 失效与反射入口 | 6 |
+| 测试 | 功能、属性语义、Sendable、GC、AOT、并发和 teardown | 13 |
+| 测试 | allocator probe、clean A/B、RSS/PSS 与回归 | 4 |
+| **合计** |  | **48** |
 
-| 风险 | 最终控制措施 | 验证要求 |
-|------|--------------|----------|
-| 读取快路径绕过物化 | 所有 lookup/IC/compiler/反射入口统一识别专用惰性槽 | 热解释器、IC、AOT、反射读取均返回函数而非内部对象 |
-| prototype IC 在 HClass 不变时复用旧 handler | 同槽写回后显式进入 prototype invalidation 链，不能依赖 shape transition | 建立惰性 IC 后物化，旧 handler 不得返回内部槽或旧值 |
-| descriptor 输入失效 | 仅复制 method/data；key/attrs 进入 VM 元数据 | define_class 返回后销毁输入缓冲仍可正确物化 |
-| 并发或异常造成重复函数 | CAS 物化权；写回前校验 accessor identity | 多线程首读只发布一个函数 |
-| override/delete 与物化竞争 | 统一状态机；终态发布先于 recipe free | 覆盖、删除、defineProperty 与首读交错无 UAF/双释放 |
-| environment teardown 竞争 | generation-safe token、guard drain、DEAD 后禁止新物化 | worker/env teardown 压测，无悬空 callback/data 读取 |
-| 属性反射暴露内部表示 | descriptor 查询先物化，其他操作按数据属性语义分流 | descriptor、赋值、delete、freeze、proxy 测试通过 |
-| Sendable 跨线程语义变化 | Sendable 类继续即时创建 | Sendable 回归无惰性槽 |
-| 结构成本抵消收益 | 逐类计算真实 allocator 与固定成本，收益不成立时不启用 | clean A/B 分列结构成本和物理内存指标 |
+### 5.2 灰度观测指标
 
-功能默认通过注册期开关受控发布。关闭开关时，目标方法继续执行当前 `NapiNativeCreateFunction` 即时创建链，不改变已发布 NAPI 接口。
+- `napi_define_class` 调用数、目标方法数、fallback 数和每类 `N/U`。
+- 注册耗时 P50/P95/P99；首次读取耗时 P50/P95/P99；稳态吞吐。
+- `NapiLazyAccessor`、recipe、directory 的 requested/usable/actual bytes 和 allocation count。
+- full-GC 后 native heap committed、JS heap shallow/live、RSS/PSS。
+- `libark_jsruntime.so` 相关 cppcrash、UAF、double-free、leak、异常退出和属性语义 DT 失败数。
+- `freeze`、`seal`、Proxy、worker/environment teardown 和模块卸载场景的峰值分配与耗时。
 
-## 10. 测试设计
+### 5.3 回滚触发条件（SOP）
 
-### 10.1 功能与属性语义
+灰度阶段任一条件满足即关闭 C2 开关，恢复当前即时创建路径：
 
-- 首次读取、重复读取和函数对象身份；
-- string/symbol key 的函数名称与 `length`；
-- own/inherited assignment、严格模式不可写属性；
-- `getOwnPropertyDescriptor`、`defineProperty`、delete、键枚举和值枚举；
-- freeze、seal、preventExtensions、Proxy 与 Reflect；
-- constructor、static、getter、setter、value 和 Sendable 排除路径。
+1. 崩溃率相对基线增加超过 1%，或出现任意可归因 UAF、double-free、native heap leak。
+2. 注册 P95 相对基线回退超过 1%。
+3. 首次读取 P95 增量超过 `0.10 ms/方法`。
+4. 稳态吞吐低于基线 99%。
+5. 任一属性 descriptor、函数 identity/name/length、Proxy、严格模式或 Sendable DT 失败。
+6. RSS/PSS 在相同采样点重复测量中出现可归因回退，或 native usable bytes 未下降且新增管理成本超过 `0 B` 的待测红线。
 
-### 10.2 VM 与生命周期
+## 六、破坏性变更清单（强制暴露负面影响）
 
-- interpreter、LoadIC/StoreIC、MegaIC、runtime stub、compiler/AOT 全读取路径；
-- 物化前建立 prototype-chain IC，物化后验证旧 handler 失效；
-- 并发首读、override/delete 竞争；
-- worker 创建/销毁、environment teardown、GC 和快照识别；
-- allocator failure 路径回归。
+| 影响维度 | 具体负面表现 | 缓解/适配措施 |
+| :--- | :--- | :--- |
+| 首次读取 | 首次读取新增 lookup、CAS、函数创建和 slot 写回延迟 | 单方法和批量首次读取分别压测；超过 `0.10 ms/方法` 自动回滚 |
+| 分配峰值 | `freeze`、`seal`、序列化或批量枚举可能在短时间内物化多个函数 | 记录峰值和 P95；批量峰值超过基线 `+1 MB` 时停止灰度，具体基线待测 |
+| VM 修改面 | property lookup、反射、IC invalidation、GC cleanup 需要识别内部惰性槽 | 使用独立 VM 类型和全入口 DT；无法覆盖的入口保持 legacy |
+| 动态属性操作 | override、delete、`defineProperty`、Proxy 和环境销毁可能与物化并发 | 状态机、accessor identity 校验、guard drain 和 exactly-once 释放 |
+| 三方 Node-API | 公开 ABI 不变，但 callback/data lifetime 与私有 trampoline 解释必须保持兼容 | 三方 native module 回归；不改变 `napi_property_descriptor` 布局 |
+| DevEco Studio | 调试器和反射工具可能在首读前看到内部值，造成显示或断点行为差异 | 所有反射入口先物化；调试模式默认关闭开关，异常由 DT 捕获 |
+| HAP/HSP | 本方案不改变字节码和 JS 源码，包体积增量目标为 `0 MB`；新增实现代码的包体积尚未测量 | build 产物对比；增量超过 `0.1 MB` 或 `1%` 取较大者时停止灰度 |
+| 动态库卸载 | recipe 只保存 callback 地址，不延长 SO 生命周期 | 与即时路径做 unload 对照；不把 module pin 混入 C2 |
 
-### 10.3 性能与内存
+## 七、风险评估（仅保留与技术实现强相关项）
 
-- 同构 clean A/B 的注册耗时、首次读取耗时和稳态吞吐；
-- 每类 `N/U`、accessor actual、recipe allocator actual、directory 与固定头；
-- full-GC 后 shallow/live bytes、Region used/committed 和 RSS/PSS；
-- freeze/serialization 等批量物化场景的峰值时延和瞬时分配。
+| 风险项 | 概率 | 影响描述 | 缓解动作 |
+|---|---|---|---|
+| 读取入口遗漏 | 中 | 某条 interpreter/IC/AOT/反射路径将内部槽直接返回给 JavaScript | 入口清单审计；每条路径执行首次读取和 descriptor DT |
+| HClass/LayoutInfo 语义变化 | 中 | slot 写回触发错误 transition，导致属性描述符或 IC 结果变化 | 只允许同 slot TAGGED 写入；对比 HClass/LayoutInfo identity 和 W/E/C |
+| 首读重复物化 | 中 | 多线程或重入产生多个函数对象、重复 callback metadata 或泄漏 | `LAZY -> MATERIALIZING` CAS；只发布一个结果并验证 exactly-once |
+| override/delete 竞态 | 中 | recipe 提前释放或写回已被替换的 slot，导致 UAF | holder/accessor identity 校验；终态发布先于 free |
+| teardown UAF | 中 | guard 未排空即释放 lifetime、recipe 或 token | `DEAD`、guard drain、GC/worker teardown 压测；ASan/LSan，支持时 TSan |
+| allocator 成本抵消 | 高 | recipe、accessor、directory 和 registry 实际成本超过省下的对象 | 按 ABI 与 allocator actual/usable bytes 逐类测量；小类 fallback |
+| Symbol/重复 key | 中 | 慢路径与重复 key throw 行为改变 | 保留当前 key 分区和异常路径；覆盖 Symbol、duplicate key DT |
+| Sendable 误纳入 | 低 | 跨线程共享语义被改变 | Sendable 强制 legacy；增加类型和线程回归 |
+| 动态库卸载 | 中 | callback 地址在 SO 卸载后失效 | 维持基线语义；不声称 C2 解决 module lifetime |
 
-## 11. 实施工作量与排期
+## 八、未决问题（Open Issues）
 
-| 阶段 | 内容 | 人日 |
-|------|------|-----:|
-| 设计 | VM/NAPI 接口、对象布局、状态机、属性语义与错误传播定稿 | 4 |
-| 开发 | 注册链与元数据所有权 | 6 |
-| 开发 | VM 槽对象、key-aware lookup 与函数物化 | 8 |
-| 开发 | prototype 写回、IC 失效与反射操作 | 7 |
-| 开发 | lifetime registry、并发状态机与 environment cleanup | 6 |
-| 测试 | 功能、property semantics、Sendable 与回归 DT | 7 |
-| 测试 | IC/AOT、并发、异常、GC 与 teardown | 6 |
-| 测试 | clean A/B、allocator 与物理内存验证 | 4 |
-| **设计小计** |  | **4** |
-| **开发小计** |  | **27** |
-| **测试小计** |  | **17** |
-| **总计** |  | **48 人日** |
+1. 当前分支是否提供可覆盖所有 interpreter、LoadIC/StoreIC、runtime stub、compiler/AOT、反射和 Proxy 入口的惰性槽识别点：`[待核实：请在此处补充源码文件绝对路径 + 行号]`。
+2. `NapiLazyAccessor` 的目标 ABI 大小、`Record` factory 分配大小、GC visitor 范围和 verifier 规则：`[待核实：请在此处补充源码文件绝对路径 + 行号]`。
+3. prototype 原位写回使用的正式 `JSHClass`/IC invalidation API 及其是否会影响 PGO `TrackType`：`[待核实：请在此处补充源码文件绝对路径 + 行号]`。
+4. `ClassBindingLifetime` 与 environment cleanup 的并发顺序、guard drain 和 worker teardown 行为：`[待核实：请在此处补充源码文件绝对路径 + 行号]`。
+5. 目标 AArch64 allocator 的 `malloc_usable_size`/等价接口结果，以及 `N=1..16` 的准入阈值：待 allocator probe。
+6. Top13 和快手的创建侧 eligible method 数、每类 method 数、未读取比例和实际 `N/U` 分布：待 `napi_define_class` 创建侧插桩；快照 closure population 不作为替代数据。
+7. 注册 P95、首次读取 P95、稳态吞吐、RSS/PSS、native committed 和 HAP/HSP 增量的基线及重复测量置信区间：待 clean A/B。
+8. 首读失败、异常传播、`freeze`/`seal` 批量物化和 module unload 的产品级回滚开关：待运行时 DT 和灰度策略确认。
 
-按 2 名开发与 1 名测试并行安排，计划 6 周：第 1 周完成接口与布局；第 2-4 周完成注册、物化、属性语义和生命周期；第 3-5 周并行补齐 DT；第 6 周完成全路径回归与 clean A/B。
+## 附录 A：术语-源码路径映射表
 
-## 12. 设计结论
+| 术语 | 含义 | 源码路径 |
+|---|---|---|
+| `EcmaVM` | ArkTS/JS 执行环境及生命周期主体 | `D:\docker\invest\arkcompiler\ets_runtime\ecmascript\ecma_vm.cpp` |
+| `JSFunction` | JavaScript 函数对象 | `D:\docker\invest\arkcompiler\ets_runtime\ecmascript\js_function.cpp` |
+| `JSNativePointer` | 函数 extra info 关联的 native pointer | `D:\docker\invest\arkcompiler\ets_runtime\ecmascript\js_native_pointer.h` |
+| `NapiFunctionInfo` | 当前 NAPI callback/data/env/scope metadata | `D:\docker\invest\foundation\arkui\napi\native_engine\native_value.h:54-63` |
+| `PropertyAttributes` | 属性 W/E/C、data/accessor 和表示信息 | `D:\docker\invest\arkcompiler\ets_runtime\ecmascript\` `[待核实：请在此处补充具体文件与行号]` |
+| `JSHClass` | 对象 shape 和属性布局管理对象 | `D:\docker\invest\arkcompiler\ets_runtime\ecmascript\js_hclass*` `[待核实：请在此处补充具体文件与行号]` |
+| `LayoutInfo` | 属性 key、attributes、offset 等布局信息 | `D:\docker\invest\arkcompiler\ets_runtime\ecmascript\layout_info*` `[待核实：请在此处补充具体文件与行号]` |
+| `NapiDefineClass` | NAPI class 注册内部入口 | `D:\docker\invest\foundation\arkui\napi\native_engine\impl\ark\ark_native_engine.cpp:333-369` |
+| `FunctionRef::NewConcurrentWithName` | 创建 native `JSFunction` 与 extra info 的入口 | `D:\docker\invest\arkcompiler\ets_runtime\ecmascript\napi\jsnapi_expo.cpp:3947-4039` |
+| `RunCleanupHooks` | NAPI environment cleanup hook 执行入口 | `D:\docker\invest\foundation\arkui\napi\native_engine\native_engine.cpp:863-906` |
+| `NapiLazyAccessor` | 本方案新增的 VM 内部惰性值类型 | 本方案设计类型，源码路径待实现 |
+| `ClassBindingLifetime` | 本方案新增的类级生命周期对象 | 本方案设计类型，源码路径待实现 |
 
-最终实现仅改变普通非 Sendable 类的 prototype native method：注册时安装专用惰性方法槽并持久化独立 `{method, data}` 记录，首次读取时复用现有函数创建链，随后写回普通数据属性。constructor 和其他属性类型保持当前流程。
+## 附录 B：验收数据表
 
-方案成立的必要条件是：专用槽不对 JavaScript 可见、所有读取路径都进入物化、prototype 写回完整触发 IC 失效、每槽元数据按终态物理释放、environment teardown 在释放前排空 lifetime guard。上述条件由功能 DT、VM 全路径测试和 clean A/B 共同验收。
+| 指标 | 基线 | C2 | 红线 |
+|---|---:|---:|---:|
+| 注册 P95 | 待测 | 待测 | 相对基线回退 ≤1% |
+| 首次读取 P95 | 待测 | 待测 | 增量 ≤0.10 ms/方法 |
+| 稳态吞吐 | 待测 | 待测 | ≥基线 99% |
+| native usable bytes | 待测 | 待测 | 不得因 C2 增加 |
+| RSS/PSS | 待测 | 待测 | clean A/B 不得可归因回退 |
+| HAP/HSP 体积 | 待测 | 待测 | 增量 ≤max(0.1 MB, 基线 1%) |
+| 崩溃率 | 待测 | 待测 | 相对基线增加 ≤1% |
 
-## 附录 A：源码锚点
-
-| 事实 | 源码位置 |
-|------|----------|
-| public API 进入 `NapiDefineClass` | `foundation/arkui/napi/native_engine/native_api.cpp:1643-1674` |
-| `NapiNativeCreateFunction` 分配/填充 `NapiFunctionInfo` 并调用 `FunctionRef::NewConcurrentWithName` | `foundation/arkui/napi/native_engine/impl/ark/ark_native_engine.cpp:190-213` |
-| `NapiGetKeysAndAttrsFromProps` 创建 key、即时 method value 并 placement-new `PropertyAttribute` | `foundation/arkui/napi/native_engine/impl/ark/ark_native_engine.cpp:250-285` |
-| `NapiCreateClassFunction` 创建栈/堆 `keys[]`、`attrs[]`，调用类创建入口并释放 heap backing | `foundation/arkui/napi/native_engine/impl/ark/ark_native_engine.cpp:288-330` |
-| `NapiDefineClass` 创建 constructor `NapiFunctionInfo` 并进入 `NapiCreateClassFunction` | `foundation/arkui/napi/native_engine/impl/ark/ark_native_engine.cpp:333-369` |
-| `FunctionRef::NewConcurrentWithName` 创建 name String、`JSFunction`，安装 extra info 和 lexical environment | `arkcompiler/ets_runtime/ecmascript/napi/jsnapi_expo.cpp:3947-4039` |
-| `FunctionRef::NewConcurrentClassFunctionWithName` 创建栈/堆 `PropertyDescriptor[]` 并释放 heap backing | `arkcompiler/ets_runtime/ecmascript/napi/jsnapi_expo.cpp:4042-4073` |
-| `ConstructDescByAttr` 填 descriptor；`CreateClassFuncWithProperties`/`NewClassFuncProtoWithProperties` 创建 HClass、LayoutInfo、class function、prototype 并写 property slot；`DestructDesc`/`DestructAttr` 回收临时元素 | `arkcompiler/ets_runtime/ecmascript/napi/jsnapi_class_creation_helper.cpp:32-216` |
-| `JSFunction::SetFunctionExtraInfo` 创建并安装 extra info `JSNativePointer` | `arkcompiler/ets_runtime/ecmascript/js_function.cpp:1110-1134` |
-| `ObjectFactory::NewNativeFunctionByHClass` 分配并初始化 native `JSFunction` | `arkcompiler/ets_runtime/ecmascript/object_factory.cpp:2261-2280` |
-| prototype change marker | `arkcompiler/ets_runtime/ecmascript/js_hclass-inl.h:381-405` |
-| environment cleanup hook 执行入口 `NativeEngine::RunCleanupHooks` | `foundation/arkui/napi/native_engine/native_engine.cpp:863-906` |
-
-## 附录 B：术语
-
-| 术语 | 含义 |
-|------|------|
-| 目标方法 | 满足本设计适用条件的非 static、非 Sendable prototype native method |
-| 惰性方法槽 | 注册期安装、首次取值时被普通数据属性替换的 VM 内部属性表示 |
-| 按需物化 | 根据回调元数据创建 `JSFunction` 对象图并写回属性的过程 |
-| callback metadata recipe | 物化所需的最小运行时记录 `{method, data}` |
-| slot directory | 每类的原子状态目录，连接 recipe 所有权与方法槽 index |
-| lifetime guard | teardown 释放资源前用于保护在途物化操作的生命周期引用 |
-| generation-safe token | 防止 registry entry 地址复用后旧 accessor 命中新 lifetime 的标识 |
+本提案只有在源码入口、对象布局、allocator actual、生命周期 DT 和 clean A/B 均完成验证后，才具备进入默认灰度范围的条件。
