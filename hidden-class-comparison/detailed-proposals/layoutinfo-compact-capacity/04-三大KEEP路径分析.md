@@ -403,12 +403,12 @@ int Map::SlackForArraySize(int old_size, int size_limit) {
 
 | 路径 | 源码位置 | 改动 | 属性数来源 | 收益 | 劣化 | 风险 |
 |------|---------|------|----------|------|------|------|
-| **A1：函数 HClass** | `object_factory.cpp:2034` | `CreateLayoutInfo(2, SEMI, GROW)` → `CreateLayoutInfo(2, SEMI, KEEP)` | 函数属性集固定（length+name） | ~1.2 MiB | **零** | **零** |
-| **A2：字典迁移** | `js_hclass.cpp:731` | `CreateLayoutInfo(N, GROW)` → `CreateLayoutInfo(N, SEMI, KEEP)` | `EntriesCount()` 已知 | ~0.4 MiB | 一次性 ~110 ns | 极低 |
-| **A3：对象字面量** | `object_factory.cpp:5722,5829` | `CreateLayoutInfo(N, GROW)` → `CreateLayoutInfo(N, SEMI, KEEP)` | `propertyCount` 编译期已知 | ~0.6 MiB | 一次性 ~110 ns | 低 |
-| **合计** | | **3-4 行** | | **~2.2 MiB** | | |
+| **A1：函数 HClass** | `object_factory.cpp:2034` | `GROW` → `KEEP` | 函数属性集固定（length+name） | ~1.2 MiB | **零** | **零** |
+| **A2：字典迁移** | `js_hclass.cpp:731` | `GROW` → `KEEP` | `EntriesCount()` 已知 | ~0.4 MiB | 一次性 ~110 ns | 极低 |
+| **A3：对象字面量** | `object_factory.cpp:5722,5829` | `GROW` → `KEEP` | `propertyCount` 编译期已知 | ~0.6 MiB | 一次性 ~110 ns | 低 |
+| **合计** | | | | **~2.2 MiB** | | |
 
-改动均为 1-2 行参数变更，不修改任何逻辑代码。
+改动均为参数级别变更，不修改任何逻辑代码。
 
 ### 5.2 方案 B：调整 GROW 增长公式
 
@@ -463,12 +463,11 @@ static inline uint32_t ComputeGrowCapacity(uint32_t old_capacity) {
 
 ### 5.3 方案 A+B 组合效果
 
-| 方案 | 覆盖范围 | 收益（快手前台） | 改动量 | 性能影响 |
-|------|---------|---------------|--------|---------|
-| A：三路径 KEEP | 函数 HClass + 字典迁移 + 对象字面量 | **~2.2 MiB** | 3-4 行 | G1 零劣化，G10/G11 一次性 ~110 ns |
-| B：GROW 公式调整 | 其余所有 GROW 路径（transition 链、动态对象等） | **~0.8-1.5 MiB** | 1 个函数 ~6 行 | 小 Layout 扩容频率略增 |
-| **A+B 合计** | 全部 LayoutInfo 分配 | **~3.0-3.7 MiB** | **~10 行** | |
-| 叠加 layoutinfo-sharing（方案 C） | 内容去重 | ~2.0-5.5 MiB | 50 人日 | 查找 ~5-50 cycle/publish |
+| 方案 | 覆盖范围 | 收益（快手前台） | 性能影响 |
+|------|---------|---------------|---------|
+| A：三路径 KEEP | 函数 HClass + 字典迁移 + 对象字面量 | **~2.2 MiB** | G1 零劣化，G10/G11 一次性 ~110 ns |
+| B：GROW 公式调整 | 其余所有 GROW 路径（transition 链、动态对象等） | **~0.8-1.5 MiB** | 小 Layout 扩容频率略增 |
+| **A+B 合计** | 全部 LayoutInfo 分配 | **~3.0-3.7 MiB** | |
 
 方案 B 的收益估算依据：快手前台 ~30,000 个 GROW 路径 LayoutInfo 中，属性 ≤8 的部分每条节省 32-48 B。精确收益需插桩后按实际属性分布计算。
 
@@ -532,9 +531,9 @@ static inline uint32_t ComputeGrowCapacity(uint32_t old_capacity) {
 
 ### 5.5 结论
 
-1. **方案 A（三路径 KEEP）是零风险纯收益**——3-4 行改动，~2.2 MiB 节省，G1 零劣化，G10/G11 一次性 ~110 ns；
-2. **方案 B（GROW 公式调整）是低风险增强**——1 个函数 ~6 行改动，额外 ~0.8-1.5 MiB，小 Layout 扩容频率略增但总量极小；
-3. **A+B 组合覆盖全部 LayoutInfo 分配路径**，合计 ~3.0-3.7 MiB（快手前台口径），总改动量 ~10 行；
+1. **方案 A（三路径 KEEP）是零风险纯收益**——~2.2 MiB 节省，G1 零劣化，G10/G11 一次性 ~110 ns；
+2. **方案 B（GROW 公式调整）是低风险增强**——额外 ~0.8-1.5 MiB，小 Layout 扩容频率略增但总量极小；
+3. **A+B 组合覆盖全部 LayoutInfo 分配路径**，合计 ~3.0-3.7 MiB（快手前台口径）；
 4. **热路径零影响**——属性查找、IC、枚举完全不经过 LayoutInfo 容量机制；
 5. **GC 正向**——LayoutInfo 对象更小、标记扫描量下降、分配压力减少；
 6. 冷启动影响在 0.3 ms 量级（秒级启动的 <0.1%），不可测量。
