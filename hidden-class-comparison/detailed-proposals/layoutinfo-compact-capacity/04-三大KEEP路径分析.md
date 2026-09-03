@@ -124,9 +124,38 @@ layoutInfoHandle = CreateLayoutInfo(JSFunction::LENGTH_OF_INLINE_PROPERTIES,
 
 **性能劣化：零。不存在累加**——函数的 `length` 和 `name` 属性集是封闭的，在创建时一次性全部填入，此后不会再有任何属性追加到该 LayoutInfo。
 
-### 2.5 V8 对照
+### 2.5 V8 对照：函数 Map 创建
 
-V8 不为每个函数独立创建 DescriptorArray。同一种 FunctionKind 的所有函数共享 native context 缓存的同一个 Map（含同一个 DescriptorArray），per-context 仅一份。ArkVM 每个函数 HClass 独立创建 LayoutInfo，是两者的结构性差异。
+V8 的函数对象不独立创建 DescriptorArray——所有同种 FunctionKind 的函数共享 native context 缓存的同一个 Map（含同一个 DescriptorArray）。
+
+**V8 的函数 Map 创建流程**（`src/heap/factory.cc`）：
+
+```cpp
+// Factory::NewFunction — 创建函数时不创建新 DescriptorArray
+Handle<JSFunction> Factory::NewFunction(Handle<Map> map) {
+    // map 来自 native_context->get(i) — 已缓存的共享 Map
+    // DescriptorArray 已在 context 初始化时创建，此后不变
+    JSFunction fn = NewJSObject(map);
+    return fn;
+}
+
+// 初始化时每种 FunctionKind 只创建一次 Map：
+//   native_context->set(ORDINARY_FUNCTION_INDEX, CreateFunctionMap(...))
+//   → Factory::CreateFunctionMap → NewMap(JS_FUNCTION_TYPE, size, ...)
+//     → Map 自带 DescriptorArray [length, name] — 精确 2 条，无 slack
+//   此后所有 ordinary function 共享这一个 Map + DescriptorArray
+```
+
+**结构对比**：
+
+| 维度 | V8 | ArkVM |
+|------|-----|-------|
+| 函数 Map/DescriptorArray 数量 | **per-context 每个 FunctionKind 一个**（~5 种 kind → ~5 个） | **per function HClass 一个**（数千到数万） |
+| DescriptorArray 分配 | context 初始化时一次性创建，capacity=属性数（无 slack） | 每个函数创建时独立分配，GROW +4 slack |
+| 后续属性追加 | 走 transition 链（`ShareDescriptor`），不修改共享数组 | 走 `AddPropertyToNewHClass`，可能原地追加 |
+| waste | **零**（共享 + 无 slack） | 64 B × 每个函数 |
+
+**ArkVM 差异的根源**：ArkVM 为每个函数 HClass 独立调用 `CreateLayoutInfo(2, GROW)`，而非从 GlobalEnv 缓存复用。V8 的做法等价于将此路径的 `GrowMode` 从 `GROW` 改为 `KEEP` 并加上 context 级共享——即使不做共享，仅改 `KEEP` 即可消除 64 B/函数的浪费。
 
 ---
 
@@ -186,9 +215,42 @@ KEEP 改后：
 
 **实际风险评估**：字典→fast 迁移本身意味着 VM 判定该对象形状已稳定。迁移后再追加属性的概率极低（如果经常追加，VM 就不会迁移回 fast 了）。
 
-### 3.4 V8 对照
+### 3.4 V8 对照：字典→fast 迁移
 
-V8 的 `JSObject::MigrateSlowToFast`（objects.cc）在迁移时调用 `DescriptorArray::Allocate(isolate, numberOfProperties, 0)`——**slack 显式传 0**，精确分配，与 KEEP 等效。V8 已在此路径采用精确容量。
+V8 的 `JSObject::MigrateSlowToFast`（`src/objects/objects.cc`）在迁移时采用**精确容量 + 按需 slack** 策略。
+
+**V8 迁移时的 DescriptorArray 分配**：
+
+```cpp
+// objects.cc — MigrateSlowToFast 核心路径
+void JSObject::MigrateSlowToFast(...) {
+    int nof = dictionary->NumberOfElements();  // 属性数已知
+
+    // 分配新 DescriptorArray — slack 参数显式传 0
+    Handle<DescriptorArray> new_descriptors =
+        DescriptorArray::Allocate(isolate, nof, 0, AllocationType::kYoung);
+    //                                    ↑   ↑
+    //                              nof 个描述符  slack = 0（精确！）
+    
+    // 逐条填入
+    for (int i = 0; i < nof; i++) {
+        new_descriptors->Set(i, descriptors->Get(i));
+    }
+}
+```
+
+**V8 后续追加的处理**：迁移后如有新属性追加，走 `Map::TransitionToDataProperty` → `ShareDescriptor` → `EnsureDescriptorSlack(map, SlackForArraySize(old_size))`——使用条件性 slack（小数组 +1、大数组 +25%），而非固定 +4。
+
+**结构对比**：
+
+| 维度 | V8 | ArkVM |
+|------|-----|-------|
+| 迁移时 capacity | `nof + 0`（精确） | `nof + 4`（GROW） |
+| 迁移时 waste | **零** | 64 B |
+| 迁移后追加 | `ShareDescriptor` + `SlackForArraySize`（条件性） | `ExtendLayoutInfo` + 固定 +4 |
+| GC 回收 | `TrimDescriptorArray` 物理右裁剪回收超量 slack | 无回收机制 |
+
+**结论**：V8 在此路径已采用精确容量（slack=0），与 KEEP 等效。ArkVM 改 KEEP 后行为与 V8 对齐。
 
 ---
 
@@ -260,9 +322,76 @@ KEEP 改后：
 
 **严格 ArkTS 风险为零**：对象字面量 `{x:1, y:2, z:3}` 的后续追加 `obj.w = 4` 在编译期即被禁止（`w` 未声明）。
 
-### 4.4 V8 对照
+### 4.4 V8 对照：对象字面量
 
-V8 的对象字面量通过 `ObjectLiteralMapFromCache`（factory.cc）从 native context 缓存获取初始 Map，属性数精确匹配（`kMapCacheSize=128`，按属性数索引）。后续属性追加走 transition 链（`ShareDescriptor` + `SlackForArraySize`），使用条件性 slack（小数组 +1、大数组 +25%）而非固定 +4。
+V8 的对象字面量通过 `Factory::ObjectLiteralMapFromCache`（`src/heap/factory.cc`）从 native context 缓存获取初始 Map，属性数精确匹配。
+
+**V8 的对象字面量 Map 获取流程**：
+
+```cpp
+// factory.cc — ObjectLiteralMapFromCache
+Handle<Map> Factory::ObjectLiteralMapFromCache(
+    Handle<NativeContext> context, int number_of_properties) {
+    
+    // 从 native_context 的 object_literal_map_cache 取缓存
+    // cache 按 number_of_properties 索引，kMapCacheSize = 128
+    Handle<FixedArray> cache(context->object_literal_map_cache());
+    
+    if (number_of_properties < kMapCacheSize) {
+        Handle<Object> maybe_map(cache->get(number_of_properties));
+        if (maybe_map->IsMap()) {
+            return Handle<Map>::cast(maybe_map);  // ← 缓存命中，直接复用
+        }
+    }
+    
+    // 缓存未命中 → 创建新 Map（初始 Map，无属性）
+    Handle<Map> map = NewMap(JS_OBJECT_TYPE, JSObject::kHeaderSize);
+    
+    // 后续通过 transition 链逐属性添加
+    // 走 ShareDescriptor + SlackForArraySize（条件性 slack）
+    if (number_of_properties < kMapCacheSize) {
+        cache->set(number_of_properties, *map);  // 存入缓存供后续复用
+    }
+    return map;
+}
+```
+
+**V8 字面量创建后的属性追加**：
+
+```cpp
+// 对象字面量的属性通过 boilerplate + clone 或逐属性 transition 填充
+// 追加新属性时走 Map::ShareDescriptor：
+
+if (descriptors->number_of_slack_descriptors() == 0) {
+    int slack = Map::SlackForArraySize(old_size, kMaxNumberOfDescriptors);
+    //   → old_size < 4: slack = 1（紧凑）
+    //   → old_size ≥ 4: slack = old_size / 4（25% 增长）
+    Map::EnsureDescriptorSlack(isolate, map, slack);
+}
+descriptors->Append(descriptor);  // 原地追加
+```
+
+**结构对比**：
+
+| 维度 | V8 | ArkVM |
+|------|-----|-------|
+| 初始 Map 来源 | `ObjectLiteralMapFromCache` per-context 缓存（按属性数索引） | `CreateLayoutInfo(propertyCount, GROW)` 每次新分配 |
+| 初始 capacity | 属性数精确匹配（缓存命中时零分配） | propertyCount + 4 |
+| 初始 waste | **零**（缓存 + 精确） | 64 B |
+| 后续追加 | `ShareDescriptor` + `SlackForArraySize`（条件性：小 +1、大 +25%） | `ExtendLayoutInfo` + 固定 +4 |
+| GC 回收 | `TrimDescriptorArray` 物理右裁剪 | 无回收机制 |
+
+**V8 的条件性增长公式**（`map-inl.h:1267`）：
+
+```cpp
+int Map::SlackForArraySize(int old_size, int size_limit) {
+    if (old_size < 4) return 1;                    // 小数组：+1
+    return std::min(size_limit - old_size,
+                    old_size / 4);                  // 大数组：+25%
+}
+```
+
+对比 ArkVM 的 `ComputeGrowCapacity`：固定 `old_capacity + 4`，不随规模缩放。小数组（≤8 属性）的浪费恒定为 64 B，而 V8 仅为 16 B（+1 属性位）且可被 GC 回收。
 
 ---
 
