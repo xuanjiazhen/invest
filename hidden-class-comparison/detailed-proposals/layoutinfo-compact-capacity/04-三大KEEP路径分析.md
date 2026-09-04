@@ -1,20 +1,23 @@
 # 三大 GROW→KEEP 转换路径：逐路径浪费分析与 V8 对照
 
-本文档对 LayoutInfo 当前使用 `GrowMode::GROW`（固定 +4 slack）的三条最大浪费路径进行源码级分析，包含代码示例、浪费可视化、性能定量和 V8 对照。
+本文档对 LayoutInfo 当前使用 `GrowMode::GROW` 的三条最大浪费候选路径进行源码级分析，包含代码示例、浪费可视化、性能模型和 V8 对照。GROW 的 +4 是容量单位：每次分配最多预留 4 个 property-capacity units（8 个 TaggedArray 槽位，64 B；接近 `MAX_PROPERTIES_LENGTH` 时被截断为更少）。实际浪费取决于后续追加，稳态浪费上界为 64 B。三条路径当前均标记为源码候选：属性数可知的依据已在源码核验，但对象群体的准确数量、属性闭包的完整性、后续追加概率需通过插桩验证后才能确定最终收益。
+
+范围限定：本文仅分析 LocalHeap 的 `LayoutInfo`（`TaggedArray` 子类）。SharedHeap/Sendable 路径使用 `SLayoutInfo`（`shared_object_factory.cpp`、`CopyAndReSortSLayoutInfo` 等），有独立的并发与序列化约束，不在本文范围内。
+
 
 ## 目录
 
 1. [全部 LayoutInfo 分配路径总览](#1-全部-layoutinfo-分配路径总览)
 2. [路径 G1：函数 HClass LayoutInfo](#2-路径-g1函数-hclass-layoutinfo)
 3. [路径 G10：字典→fast 迁移](#3-路径-g10字典fast-迁移)
-4. [路径 G11：对象字面量属性填充](#4-路径-g11对象字面量属性填充)
+4. [路径 G11：N-API/工厂大对象属性构造](#4-路径-g11n-api工厂大对象属性构造源码候选)
 5. [汇总与结论](#5-汇总与结论)
 
 ---
 
 ## 1. 全部 LayoutInfo 分配路径总览
 
-### 1.1 KEEP 精确分配（11 个路径，零浪费）
+### 1.1 KEEP 精确分配（7 个路径）
 
 | # | 调用点 | 创建什么 | 属性来源 |
 |---|--------|---------|---------|
@@ -26,11 +29,11 @@
 | K6 | `object_factory.cpp:2105` | 默认类 prototype 变体 | 固定 schema |
 | K7 | `global_env_constants.cpp:577` | 空 LayoutInfo（常量） | 0 属性 |
 
-### 1.2 GROW +4 slack（12 个路径，每 LayoutInfo 浪费 64 B）
+### 1.2 GROW +4 slack（12 个路径，每 LayoutInfo 最多浪费 64 B）
 
 | # | 调用点 | 创建什么 | 典型属性数 | 浪费/Layout | 快照占比 |
 |---|--------|---------|----------|-----------|---------|
-| **G1** | `object_factory.cpp:2034-2036` | **函数 HClass LayoutInfo** | 1-2 | **64 B** | **~30%** |
+| **G1** | `object_factory.cpp:2029-2075` 等 | **函数类 HClass LayoutInfo**（G1-A bootstrap / G1-B N-API 类函数 / G1-C N-API 类 prototype，见 §2.4a） | 2-3（G1-A）；按事务上界（G1-B/C） | **最多 80 B**（G1-A 两类分支） | 50% |
 | G2 | `builtins.cpp:428` | 内建函数 LayoutInfo | 1-2 | 48-64 B | <1% |
 | G3 | `builtins.cpp:553` | Function.prototype 属性 | 2-3 | 48-64 B | <1% |
 | G4 | `builtins.cpp:586` | Function 静态属性 | 1-3 | 32-64 B | <1% |
@@ -39,15 +42,17 @@
 | G7 | `object_factory.cpp:882` | RegExp 类 LayoutInfo | 1 | 64 B | <1% |
 | G8 | `object_factory.cpp:907` | Array length 属性 | 1 | 64 B | <1% |
 | G9 | `object_factory.cpp:935` | Arguments length 属性 | 1 | 64 B | <1% |
-| **G10** | `js_hclass.cpp:731` | **字典→fast 迁移** | N | **64 B** | **~10%** |
-| **G11** | `object_factory.cpp:5722,5829` | **对象字面量属性填充** | N | **64 B** | **~15%** |
+| **G10** | `js_hclass.cpp:719-746` | **字典→fast 迁移**（named-property，`isDictionary=true`；elements 另见 G10-E） | N | **最多 64 B** | 15% |
+| **G11** | `object_factory.cpp:5722,5829` | **N-API/工厂大对象属性构造**（G11-B direct，63<N≤1023，见 §4.1） | 64-1023 | **最多 64 B** | 10% |
 | G12 | `object_factory.cpp:5423,4340` | Iterator/其他 | 2-N | 32-64 B | ~2% |
 
 ---
 
-## 2. 路径 G1：函数 HClass LayoutInfo
+## 2. 路径 G1：函数类 HClass LayoutInfo（源码候选）
 
 ### 2.1 应用代码
+
+注意：`CreateFunctionClass` 创建的是函数类 HClass（per-FunctionKind），不是每个 JSFunction 实例各自创建 LayoutInfo。内建函数实例通常通过 `GetHClassByFunctionKind` 复用环境中已有的 HClass（`object_factory.cpp:1929-1995`）。
 
 ```ts
 // 每个模块的每个函数声明/表达式
@@ -59,50 +64,68 @@ export class Calculator { /* ... */ }
 ### 2.2 VM 内部执行
 
 ```cpp
-// object_factory.cpp:2031-2056
+// object_factory.cpp:2029-2075 — CreateFunctionClass
+// 创建函数类 HClass 及其 LayoutInfo（per-FunctionKind，非 per-function）
 uint32_t fieldOrder = 0;
 
-// 创建 LayoutInfo，GrowMode 默认 GROW
-layoutInfoHandle = CreateLayoutInfo(JSFunction::LENGTH_OF_INLINE_PROPERTIES);
-//             ↑ CreateLayoutInfo(2, SEMI_SPACE, GrowMode::GROW)
-//             → ComputeGrowCapacity(2) = 2 + 4 = 6
-//             → 分配 capacity=6 的数组，self_size = 16 + 16×6 = 112 B
+// LayoutInfo 创建参数依赖 inlinedProps：
+// JSFunction::LENGTH_OF_INLINE_PROPERTIES = 3（js_function.h:258）
+// 对应 length / name / prototype 三个内联属性槽位
+if (inlinedProps == JSHClass::DEFAULT_CAPACITY_OF_IN_OBJECTS) {
+    layoutInfoHandle = CreateLayoutInfo(JSFunction::LENGTH_OF_INLINE_PROPERTIES);
+    //             ↑ CreateLayoutInfo(3, SEMI, GROW)
+    //             → ComputeGrowCapacity(3) = 3 + 4 = 7
+} else {
+    layoutInfoHandle = CreateLayoutInfo(static_cast<int>(inlinedProps));
+    //             → capacity = inlinedProps + 4（同样 GROW）
+}
+// GrowMode 默认 GROW → capacity = N + 4
 
-// 立即填入 length（第 1 个属性）
+// 属性写入闭包依赖 FunctionKind（object_factory.cpp:2039-2075）：
+// ① length：所有 kind 都写入
 layoutInfoHandle->AddKey(thread_, 0, "length", attributes);
-// → ExtraLength: 0→1, capacity=6, slack=5
 
-// 立即填入 name（第 2 个属性，class constructor 除外）
-layoutInfoHandle->AddKey(thread_, 1, "name", attributes);
-// → ExtraLength: 1→2, capacity=6, slack=4
+// ② name：非 class constructor 才写入
+if (!JSFunction::IsClassConstructor(kind)) {
+    layoutInfoHandle->AddKey(thread_, 1, "name", attributes);
+}
 
-// ← 此后再无属性追加！length 和 name 是函数仅有的两个属性
-// 4 个 slack 槽（64 B）从此永久闲置
+// ③ prototype：两个写入分支
+//    a) HasPrototype(kind) 且非 class constructor
+//    b) class / derived constructor（else-if，同样写 prototype）
+if (JSFunction::HasPrototype(kind) && !JSFunction::IsClassConstructor(kind)) {
+    layoutInfoHandle->AddKey(thread_, ..., "prototype", attributes);
+} else if (JSFunction::IsClassConstructor(kind)) {
+    layoutInfoHandle->AddKey(thread_, ..., "prototype", attributes);
+}
+// HasPrototype 范围：BASE_CONSTRUCTOR..ASYNC_GENERATOR_FUNCTION，
+// 排除 BUILTIN_PROXY_CONSTRUCTOR（js_function.h:381-385）；
+// NORMAL_FUNCTION=0（js_function_kind.h:23）不在范围内——不写 prototype
 ```
 
-### 2.3 浪费可视化
+### 2.3 浪费可视化（按 FunctionKind 分支）
+
+`CreateFunctionClass` 内部的写入集合由 FunctionKind 决定（`object_factory.cpp:2039-2075`）。`HasPrototype` 的实际范围是 `BASE_CONSTRUCTOR .. ASYNC_GENERATOR_FUNCTION`（排除 `BUILTIN_PROXY_CONSTRUCTOR`，`js_function.h:381-385`）；`NORMAL_FUNCTION=0`（`js_function_kind.h:23`）不在该范围内，不写 prototype。默认 requested=3、GROW capacity=7（128 B）下，创建后物理 slack 为：
+
+| FunctionKind 分支 | CreateFunctionClass 内部写入 | 属性数 | slack units | slack 字节 |
+|---|---|---:|---:|---:|
+| 无 prototype 且非 class constructor（NORMAL/ARROW/GETTER/SETTER/ASYNC/CONCURRENT 等） | length + name | 2 | 5 | 80 B |
+| 有 prototype 且非 class constructor（BASE_CONSTRUCTOR/BUILTIN_CONSTRUCTOR/GENERATOR/ASYNC_GENERATOR/NONE 等） | length + name + prototype | 3 | 4 | 64 B |
+| class / derived constructor | length + prototype（不写 name） | 2 | 5 | 80 B |
+
+以 3 属性分支（有 prototype 且非 class constructor）为例：
 
 ```text
-┌───────────────────────────────────────────────┐
-│ LayoutInfo (capacity=6, self_size=112 B)     │
-├───────────────────────────────────────────────┤
-│ slot[0]  key="length"  attr=... │ ← 有效     │
-│ slot[1]  attr                │ ← 有效        │
-│ slot[2]  key="name"    attr=... │ ← 有效     │
-│ slot[3]  attr                │ ← 有效        │
-│ slot[4]  Hole                │ ← ★ 浪费 16 B │
-│ slot[5]  默认attr             │ ← ★ 浪费 16 B │
-│ slot[6]  Hole                │ ← ★ 浪费 16 B │
-│ slot[7]  默认attr             │ ← ★ 浪费 16 B │
-│ slot[8]  Hole                │ ← ★ 浪费 16 B │
-│ slot[9]  默认attr             │ ← ★ 浪费 16 B │
-│ slot[10] Hole                │ ← ★ 浪费 16 B │
-│ slot[11] 默认attr             │ ← ★ 浪费 16 B │
-└───────────────────────────────────────────────┘
+LayoutInfo (capacity=7, self_size=16+16×7=128 B)
+├─ slot[0-1]   length    (key+attr)  ← 有效
+├─ slot[2-3]   name      (key+attr)  ← 有效
+├─ slot[4-5]   prototype (key+attr)  ← 有效
+├─ slot[6-13]  Hole ×4 属性位        ← ★ 最多 4 property-capacity units
+                                        = 最多 8 tagged slots = 最多 64 B
 
-浪费 = 4 个属性位 × 16 B = 64 B / LayoutInfo
-KEEP 版本只需 16+16×2 = 48 B，节省 64 B（57%）
+KEEP 版本: capacity=3, self_size=64 B, 该分支创建期浪费=0
 ```
+
 
 ### 2.4 改为 KEEP 的性能分析
 
@@ -110,19 +133,44 @@ KEEP 版本只需 16+16×2 = 48 B，节省 64 B（57%）
 // 修改后（1 行）
 layoutInfoHandle = CreateLayoutInfo(JSFunction::LENGTH_OF_INLINE_PROPERTIES,
                                      MemSpaceType::SEMI_SPACE, GrowMode::KEEP);
-// capacity = 2, self_size = 48 B
-// AddKey #1 (length) → ExtraLength=1, cap=2 ✅
-// AddKey #2 (name)   → ExtraLength=2, cap=2 ✅ 刚好满
+// capacity = 3, self_size = 64 B
+// 3 属性分支: length → name → prototype 三次 AddKey 恰好填满 cap=3
+// 2 属性分支: 两次 AddKey 后余 1 槽位（16 B），无越界
 ```
 
 | 维度 | 现有 GROW | 改为 KEEP | 差异 |
 |------|----------|----------|------|
-| 分配大小 | 112 B | 48 B | **-64 B** |
-| AddKey 次数 | 2 次（原地） | 2 次（原地） | **零** |
-| Extend 触发 | 从不 | 从不 | **零** |
-| 后续追加 | 从不（函数属性固定） | 从不 | **零** |
+| 分配大小 | 128 B | 64 B | **-64 B** |
+| 创建期 AddKey | ≤3 次（原地写） | ≤3 次（原地写） | **零** |
+| 发布后追加属性 | 最多 5 个 slack 属性位内原地写（按分支 4-5） | capacity 已满或余 1，追加触发一次 Extend/CopyAndReSort | 见下方约束 |
 
-**性能劣化：零。不存在累加**——函数的 `length` 和 `name` 属性集是封闭的，在创建时一次性全部填入，此后不会再有任何属性追加到该 LayoutInfo。
+**性能影响**：创建时的 AddKey 均为原地写入，行为不变。但该 HClass 被显式设置为可扩展（`object_factory.cpp:2022-2028`），且后续是否沿同一 LayoutInfo 追加取决于具体使用模式——需插桩确认“发布后无同 backing 追加”后才能从源码候选升级为确定性 KEEP。
+
+### 2.4a G1 子路径拆分（G1-A / G1-B / G1-C）
+
+G1 的调用者分三类，：
+
+**G1-A：VM bootstrap/专用函数类 HClass**。`CreateFunctionClass` 直接调用，写入闭包即 §2.2/§2.3 的 FunctionKind 分支（2-3 属性）
+
+**G1-B：N-API class function HClass**。用户入口 `FunctionRef::NewConcurrentClassFunctionWithName`（`jsnapi_expo.cpp:4044-4075`）→ `CreateClassFuncWithProperties`（`jsnapi_class_creation_helper.cpp:149-216`）→ `CreateClassFuncHClass`/`CreateApiClassFuncHClass`（`object_factory.cpp:5902/5909`）。容量参数：
+
+```text
+inlinedStaticPropCount = min(staticPropCount, maxInlPropCountForClassFunc)
+inlinedProps = inlinedStaticPropCount + DEFAULT_CAPACITY_OF_IN_OBJECTS(4)
+→ CreateFunctionClass(CLASS_CONSTRUCTOR, ..., inlinedProps)
+→ GROW capacity = inlinedProps + 4 = inlinedStaticPropCount + 8
+```
+
+完整无 transition 写入闭包不止 `CreateFunctionClass` 内部的 length + prototype（class constructor 不写 name）：事务后续经 `AddInlinedPropToHClass` 写入 name 和成功进入 fast path 的静态属性（`jsnapi_class_creation_helper.cpp:161-179`）。最大安全写入数：
+
+```text
+max_write = 2 (length + prototype) + 1 (name) + inlinedStaticPropCount
+          = 3 + inlinedStaticPropCount
+KEEP(inlinedProps) 容量 = inlinedStaticPropCount + 4 = max_write + 1
+```
+
+特殊分支：`inlinedStaticPropCount=0` 时 `inlinedProps=4=DEFAULT_CAPACITY_OF_IN_OBJECTS`，`CreateFunctionClass` 内改走 `CreateLayoutInfo(LENGTH_OF_INLINE_PROPERTIES=3)`，事务完整写入 = length+prototype+name = 3，`KEEP(3)` 恰好安全；
+
 
 ### 2.5 V8 对照：函数 Map 创建
 
@@ -153,13 +201,13 @@ Handle<JSFunction> Factory::NewFunction(Handle<Map> map) {
 | 函数 Map/DescriptorArray 数量 | **per-context 每个 FunctionKind 一个**（~5 种 kind → ~5 个） | **per function HClass 一个**（数千到数万） |
 | DescriptorArray 分配 | context 初始化时一次性创建，capacity=属性数（无 slack） | 每个函数创建时独立分配，GROW +4 slack |
 | 后续属性追加 | 走 transition 链（`ShareDescriptor`），不修改共享数组 | 走 `AddPropertyToNewHClass`，可能原地追加 |
-| waste | **零**（共享 + 无 slack） | 64 B × 每个函数 |
+| waste | **零**（共享 + 无 slack） | 最多 64 B × 每个函数类 HClass |
 
-**ArkVM 差异的根源**：ArkVM 为每个函数 HClass 独立调用 `CreateLayoutInfo(2, GROW)`，而非从 GlobalEnv 缓存复用。V8 的做法等价于将此路径的 `GrowMode` 从 `GROW` 改为 `KEEP` 并加上 context 级共享——即使不做共享，仅改 `KEEP` 即可消除 64 B/函数的浪费。
+**ArkVM 差异的根源**：ArkVM 为每个函数类 HClass 独立调用 `CreateLayoutInfo(LENGTH_OF_INLINE_PROPERTIES=3, GROW)`，而非从 GlobalEnv 缓存复用。V8 的做法等价于将此路径的 `GrowMode` 从 `GROW` 改为 `KEEP` 并加上 context 级共享。函数类 HClass 的创建次数取决于 VM 初始化和 FunctionKind 种类数，而非应用代码中的函数声明数。
 
 ---
 
-## 3. 路径 G10：字典→fast 迁移
+## 3. 路径 G10：字典→fast 迁移（BUILD_EXACT_WITH_FALLBACK 候选）
 
 ### 3.1 应用代码
 
@@ -173,10 +221,12 @@ config.alpha = 1;          // ← 属性重新稳定
 // ... VM 检测到对象稳定，迁移回 fast 模式
 ```
 
+**两段归因**：`delete` 触发的是 `JSObject::TransitionToDictionary`（`js_object.cpp:185-244`），只将对象转入 dictionary mode，G10 仅在后续 `JSObject::OptimizeAsFastProperties`（`js_object.cpp:477-511`）命中 `isDictionary=true` 分支时发生。不能用 dictionary 对象数量直接替代 G10 调用次数。
+
 ### 3.2 VM 内部执行
 
 ```cpp
-// js_hclass.cpp:725-750 — 迁移时创建新 LayoutInfo
+// js_hclass.cpp:719-746 — OptimizeAsFastProperties（named-property，isDictionary=true 分支）
 int numberOfProperties = properties->EntriesCount();  // ← 属性数已知！
 JSHandle<LayoutInfo> layoutInfoHandle = factory->CreateLayoutInfo(numberOfProperties);
 //             ↑ CreateLayoutInfo(N, SEMI, GROW)
@@ -187,7 +237,7 @@ for (int i = 0; i < numberOfProperties; i++) {
     JSTaggedValue key = properties->GetKey(thread, indexOrder[i]);
     layoutInfoHandle->AddKey(thread_, i, key, attributes);
 }
-// 填完后 ExtraLength=N, capacity=N+4, slack=4 → 浪费 64 B
+// 填完后 ExtraLength=N, capacity=N+4, slack=4 → 浪费最多 64 B
 ```
 
 ### 3.3 改为 KEEP 的性能分析
@@ -195,23 +245,22 @@ for (int i = 0; i < numberOfProperties; i++) {
 | 维度 | 现有 GROW | 改为 KEEP | 差异 |
 |------|----------|----------|------|
 | 迁移时的 N 次 AddKey | 原地写（cap=N+4） | 原地写（cap=N） | **零** |
-| 迁移后追加属性 | 用 slack 原地写（~10 ns） | **触发一次 Extend（~110 ns）** | **+100 ns** |
+| 迁移后追加属性 | 用 slack 原地写 | **触发一次 Extend** | 一次分配+拷贝+屏障（操作级，未实测） |
 
 **劣化场景**（迁移后追加属性）：
 
 ```text
 GROW 现状：
-  cap=N+4 > N → 原地 AddKey (~10ns)
+  cap=N+4 > N → 原地 AddKey
 
 KEEP 改后：
   cap=N ≤ N → ExtendLayoutInfo
     → 分配新数组 cap=N+4（与 GROW 初始分配相同！）
     → 拷贝 2N 槽（N 属性 × 2 槽/属性）
     → AddKey
-    代价 = 1 次分配 (~50ns) + 2N 槽拷贝 (~20ns) + 写屏障 (~40ns) ≈ ~110ns
+    代价 = 1 次分配 + 2N 槽拷贝 + 写屏障（操作级模型，未实测）
 ```
 
-**累加？不会**——Extend 后新数组获得 +4 slack（capacity=N+4），与 GROW 初始分配完全相同，后续行为立即收敛。整个生命周期只多一次 Extend。
 
 **实际风险评估**：字典→fast 迁移本身意味着 VM 判定该对象形状已稳定。迁移后再追加属性的概率极低（如果经常追加，VM 就不会迁移回 fast 了）。
 
@@ -254,39 +303,42 @@ void JSObject::MigrateSlowToFast(...) {
 
 ---
 
-## 4. 路径 G11：对象字面量属性填充
+## 4. 路径 G11：N-API/工厂大对象属性构造（源码候选）
 
-### 4.1 应用代码
+### 4.1 子路径拆分（G11-A / G11-B / G11-C）
 
-```ts
-// 应用代码
-const point = { x: 1, y: 2, z: 3 };  // 3 个属性的对象字面量
-```
+用户入口为 `ObjectRef::NewWithProperties` / `NewWithNamedProperties`（`jsnapi_expo.cpp:2815-2848`、`2864-2873`）。按 `propertyCount` 阈值分流（`MAX_LITERAL_HCLASS_CACHE_SIZE=63`、`MAX_FAST_PROPS_CAPACITY=1023`，`property_attributes.h:97-105`）：
+
+| 子路径 | 条件 | 源码路径 | 是否 direct LayoutInfo 分配 |
+|---|---|---|---|
+| G11-A 小对象 | propertyCount ≤ 63 | `CreateJSObjectWithProperties` → `GetObjectLiteralRootHClass` → `SetPropertyOfObjHClass`（`object_factory.cpp:5671-5707`、`4391-4439`） | 否：root HClass cache + `FindTransitions`（`js_hclass-inl.h:485-500`）命中即复用，未命中才 clone + transition |
+| G11-B 大对象 | 63 < propertyCount ≤ 1023 | `CreateLargeJSObjectWithProperties` / `CreateLargeJSObjectWithNamedProperties`（`object_factory.cpp:5710-5747`、`5818-5849`） | 是：`CreateLayoutInfo(propertyCount)` 直分配，G11 主体 |
+| G11-C 超限 | propertyCount > 1023 | `CreateDictionaryJSObjectWithProperties` / `...NamedProperties`（`object_factory.cpp:5749-5782`、`5852-5880`） | 否：创建 `NameDictionary`，无 fast LayoutInfo，排除 |
+
 
 ### 4.2 VM 内部执行
 
 ```cpp
-// object_factory.cpp:5720-5740 — 字面量路径
+// object_factory.cpp:5710-5747 — CreateLargeJSObjectWithProperties（G11-B）
+// propertyCount 是本次运行时 API 调用传入的完整属性数（63 < N ≤ 1023）
 JSHandle<LayoutInfo> layoutHandle = CreateLayoutInfo(propertyCount);
-//             ↑ CreateLayoutInfo(3, SEMI, GROW)
-//             → capacity = 3 + 4 = 7, self_size = 16 + 16×7 = 128 B
+//             ↑ CreateLayoutInfo(N, SEMI, GROW)
+//             → capacity = N + 4, 填入 N 个属性后 slack=4
 
-// 逐个填入 3 个属性
 for (size_t i = 0; i < propertyCount; ++i) {
     layout->AddKey(thread_, i, key, attr);
 }
-// 填完后 ExtraLength=3, capacity=7, slack=4 → 浪费 64 B
 ```
 
 ### 4.3 改为 KEEP 的性能分析
 
-| 维度 | 现有 GROW (cap=7) | 改为 KEEP (cap=3) | 差异 |
-|------|-------------------|-------------------|------|
-| 字面量创建时 3 次 AddKey | 原地写 (~30ns) | 原地写 (~30ns) | **零** |
-| `point.x = 10`（改已有属性） | 不经过 LayoutInfo | 不经过 LayoutInfo | **零** |
-| `point.w = 4`（追加新属性） | 原地写 cap=7>3 (~10ns) | **触发 Extend (~110ns)** | **+100ns** |
+| 维度 | 现有 GROW (cap=N+4) | 改为 KEEP (cap=N) | 差异 |
+|------|---------------------|-------------------|------|
+| 构造时 N 次 AddKey | 原地写 | 原地写 | **零** |
+| 修改已有属性值 | 不经过 LayoutInfo | 不经过 LayoutInfo | **零** |
+| 追加新属性 | slack 内原地写 | **首次追加触发一次 Extend** | 一次分配+拷贝+屏障（操作级，未实测） |
 
-**劣化场景可视化**（追加第 4 个属性 `point.w = 4`）：
+**劣化场景可视化**（以 3 属性 N-API 对象构造完成后追加第 4 个属性为例）：
 
 ```text
 GROW 现状：
@@ -302,65 +354,33 @@ KEEP 改后：
     从此行为与 GROW 完全一致
 ```
 
-**时间线对比**（对象 `{x,y,z}` 后续加 w, v, u, t）：
+**时间线对比**（3 属性 N-API 对象构造完成后继续追加 4 个属性）：
 
 ```text
 GROW 现状：
-  创建 cap=7 → x,y,z 原地 → w 原地 → v 原地 → u 原地 → t 原地(cap满) → Extend→cap=11
+  创建 cap=7 → x,y,z,w,v,u,t 原地(第7属性填满) → 第8属性触发 Extend→cap=11
   总分配: 2次  总拷贝: 14槽
 
 KEEP 改后：
-  创建 cap=3 → x,y,z 原地 → w Extend→cap=7(~110ns) → v 原地 → u 原地 → t 原地(cap满) → Extend→cap=11
+  创建 cap=3 → x,y,z 原地 → w Extend→cap=7 → v,u,t 原地(第7属性填满) → 第8属性 Extend→cap=11
   总分配: 3次  总拷贝: 6+14=20槽
-  额外代价: 1次分配 + 6槽拷贝 ≈ ~80ns（一次性）
+  额外代价: 1次分配 + 6槽拷贝（一次性，操作级模型，未实测）
 
   ← Extend 后 cap=7 与 GROW 初始分配完全相同，从此完全一致
   ← 不存在累加：只有第一次追加有差异
 ```
 
-**累加？不会**——Extend 后的 capacity 与 GROW 初始分配完全相同，后续走同一条演化路径。整个生命周期只多一次 Extend。
+**风险约束**：N-API 路径的后续属性追加不受 ArkTS 编译器约束（N-API 是 native 侧调用）。需插桩确认 N-API 大对象构造后的追加概率。
 
-**严格 ArkTS 风险为零**：对象字面量 `{x:1, y:2, z:3}` 的后续追加 `obj.w = 4` 在编译期即被禁止（`w` 未声明）。
+### 4.4 V8 对照：native 侧批量属性构造
 
-### 4.4 V8 对照：对象字面量
-
-V8 的对象字面量通过 `Factory::ObjectLiteralMapFromCache`（`src/heap/factory.cc`）从 native context 缓存获取初始 Map，属性数精确匹配。
-
-**V8 的对象字面量 Map 获取流程**：
+V8 没有"单次 native 调用传入 N 个属性名并预分配描述符数组"的等价路径：C++/N-API 侧创建对象（`v8::Object::New` / `napi_create_object`）从 native context 缓存的空对象 Map 起步，随后逐属性走普通 transition 链，描述符数组按条件性 slack 增长，超量 slack 可被 GC 右裁剪回收。
 
 ```cpp
-// factory.cc — ObjectLiteralMapFromCache
-Handle<Map> Factory::ObjectLiteralMapFromCache(
-    Handle<NativeContext> context, int number_of_properties) {
-    
-    // 从 native_context 的 object_literal_map_cache 取缓存
-    // cache 按 number_of_properties 索引，kMapCacheSize = 128
-    Handle<FixedArray> cache(context->object_literal_map_cache());
-    
-    if (number_of_properties < kMapCacheSize) {
-        Handle<Object> maybe_map(cache->get(number_of_properties));
-        if (maybe_map->IsMap()) {
-            return Handle<Map>::cast(maybe_map);  // ← 缓存命中，直接复用
-        }
-    }
-    
-    // 缓存未命中 → 创建新 Map（初始 Map，无属性）
-    Handle<Map> map = NewMap(JS_OBJECT_TYPE, JSObject::kHeaderSize);
-    
-    // 后续通过 transition 链逐属性添加
-    // 走 ShareDescriptor + SlackForArraySize（条件性 slack）
-    if (number_of_properties < kMapCacheSize) {
-        cache->set(number_of_properties, *map);  // 存入缓存供后续复用
-    }
-    return map;
-}
-```
-
-**V8 字面量创建后的属性追加**：
-
-```cpp
-// 对象字面量的属性通过 boilerplate + clone 或逐属性 transition 填充
-// 追加新属性时走 Map::ShareDescriptor：
+// v8::Object::New → 初始 Map 为 context 缓存的空对象 Map（无属性、零 slack）
+// 后续每个属性添加走：
+//   Map::TransitionToDataProperty → Map::ShareDescriptor
+//   容量不足时 EnsureDescriptorSlack(map, SlackForArraySize(old_size))：
 
 if (descriptors->number_of_slack_descriptors() == 0) {
     int slack = Map::SlackForArraySize(old_size, kMaxNumberOfDescriptors);
@@ -375,13 +395,13 @@ descriptors->Append(descriptor);  // 原地追加
 
 | 维度 | V8 | ArkVM |
 |------|-----|-------|
-| 初始 Map 来源 | `ObjectLiteralMapFromCache` per-context 缓存（按属性数索引） | `CreateLayoutInfo(propertyCount, GROW)` 每次新分配 |
-| 初始 capacity | 属性数精确匹配（缓存命中时零分配） | propertyCount + 4 |
-| 初始 waste | **零**（缓存 + 精确） | 64 B |
+| 构造方式 | 空对象 Map 起步，逐属性 transition | 单次调用传入 N 个属性，预分配 cap=N+4 |
+| 初始 capacity | 从 0 按需增长 | N + 4 |
+| 稳态 waste | **零**（条件性 slack + GC 裁剪） | 最多 64 B（4 slack 属性位） |
 | 后续追加 | `ShareDescriptor` + `SlackForArraySize`（条件性：小 +1、大 +25%） | `ExtendLayoutInfo` + 固定 +4 |
 | GC 回收 | `TrimDescriptorArray` 物理右裁剪 | 无回收机制 |
 
-**V8 的条件性增长公式**（`map-inl.h:1267`）：
+**V8 的条件性增长公式**（`map-inl.h`）：
 
 ```cpp
 int Map::SlackForArraySize(int old_size, int size_limit) {
@@ -391,24 +411,27 @@ int Map::SlackForArraySize(int old_size, int size_limit) {
 }
 ```
 
-对比 ArkVM 的 `ComputeGrowCapacity`：固定 `old_capacity + 4`，不随规模缩放。小数组（≤8 属性）的浪费恒定为 64 B，而 V8 仅为 16 B（+1 属性位）且可被 GC 回收。
+对比 ArkVM 的 `ComputeGrowCapacity`：固定 `old_capacity + 4`，不随规模缩放。小对象（≤8 属性）的 GROW slack 恒为 4 个属性位（64 B），而 V8 同规模仅 +1 属性位（16 B）且可被 GC 回收。
 
 ---
 
 ## 5. 整体方案汇总
 
-### 5.1 方案 A：三条路径 GROW→KEEP
+### 5.1 方案 A：三条路径 GROW→KEEP（源码候选）
 
-将三条已证明属性数可知的路径从 `GrowMode::GROW` 改为 `GrowMode::KEEP`：
+将三条属性数可知的路径从 `GrowMode::GROW` 改为 `GrowMode::KEEP`。各路径的对象群体数量、后续追加概率和收益分摊需通过 creation-site 插桩归因确认，不能用快照全量 slack 按路径直接拆分：
 
-| 路径 | 源码位置 | 改动 | 属性数来源 | 收益 | 劣化 | 风险 |
-|------|---------|------|----------|------|------|------|
-| **A1：函数 HClass** | `object_factory.cpp:2034` | `GROW` → `KEEP` | 函数属性集固定（length+name） | ~1.2 MiB | **零** | **零** |
-| **A2：字典迁移** | `js_hclass.cpp:731` | `GROW` → `KEEP` | `EntriesCount()` 已知 | ~0.4 MiB | 一次性 ~110 ns | 极低 |
-| **A3：对象字面量** | `object_factory.cpp:5722,5829` | `GROW` → `KEEP` | `propertyCount` 编译期已知 | ~0.6 MiB | 一次性 ~110 ns | 低 |
-| **合计** | | | | **~2.2 MiB** | | |
+| 子路径 | 源码位置 | 改动 | 属性数来源   | 劣化 | 风险 |
+|------|---------|------|----------|------|------|
+| **A1-A：bootstrap 函数类** | `object_factory.cpp:2029-2075` | `GROW` → `KEEP` | FunctionKind 分支决定 2-3 属性（§2.3 表） | 发布后若有追加则首次 Extend | 需插桩确认追加闭包 |
+| **A1-B：N-API 类函数** | `object_factory.cpp:5902/5909` + helper 事务 | `GROW` → `KEEP` | max_write = 3 + inlinedStaticPropCount |—（无 transition 追加即越界） | 无 Extend fallback，容量须按事务最大无 transition offset |
+| **A1-C：N-API 类 prototype** | `object_factory.cpp:5887` + helper 事务 | `GROW` → `KEEP` | max_write = 1 + inlNonStaticPropCount | —（同上） | 同上，与 A1-B 独立建表 |
+| **A2：字典迁移（named-property）** | `js_hclass.cpp:719-746`（仅 isDictionary=true 分支；G10-E elements 另行统计） | `GROW` → `KEEP` | `EntriesCount()` 已知 | 迁移后追加触发一次 Extend | 迁移本身意味着形状已稳定，追加概率低 |
+| **A3：N-API 大对象（G11-B）** | `object_factory.cpp:5722,5829`（63<N≤1023） | `GROW` → `KEEP` | `propertyCount` 由 API 参数运行时传入 |  构造后追加触发一次 Extend | N-API 追加不受编译器约束，需插桩 |
+| **合计** | | | | （快照全量上界约束：快手前台 3.19 MiB、TOP13 合计 19.71 MiB） | | |
 
-改动均为参数级别变更，不修改任何逻辑代码。
+改动均为参数级别变更，不修改任何逻辑代码；但子路径不能合并为统一 KEEP 参数，须逐子路径建立容量账本：
+
 
 ### 5.2 方案 B：调整 GROW 增长公式
 
@@ -459,17 +482,18 @@ static inline uint32_t ComputeGrowCapacity(uint32_t old_capacity) {
 | 9-15 | +4 | +2~3 | 略频繁 |
 | ≥16 | +4 | +4 | **不变** |
 
-小 Layout 的扩容频率增高的代价：每次 Extend 约 ~110 ns。对于一次性创建后不再追加的 ArkTS 对象（96% 属性 ≤9），实际触发的 Extend 次数极少。
+小 Layout 的扩容频率增高的代价：每次 Extend 是一次分配+拷贝+屏障操作（操作级模型，未实测）。对于一次性创建后不再追加的 ArkTS 对象（96% 属性 ≤9），实际触发的 Extend 次数极少。
 
-### 5.3 方案 A+B 组合效果
+### 5.3 方案 A+B 组合效果（结构性上界）
 
-| 方案 | 覆盖范围 | 收益（快手前台） | 性能影响 |
-|------|---------|---------------|---------|
-| A：三路径 KEEP | 函数 HClass + 字典迁移 + 对象字面量 | **~2.2 MiB** | G1 零劣化，G10/G11 一次性 ~110 ns |
-| B：GROW 公式调整 | 其余所有 GROW 路径（transition 链、动态对象等） | **~0.8-1.5 MiB** | 小 Layout 扩容频率略增 |
-| **A+B 合计** | 全部 LayoutInfo 分配 | **~3.0-3.7 MiB** | |
+以下收益来自快照结构性 slack 上界，不能直接拆分归因到各路径。需完成 creation-site 插桩归因后确定各路径独立贡献。快照全量结构性 slack 上界：快手前台 3.19 MiB、后台 2.96 MiB、TOP13 合计 19.71 MiB。
 
-方案 B 的收益估算依据：快手前台 ~30,000 个 GROW 路径 LayoutInfo 中，属性 ≤8 的部分每条节省 32-48 B。精确收益需插桩后按实际属性分布计算。
+| 方案 | 覆盖范围 | 收益 | 性能影响 | 建议 |
+|------|---------|------|---------|------|
+| A：三路径 KEEP | 函数类 HClass + 字典迁移 + N-API 大对象 | 需 creation-site 归因（含于全量上界内） | 创建期均原地写；发布后首次追加各触发一次 Extend | 源码候选 |
+| B：GROW 公式调整 | 其余所有 GROW 路径 | 模型估算 ~0.8-1.5 MiB（快手前台，需按属性分布复核） | 小 Layout 扩容频率略增 | 在部分路径实施 |
+| **A+B 合计** | 全部 LayoutInfo 分配 | 以快照全量结构性 slack 上界为约束（快手前台 3.19 MiB、后台 2.96 MiB、TOP13 合计 19.71 MiB） | | |
+
 
 ### 5.4 性能表现汇总
 
@@ -477,10 +501,10 @@ static inline uint32_t ComputeGrowCapacity(uint32_t old_capacity) {
 
 | 操作 | 现有 | 方案 A 后 | 方案 B 后 | 差异来源 |
 |------|------|----------|----------|---------|
-| 函数 HClass 创建 | cap=6, 2 次 AddKey (~20ns) | cap=2, 2 次 AddKey (~20ns) | 不变 | **零差异**（G1 属性集封闭） |
-| 字典→fast 迁移 | cap=N+4, N 次 AddKey | cap=N, N 次 AddKey | 不变 | **零差异**（都是原地写） |
-| 对象字面量创建 | cap=N+4, N 次 AddKey | cap=N, N 次 AddKey | 不变 | **零差异**（都是原地写） |
-| 动态对象属性追加 | cap=N+4, 首次原地 (~10ns) | 不变 | cap=N+25%, 可能触发 Extend | **+100 ns 首次**（B 策略） |
+| 函数类 HClass 创建 | cap=7, ≤3 次 AddKey | cap=3, ≤3 次 AddKey | 不变 | **零差异**（均原地写） |
+| 字典→fast 迁移 | cap=N+4, N 次 AddKey | cap=N, N 次 AddKey | 不变 | **零差异**（均原地写） |
+| N-API 大对象构造 | cap=N+4, N 次 AddKey | cap=N, N 次 AddKey | 不变 | **零差异**（均原地写） |
+| 动态对象属性追加 | cap=N+4, slack 内原地写 | 追加时首次触发一次 Extend | cap=N+25%, 可能触发 Extend | 首次各多一次 Extend（B 策略） |
 
 #### 属性访问性能（热路径）
 
@@ -496,8 +520,8 @@ static inline uint32_t ComputeGrowCapacity(uint32_t old_capacity) {
 | 场景 | 现有频率 | 方案 B 后频率 | 每次成本 | 总影响 |
 |------|---------|------------|---------|--------|
 | ArkTS 类对象（属性固定） | ~0（一次性创建） | ~0（同） | — | **零** |
-| 动态对象（属性 ≤8） | 每 4 属性一次 | 每 1-2 属性一次 | ~110 ns | 每多属性多 ~50-100 ns（一次性） |
-| 大对象（属性 ≥16） | 每 4 属性一次 | 每 4 属性一次 | ~110 ns | **不变** |
+| 动态对象（属性 ≤8） | 每 4 属性一次 | 每 1-2 属性一次 | 一次分配+拷贝+屏障（未实测） | 每属性最多多一次 Extend（一次性） |
+| 大对象（属性 ≥16） | 每 4 属性一次 | 每 4 属性一次 | 一次分配+拷贝+屏障（未实测） | **不变** |
 
 #### GC 影响
 
@@ -508,32 +532,19 @@ static inline uint32_t ComputeGrowCapacity(uint32_t old_capacity) {
 | 暂停时间 | — | 无新增暂停点 | 零变化 |
 | 碎片 | — | 更小对象可能改善碎片 | 略正向 |
 
-#### 启动性能
-
-| 阶段 | 影响 | 原因 | 量级 |
-|------|------|------|------|
-| 冷启动 | ⚠️ 略增 | 方案 B 使小 Layout 创建时可能多一次 Extend | 每次创建多 ~110 ns × 触发次数 |
-| 稳态运行 | ❌ 零 | 属性查找/枚举/IC 全部不经容量 | **零** |
-| 内存压力 | ✅ 改善 | LayoutInfo 总量减少 ~2-4 MiB → GC 触发频率略降 | 正向 |
-
-冷启动影响量级：假设启动期间创建 ~50,000 个 LayoutInfo，其中 5% 触发 Extend = 2,500 次 × 110 ns = **0.28 ms**（在秒级冷启动中不可测）。
-
-#### 性能门槛
+#### 性能门槛（放行前置条件）
 
 | 指标 | 放行线 |
 |------|-------|
-| 冷启动 P50 | ≤ 1% 回退 |
-| 冷启动 P95 | ≤ 2% 回退 |
 | 属性查找/枚举 | 零回退 |
-| GC pause | ≤ 2% 回退 |
+| GC pause | ≤ 1% 回退 |
 | 扩容率（Extend/create 比值） | 监控，不设硬门槛 |
 | 快手前台 LayoutInfo shallow | 下降 ≥ 2.0 MiB |
 
 ### 5.5 结论
 
-1. **方案 A（三路径 KEEP）是零风险纯收益**——~2.2 MiB 节省，G1 零劣化，G10/G11 一次性 ~110 ns；
-2. **方案 B（GROW 公式调整）是低风险增强**——额外 ~0.8-1.5 MiB，小 Layout 扩容频率略增但总量极小；
-3. **A+B 组合覆盖全部 LayoutInfo 分配路径**，合计 ~3.0-3.7 MiB（快手前台口径）；
+1. **方案 A 是源码候选，粒度为子路径**——G1-A/G1-B/G1-C、G10（named-property）、G11-B 的属性上界已按源码核验，但对象群体数量、追加概率和各子路径收益分摊需 creation-site 插桩归因，三条路径不能合并为统一的 KEEP 参数改动；
+2. **方案 B（GROW 公式调整）是待全量验证实验**——需逐调用点验证写入闭包，不与方案 A 叠加收益；
+3. **A+B 合计受快照全量结构性 slack 上界约束**（快手前台 3.19 MiB、后台 2.96 MiB、TOP13 合计 19.71 MiB）——需 creation-site 归因后确定各路径独立贡献；
 4. **热路径零影响**——属性查找、IC、枚举完全不经过 LayoutInfo 容量机制；
 5. **GC 正向**——LayoutInfo 对象更小、标记扫描量下降、分配压力减少；
-6. 冷启动影响在 0.3 ms 量级（秒级启动的 <0.1%），不可测量。
