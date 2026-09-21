@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WWDC 2026 语言、编译器与工具链分享 · HTML 幻灯片</title>
+<style>
+/* =========================================================================
+   WWDC 2026 语言与工具链分享 — HTML 幻灯片
+   设计约定：16:9 / 1280×720 设计稿；白灰底、深色文字；
+   蓝色=已支持事实，琥珀色=状态待核实（颜色始终伴随文字标签）
+   ========================================================================= */
+
+*,*::before,*::after{box-sizing:border-box}
+
+:root{
+  --paper:#f5f4f0;
+  --card:#ffffff;
+  --ink:#14161b;
+  --ink-2:#3b414d;
+  --ink-3:#6d7480;
+  --ink-4:#9aa0aa;
+  --rule:#dcdad3;
+  --rule-soft:#eae8e2;
+  --shade:#efeee8;
+
+  --fact:#1246c8;         /* 已支持事实 */
+  --fact-bg:#e9effc;
+  --fact-line:#c3d3f5;
+  --pend:#8f5e07;         /* 状态待核实 */
+  --pend-bg:#fbf1de;
+  --pend-line:#ecd7ab;
+  --think:#0d6b60;        /* 仓颉思考 / 分析建议 */
+  --think-bg:#e6f2ef;
+  --think-line:#bcdcd6;
+
+  --mono:"Cascadia Mono","Consolas","SFMono-Regular",ui-monospace,"DejaVu Sans Mono",monospace;
+  --sans:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Hiragino Sans GB","Source Han Sans SC","Noto Sans CJK SC",-apple-system,"Segoe UI",sans-serif;
+}
+
+html,body{margin:0;padding:0;height:100%}
+body{
+  font-family:var(--sans);
+  color:var(--ink);
+  background:
+    radial-gradient(1100px 620px at 16% -12%, #ffffff 0%, #eeece6 58%, #e3e1d9 100%);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+[hidden]{display:none !important}
+
+/* 背景网格 + 颗粒：纯本地 SVG/CSS，无外部资源 */
+.viewport{position:relative;flex:1;min-width:0;display:grid;place-items:center;overflow:hidden;padding:18px}
+.viewport::before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.55;
+  background-image:
+    linear-gradient(to right, rgba(20,22,27,.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20,22,27,.045) 1px, transparent 1px),
+    linear-gradient(to right, rgba(20,22,27,.028) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20,22,27,.028) 1px, transparent 1px);
+  background-size:200px 200px,200px 200px,40px 40px,40px 40px;
+}
+.viewport::after{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.05;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------------- 舞台与页面 ---------------- */
+.stage{
+  width:1280px;height:720px;position:relative;flex:none;
+  transform-origin:center center;transform:scale(var(--k,1));
+}
+@media (max-width:600px){
+  .viewport{display:block;width:100vw;height:100vh;padding:0}
+  .stage{position:absolute;left:0;top:0;transform-origin:top left}
+}
+.slide{
+  position:absolute;inset:0;width:1280px;height:720px;
+  background:var(--paper);
+  border:1px solid var(--rule);
+  box-shadow:0 34px 70px -34px rgba(20,22,27,.42), 0 1px 0 rgba(255,255,255,.9) inset;
+  padding:40px 58px 0 152px;
+  display:flex;flex-direction:column;overflow:hidden;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .3s ease, transform .3s ease;
+  transform:scale(.994);
+}
+.slide.active{opacity:1;visibility:visible;pointer-events:auto;transform:none;z-index:2}
+
+/* 左侧书脊 */
+.spine{position:absolute;left:0;top:0;bottom:0;width:152px;border-right:1px solid var(--rule-soft);
+  display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:30px 0 26px;background:rgba(255,255,255,.42)}
+.spine-no{font-family:var(--mono);font-size:74px;font-weight:700;line-height:.9;letter-spacing:-.05em;
+  color:#e4e2db;-webkit-text-stroke:1.1px #b6b3aa;font-variant-numeric:tabular-nums}
+.spine-rule{width:2px;flex:1;margin:16px 0;background:linear-gradient(to bottom,var(--accent),rgba(0,0,0,0))}
+.spine-theme{writing-mode:vertical-rl;text-orientation:mixed;font-family:var(--mono);font-size:13.5px;
+  letter-spacing:.3em;color:var(--ink-3);white-space:nowrap}
+
+/* 页头 */
+.s-head{flex:none;margin-bottom:16px}
+.s-eyebrow{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:14px;color:var(--ink-3);letter-spacing:.1em}
+.s-eyebrow .sep{width:14px;height:1px;background:var(--rule)}
+.s-eyebrow .s-id{color:var(--accent);font-weight:700;letter-spacing:.16em}
+.s-title{margin:9px 0 0;font-size:39px;line-height:1.22;font-weight:700;letter-spacing:-.012em;max-width:26ch}
+
+/* 页体 */
+.s-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:16px}
+.lede{margin:0;font-size:24px;line-height:1.5;color:var(--ink-2);border-left:3px solid var(--accent);padding-left:14px}
+.footline{font-family:var(--mono);font-size:14.5px;color:var(--ink-3);letter-spacing:.04em;display:flex;gap:12px;align-items:center}
+
+.points{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px;flex:none}
+.points li{position:relative;padding-left:28px;font-size:27px;line-height:1.4;letter-spacing:-.005em}
+.points li::before{content:"";position:absolute;left:0;top:.55em;width:10px;height:10px;background:var(--accent)}
+.points li b{font-weight:700}
+.points li .sub{font-size:20px;color:var(--ink-3);font-family:var(--mono)}
+
+/* 页脚 */
+.s-foot{flex:none;margin-top:12px;padding:9px 0 13px;border-top:1px solid var(--rule-soft);
+  display:flex;justify-content:space-between;align-items:baseline;gap:24px;
+  font-family:var(--mono);font-size:13px;color:var(--ink-3);letter-spacing:.02em}
+.s-src{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s-src a,.inlink{color:var(--fact);text-decoration:none;border-bottom:1px solid rgba(18,70,200,.3)}
+.s-src a:hover,.inlink:hover{border-bottom-color:var(--fact)}
+.s-meta{display:flex;gap:18px;white-space:nowrap}
+.s-page{color:var(--ink-2);font-weight:700;font-variant-numeric:tabular-nums}
+
+/* 主题横幅：只在主题首页出现 */
+.band{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(--shade);
+  border-left:4px solid var(--accent);flex:none}
+.band .b-k{font-family:var(--mono);font-size:13px;letter-spacing:.16em;color:var(--ink-3)}
+.band .b-t{font-size:20px;font-weight:700}
+.band .b-q{font-size:18px;color:var(--ink-2);margin-left:auto;text-align:right;max-width:56%;line-height:1.35}
+
+/* ---------------- 状态标记 ---------------- */
+.chip{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:13.5px;line-height:1.2;
+  padding:3px 10px;border-radius:999px;border:1px solid var(--rule);background:#f2f1ec;color:var(--ink-2);white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;background:currentColor;border-radius:1px;flex:none}
+.chip--fact{color:var(--fact);background:var(--fact-bg);border-color:var(--fact-line)}
+.chip--pend{color:var(--pend);background:var(--pend-bg);border-color:var(--pend-line)}
+.chip--think{color:var(--think);background:var(--think-bg);border-color:var(--think-line)}
+.chip--b{font-weight:700}
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+.think{border:1px solid var(--think-line);background:var(--think-bg);padding:10px 14px;display:flex;gap:12px;align-items:flex-start}
+.think .k{font-family:var(--mono);font-size:12.5px;color:var(--think);letter-spacing:.12em;padding-top:4px;white-space:nowrap}
+.think p{margin:0;font-size:19px;line-height:1.5;color:#0b4c45}
+
+/* ---------------- 图表基础件 ---------------- */
+.viz{position:relative;border:1px solid var(--rule);background:var(--card);padding:18px 20px}
+.viz--plain{border:none;background:none;padding:0}
+.viz--tint{background:#fbfaf7}
+.viz-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-family:var(--mono);font-size:13.5px;
+  letter-spacing:.1em;color:var(--ink-3)}
+.viz-h .grow{flex:1;height:1px;background:var(--rule-soft)}
+.viz-cap{position:absolute;right:12px;bottom:7px;font-family:var(--mono);font-size:12px;color:var(--ink-4);letter-spacing:.03em}
+.grow{flex:1}
+.col{display:flex;flex-direction:column;gap:14px;min-height:0}
+.row{display:flex;gap:14px;align-items:stretch}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px;min-height:0}
+.cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;min-height:0}
+.cols-32{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;min-height:0}
+
+/* 网格表 */
+.grid{display:grid;gap:1px;background:var(--rule-soft);border:1px solid var(--rule);overflow:hidden}
+.grid > *{background:var(--card);padding:11px 15px;font-size:20px;line-height:1.4;min-width:0}
+.grid > .gh{background:var(--shade);font-family:var(--mono);font-size:13px;letter-spacing:.1em;color:var(--ink-2);
+  text-transform:uppercase;display:flex;align-items:center}
+.grid--tight > *{padding:7px 13px;font-size:16px}
+.grid--tight > .gh{font-size:12.5px}
+.grid .k{font-weight:700}
+.grid .m{font-family:var(--mono);font-size:16px;color:var(--ink-2)}
+
+/* 流程链 */
+.flow{display:flex;align-items:stretch}
+.flow > .node{flex:1 1 0;min-width:0;border:1px solid var(--rule);background:#fcfbf8;padding:13px 15px;display:flex;flex-direction:column;gap:6px}
+.flow > .node .nt{font-size:19.5px;font-weight:700;line-height:1.25}
+.flow > .node .nd{font-size:16px;color:var(--ink-2);line-height:1.4}
+.flow > .arw{flex:0 0 40px;display:grid;place-items:center;font-family:var(--mono);font-size:19px;color:var(--ink-4)}
+.flow--accent > .node.is-key{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+
+/* 竖向序列 */
+.seq{display:flex;flex-direction:column}
+.seq .st{position:relative;display:flex;align-items:center;gap:10px;border:1px solid var(--rule);background:var(--card);
+  padding:8px 13px;font-size:18.5px;line-height:1.3}
+.seq .st + .st{margin-top:17px}
+.seq .st + .st::before{content:"↓";position:absolute;top:-19px;left:15px;font-family:var(--mono);font-size:14px;color:var(--ink-4)}
+.seq .st.is-key{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.seq .st .num{font-family:var(--mono);font-size:12.5px;color:var(--ink-4);letter-spacing:.08em}
+
+/* 面板 */
+.panel{border:1px solid var(--rule);background:var(--card);padding:13px 15px;display:flex;flex-direction:column;gap:9px;min-width:0}
+.panel--dim{background:#f8f7f3}
+.panel--accent{border-color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
+.panel-h{font-family:var(--mono);font-size:13px;letter-spacing:.1em;color:var(--ink-3);display:flex;align-items:center;gap:8px}
+.panel p{margin:0;font-size:18px;line-height:1.45;color:var(--ink-2)}
+
+/* 时间线 */
+.timeline{position:relative;display:flex;padding:0 6px}
+.timeline::before{content:"";position:absolute;left:8%;right:8%;top:44px;height:1px;background:var(--rule)}
+.tl{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center}
+.tl .t-when{font-family:var(--mono);font-size:13px;letter-spacing:.1em;color:var(--ink-3);height:16px}
+.tl .t-dot{width:13px;height:13px;border-radius:50%;background:var(--card);border:2px solid var(--ink-4)}
+.tl.is-now .t-dot{border-color:var(--accent);background:var(--accent);box-shadow:0 0 0 5px rgba(18,70,200,.1)}
+.tl .t-name{font-size:18.5px;font-weight:700;line-height:1.3}
+.tl .t-sub{font-size:15px;color:var(--ink-3);font-family:var(--mono)}
+
+/* 代码 */
+.code-wrap{display:flex;flex-direction:column;gap:9px;min-width:0}
+.code{margin:0;background:#fbfaf7;border:1px solid var(--rule);border-left:3px solid var(--ink-4);
+  padding:13px 16px;font-family:var(--mono);font-size:21px;line-height:1.58;color:#1d2027;white-space:pre;overflow:hidden}
+.code .c{color:var(--ink-3)}
+.code .kw{color:#8a2f8f}
+.code .fn{color:#1246c8}
+
+/* 存储/层次示意 */
+.mem{display:flex;flex-direction:column;gap:8px}
+.mem .layer{border:1px solid var(--rule);background:var(--card);padding:9px 13px;display:flex;align-items:center;gap:12px;font-size:17px}
+.mem .layer .lk{font-family:var(--mono);font-size:12.5px;color:var(--ink-4);letter-spacing:.08em;min-width:52px}
+.mem .slab{flex:1;display:flex;gap:4px}
+.mem .cell{flex:1;height:20px;background:var(--fact-bg);border:1px solid var(--fact-line)}
+.mem .cell.hot{background:#c9d8f8;border-color:#9fb8ef}
+.mem .cell.dim{background:#f1f0ea;border-color:var(--rule)}
+
+/* 分支树 */
+.tree{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.branch{border:1px solid var(--rule);background:var(--card);padding:12px 14px;display:flex;flex-direction:column;gap:8px;text-align:center}
+.branch .bt{font-size:19px;font-weight:700}
+.branch .bd{font-size:16px;color:var(--ink-2);line-height:1.4}
+.converge{margin-top:14px;border-top:1px dashed var(--rule);padding-top:12px;text-align:center;font-family:var(--mono);font-size:15px;color:var(--ink-2)}
+
+/* 行内小件 */
+.bx{border:1px solid var(--rule);background:var(--card);padding:6px 11px;font-size:16.5px;line-height:1.3;white-space:nowrap}
+.bx--dim{background:#f7f6f2;color:var(--ink-2)}
+.bx--fact{border-color:var(--fact-line);background:var(--fact-bg);color:var(--fact)}
+.bx--pend{border-color:var(--pend-line);background:var(--pend-bg);color:var(--pend)}
+.bx--dash{border-style:dashed;background:#fbfaf7}
+.bx--tall{padding:9px 12px;white-space:normal}
+.ar{font-family:var(--mono);color:var(--ink-4);font-size:16px;flex:none}
+.tag{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;color:var(--ink-3);flex:none;min-width:58px}
+.buf{display:flex;gap:3px}
+.buf i{width:24px;height:21px;border:1px solid var(--rule);background:#f1f0ea;display:block}
+.buf i.on{background:#c9d8f8;border-color:#9fb8ef}
+.buf i.pd{background:var(--pend-bg);border-color:var(--pend-line)}
+.buf i.win{background:#dbe6fb;border-color:#9fb8ef;box-shadow:inset 0 0 0 2px rgba(18,70,200,.25)}
+
+/* 讲者备注（投影时不显示） */
+.notes{display:none}
+.notes h4{margin:14px 0 4px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--ink-3)}
+.notes p{margin:0 0 8px;font-size:15px;line-height:1.65;color:var(--ink-2)}
+.notes ul{margin:0;padding-left:18px}
+.notes li{font-size:14px;line-height:1.6;color:var(--ink-2);margin-bottom:4px}
+.notes .n-time{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:.08em;margin-bottom:2px}
+
+/* ---------------- 渐显 ---------------- */
+[data-step]{transition:opacity .4s cubic-bezier(.2,.7,.2,1), transform .4s cubic-bezier(.2,.7,.2,1)}
+[data-step].staged{opacity:0;transform:translateY(12px)}
+body.reveal-all [data-step]{opacity:1 !important;transform:none !important}
+body.no-anim [data-step],body.no-anim .slide{transition:none !important}
+
+/* ---------------- 应用外壳 / HUD ---------------- */
+.app{display:flex;height:100vh;width:100vw}
+body.presenter-open .presenter{width:412px;border-left:1px solid var(--rule)}
+.presenter{width:0;flex:none;overflow:hidden;background:#fff;transition:width .26s ease;display:flex;flex-direction:column}
+.p-inner{width:412px;height:100%;display:flex;flex-direction:column;min-height:0}
+.p-head{padding:16px 20px 12px;border-bottom:1px solid var(--rule-soft);flex:none}
+.p-id{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--accent);font-weight:700}
+.p-title{font-size:19px;font-weight:700;line-height:1.35;margin:6px 0 10px}
+.p-stats{display:flex;gap:8px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.p-stat{border:1px solid var(--rule);padding:3px 8px;background:#faf9f6}
+.p-stat b{color:var(--ink);font-variant-numeric:tabular-nums}
+.p-stat.warn{color:var(--pend);border-color:var(--pend-line);background:var(--pend-bg)}
+.p-stat.ok{color:var(--think);border-color:var(--think-line);background:var(--think-bg)}
+.p-next{margin-top:10px;font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.p-body{padding:6px 20px 22px;overflow:auto;flex:1;min-height:0}
+.p-empty{padding:30px 20px;font-size:14px;color:var(--ink-3);line-height:1.7}
+
+.hud{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:60;
+  display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--rule);border-radius:999px;
+  background:rgba(255,255,255,.9);backdrop-filter:blur(10px);box-shadow:0 12px 34px -14px rgba(20,22,27,.45);
+  font-family:var(--mono);font-size:12.5px;color:var(--ink-2);transition:opacity .25s ease}
+body.hud-idle .hud{opacity:0;pointer-events:none}
+.hud button{font:inherit;color:inherit;background:transparent;border:1px solid transparent;border-radius:999px;
+  padding:5px 9px;cursor:pointer;white-space:nowrap}
+.hud button:hover{background:#f1f0ea;border-color:var(--rule)}
+.hud button.is-on{background:var(--fact-bg);border-color:var(--fact-line);color:var(--fact)}
+.hud .hud-sep{width:1px;height:18px;background:var(--rule);margin:0 4px}
+.hud .hud-pos{font-variant-numeric:tabular-nums;padding:0 6px;color:var(--ink)}
+.hud .hud-pos b{font-size:14px}
+.hud .back{color:var(--fact);border-color:var(--fact-line);background:var(--fact-bg)}
+
+.rail{position:fixed;top:0;left:0;right:0;height:4px;display:flex;z-index:61}
+.rail i{flex:1 1 0;background:rgba(20,22,27,.07);position:relative;transition:background .25s}
+.rail i.seg-done{background:rgba(18,70,200,.16)}
+.rail i.seg-active{background:rgba(18,70,200,.42)}
+.rail i.seg-active::after{content:"";position:absolute;right:0;top:0;bottom:0;width:2px;background:var(--fact)}
+
+/* 覆盖层：目录 / 帮助 */
+.overlay{position:fixed;inset:0;z-index:80;display:none;background:rgba(232,230,224,.9);backdrop-filter:blur(6px)}
+.overlay.open{display:flex;flex-direction:column}
+.ov-head{flex:none;padding:22px 34px 14px;display:flex;align-items:baseline;gap:16px;border-bottom:1px solid var(--rule)}
+.ov-head h3{margin:0;font-size:23px}
+.ov-head .ov-k{font-family:var(--mono);font-size:12.5px;color:var(--ink-3);letter-spacing:.12em}
+.ov-head .ov-close{margin-left:auto}
+.ov-body{flex:1;overflow:auto;padding:22px 34px 34px}
+.ov-group{margin-bottom:22px}
+.ov-group > h4{margin:0 0 10px;font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;color:var(--ink-3);
+  display:flex;align-items:center;gap:10px}
+.ov-group > h4 .g-rule{flex:1;height:1px;background:var(--rule)}
+.ov-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.ov-card{text-align:left;border:1px solid var(--rule);background:#fff;padding:11px 13px;cursor:pointer;
+  display:flex;flex-direction:column;gap:5px;font:inherit;border-left:3px solid var(--accent);min-height:84px}
+.ov-card:hover{border-color:var(--accent);box-shadow:0 8px 20px -14px rgba(20,22,27,.5);transform:translateY(-1px)}
+.ov-card .c-id{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;color:var(--accent);font-weight:700}
+.ov-card .c-t{font-size:15.5px;font-weight:700;line-height:1.35}
+.ov-card .c-m{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:auto}
+.ov-card.is-cur{background:var(--fact-bg);border-color:var(--fact-line)}
+
+.keys{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-width:900px}
+.keyrow{display:flex;gap:14px;align-items:baseline;border-bottom:1px solid var(--rule-soft);padding-bottom:8px}
+.keyrow .kb{font-family:var(--mono);font-size:12.5px;background:#fff;border:1px solid var(--rule);
+  border-bottom-width:2px;border-radius:5px;padding:3px 8px;white-space:nowrap;min-width:118px;text-align:center}
+.keyrow .kd{font-size:14.5px;color:var(--ink-2)}
+.note-strip{margin-top:18px;font-size:14px;color:var(--ink-2);line-height:1.7;max-width:900px;border-left:3px solid var(--accent);padding-left:14px}
+
+/* 来源附录 */
+.src-list{columns:4;column-gap:22px;font-size:14px;line-height:1.45;color:var(--ink-2)}
+.src-list .src{break-inside:avoid;margin:0 0 7px;padding-left:34px;position:relative}
+.src-list .src .sid{position:absolute;left:0;top:0;font-family:var(--mono);font-size:11.5px;color:var(--ink-4)}
+.src-list .src a{color:var(--fact);text-decoration:none;border-bottom:1px solid rgba(18,70,200,.28)}
+.src-filter{font:inherit;font-family:var(--mono);font-size:14px;padding:7px 12px;border:1px solid var(--rule);
+  background:#fff;min-width:300px}
+.src-filter:focus{outline:2px solid var(--fact-line);outline-offset:1px}
+
+/* ---------------- 打印：逐页输出、动画取消 ---------------- */
+@media print{
+  @page{size:1280px 720px;margin:0}
+  html,body{height:auto;overflow:visible;background:#fff}
+  .app{display:block;height:auto}
+  .viewport{display:block;padding:0;overflow:visible}
+  .viewport::before,.viewport::after{display:none}
+  .stage{width:auto;height:auto;transform:none !important}
+  .slide{position:relative;inset:auto;opacity:1 !important;visibility:visible !important;transform:none !important;
+    break-after:page;page-break-after:always;box-shadow:none;border:none}
+  .slide:last-child{break-after:auto;page-break-after:auto}
+  [data-step]{opacity:1 !important;transform:none !important;transition:none !important}
+  .hud,.rail,.overlay,.presenter{display:none !important}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+@media (prefers-reduced-motion: reduce){
+  [data-step],.slide,.presenter{transition:none !important}
+}
+</style>
+</head>
+<body>
+<div class="rail" id="rail" aria-hidden="true"></div>
+
+<div class="app">
+  <div class="viewport" id="viewport">
+    <div class="stage" id="stage">
+
+<!-- ============================ S01 ============================ -->
+      <section class="slide" id="s01" data-part="main" data-dur="0.5" data-theme="intro" style="--accent:#8a8f98">
+        <div class="spine"><span class="spine-no">01</span><span class="spine-rule"></span><span class="spine-theme">导入 · 范围与版本</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S01</span><span class="sep"></span><span>导入 · 范围与版本</span><span class="sep"></span><span>0.5 分钟</span></div>
+          <h2 class="s-title">WWDC26：从语言语义到开发验证</h2>
+        </header>
+        <div class="s-body">
+          <div class="band">
+            <span class="b-k">导入</span><span class="b-t">范围与版本</span>
+            <span class="b-q">今年在抽象边界上增加了哪些契约，这些契约怎样帮助开发者？</span>
+          </div>
+          <ul class="points">
+            <li data-step="1"><b>安全的高性能表达</b>　让安全语言覆盖更多性能敏感场景</li>
+            <li data-step="2"><b>可控制的编译与互操作</b>　减少跨语言、跨平台开发的重复劳动</li>
+            <li data-step="3"><b>可观测、可验证的开发记录</b>　把计划、修改与验证接进同一流程</li>
+          </ul>
+          <div class="viz viz--tint" style="margin-top:auto">
+            <div class="viz-h">本次分享的贯通主线<span class="grow"></span><span>讲解 30 分钟 ＋ 讨论 10 分钟</span></div>
+            <div class="flow flow--accent">
+              <div class="node is-key"><span class="nt">语言与库</span><span class="nd">借用访问器 borrow / mutate<br>所有权与生命周期</span></div>
+              <div class="arw">→</div>
+              <div class="node"><span class="nt">编译与构建</span><span class="nd">内联与显式特化<br>Swift Build 统一后端</span></div>
+              <div class="arw">→</div>
+              <div class="node"><span class="nt">IDE / 运行 / 验证</span><span class="nd">Xcode Agent 工作流<br>Instruments 诊断</span></div>
+            </div>
+            <div class="footline" style="margin-top:14px">面向仓颉专家的 30 分钟技术观察　·　每页顺序：更新了什么 → 解决什么问题 → 机制与取舍 → 对仓颉的思考</div>
+            <span class="viz-cap">三段为主线，非流程图</span>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://developer.apple.com/videos/play/wwdc2026/262/" target="_blank" rel="noopener">What's new in Swift（Session 262）</a> · <a href="https://developer.apple.com/videos/play/wwdc2026/258/" target="_blank" rel="noopener">What's new in Xcode 27（Session 258）</a></div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S02 ============================ -->
+      <section class="slide" id="s02" data-part="main" data-dur="1" data-theme="intro" style="--accent:#8a8f98">
+        <div class="spine"><span class="spine-no">02</span><span class="spine-rule"></span><span class="spine-theme">导入 · 范围与版本</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S02</span><span class="sep"></span><span>导入 · 范围与版本</span><span class="sep"></span><span>1 分钟</span></div>
+          <h2 class="s-title">大会年份不等于功能首次发布版本</h2>
+        </header>
+        <div class="s-body">
+          <ul class="points">
+            <li data-step="1"><b>Swift 6.3</b>　已有更新在大会上被再次介绍</li>
+            <li data-step="2"><b>Swift 6.4 / Xcode 27</b>　今年重点；逐项区分成熟度</li>
+            <li data-step="3"><b>四个版本维度分别记录</b>　编译器、语言模式、SDK、部署目标</li>
+          </ul>
+          <div class="viz" style="margin-top:auto">
+            <div class="viz-h">时间轴与证据状态<span class="grow"></span>
+            </div>
+            <div class="timeline">
+              <div class="tl"><span class="t-when">2026-03</span><span class="t-dot"></span><span class="t-name">Swift 6.3 发布</span><span class="t-sub">已有更新</span></div>
+              <div class="tl is-now"><span class="t-when">2026-06</span><span class="t-dot"></span><span class="t-name">WWDC26 专场</span><span class="t-sub">6.3 与 6.4 开发期间</span></div>
+              <div class="tl"><span class="t-when">2026-09-12</span><span class="t-dot"></span><span class="t-name">本报告检索截点</span><span class="t-sub">状态未定</span></div>
+            </div>
+            <div style="height:1px;background:var(--rule-soft);margin:16px 0 14px"></div>
+            <div class="cols2" style="gap:1px;background:var(--rule-soft)">
+              <div class="panel panel--dim" style="border:none">
+                <div class="panel-h">版本维度（分别记录，不汇为一个号）</div>
+                <div class="chip-row">
+                  <span class="chip chip--b">编译器</span><span class="chip chip--b">语言模式</span>
+                  <span class="chip chip--b">SDK</span><span class="chip chip--b">部署目标</span>
+                </div>
+              </div>
+              <div class="panel" style="border:none">
+                <div class="panel-h">本页使用的成熟度标记</div>
+                <div class="chip-row">
+                  <span class="chip chip--fact">6.3 已有</span>
+                  <span class="chip chip--fact">6.4 已实现提案</span>
+                  <span class="chip chip--pend">WWDC 展示 · 状态待核实</span>
+                </div>
+              </div>
+            </div>
+            <span class="viz-cap">RC / Beta / 正式版分开记录，不混称</span>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://www.swift.org/blog/swift-6.3-released/" target="_blank" rel="noopener">Swift 6.3 Released</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0496-inline-always.md" target="_blank" rel="noopener">SE-0496</a> · <a href="https://developer.apple.com/xcode/system-requirements" target="_blank" rel="noopener">Xcode 系统要求</a></div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S03 ============================ -->
+      <section class="slide" id="s03" data-part="main" data-dur="2" data-theme="language" style="--accent:#1246c8">
+        <div class="spine"><span class="spine-no">03</span><span class="spine-rule"></span><span class="spine-theme">主题一 · 语言特性</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S03</span><span class="sep"></span><span>主题一 · 语言特性 · 1/5</span><span class="sep"></span><span>2 分钟</span></div>
+          <h2 class="s-title">理解更新只需先认识三组 Swift 概念</h2>
+        </header>
+        <div class="s-body">
+          <div class="band">
+            <span class="b-k">主题一</span><span class="b-t">语言特性</span>
+            <span class="b-q">如何让日常表达、资源清理和高性能访问保持一致的安全语义？</span>
+          </div>
+          <div class="cols-32" style="flex:1;min-height:0">
+            <div class="col">
+              <div class="grid" style="grid-template-columns:34% 1fr">
+                <div class="gh">概念组</div><div class="gh">在本分享中的关注点</div>
+                <div class="k" data-step="1">值 / 引用 / 借用</div>
+                <div data-step="1">是否拥有独立值，能否共享或修改同一存储</div>
+                <div class="k" data-step="2">泛型 / <span class="m">some</span> / <span class="m">any</span></div>
+                <div data-step="2">编译器掌握多少具体类型信息</div>
+                <div class="k" data-step="3">Task / actor / executor</div>
+                <div data-step="3">工作、隔离、执行位置分别是什么</div>
+              </div>
+              <div class="footline">只建立阅读模型，不做 Swift 语法课；三组概念分别对应后面的性能、诊断与并发页。</div>
+            </div>
+            <div class="col">
+              <div class="panel">
+                <div class="panel-h">值与存储是两个层次</div>
+                <div class="mem">
+                  <div class="layer"><span class="lk">值</span><span class="slab"><i class="cell"></i><i class="cell"></i><i class="cell"></i></span><span class="lk" style="min-width:auto;text-align:right">独立副本</span></div>
+                  <div class="layer"><span class="lk">存储</span><span class="slab"><i class="cell hot"></i><i class="cell hot"></i><i class="cell hot"></i></span><span class="lk" style="min-width:auto;text-align:right">共享 / 借用 / 独占</span></div>
+                </div>
+                <p style="font-size:15px;color:var(--ink-3)">值语义不等于每次赋值都发生物理复制。</p>
+              </div>
+              <div class="panel">
+                <div class="panel-h">工作与执行位置是两件事</div>
+                <div style="display:flex;gap:8px">
+                  <span style="flex:1;height:28px;border:1px solid var(--fact-line);background:var(--fact-bg);display:grid;place-items:center;font-family:var(--mono);font-size:12.5px;color:var(--fact)">Task</span>
+                  <span style="flex:1;height:28px;border:1px solid var(--fact-line);background:var(--fact-bg);display:grid;place-items:center;font-family:var(--mono);font-size:12.5px;color:var(--fact)">Task</span>
+                  <span style="flex:1;height:28px;border:1px dashed var(--rule);background:#f4f3ee;display:grid;place-items:center;font-family:var(--mono);font-size:12.5px;color:var(--ink-3)">Task</span>
+                </div>
+                <div style="height:32px;border:1px solid var(--rule);background:var(--shade);display:grid;place-items:center;font-family:var(--mono);font-size:12.5px;letter-spacing:.08em;color:var(--ink-2)">EXECUTOR · 串行 / 并发 / MainActor</div>
+                <p style="font-size:15px;color:var(--ink-3)">不是"一个 Task 对应一条线程"。<span class="m">async</span> 也不等于后台执行。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0390-noncopyable-structs-and-enums.md" target="_blank" rel="noopener">SE-0390</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0296-async-await.md" target="_blank" rel="noopener">SE-0296</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0244-opaque-result-types.md" target="_blank" rel="noopener">SE-0244</a>　｜　报告 §2（历史基础，非 WWDC26 首创）</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+<!-- ============================ S04 ============================ -->
+      <section class="slide" id="s04" data-part="main" data-dur="2" data-theme="language" style="--accent:#1246c8">
+        <div class="spine"><span class="spine-no">04</span><span class="spine-rule"></span><span class="spine-theme">主题一 · 语言特性</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S04</span><span class="sep"></span><span>主题一 · 语言特性 · 2/5</span><span class="sep"></span><span>2 分钟</span></div>
+          <h2 class="s-title">异步 defer：返回之前完成清理</h2>
+        </header>
+        <div class="s-body">
+          <ul class="points">
+            <li data-step="1"><b>更新</b>　异步作用域退出可以等待清理</li>
+            <li data-step="2"><b>收益</b>　减少多出口遗漏与"清理尚未完成"的竞态</li>
+            <li data-step="3"><b>边界</b>　等待清理不等于屏蔽取消</li>
+          </ul>
+          <div class="cols2" style="flex:1;min-height:0">
+            <div class="code-wrap">
+              <div class="chip-row"><span class="chip chip--pend">自编语义示意 · 未运行</span><span class="chip chip--fact">SE-0493 · 6.4 已实现提案</span></div>
+              <pre class="code"><span class="kw">func</span> <span class="fn">performJob</span>() <span class="kw">async throws</span> {
+    <span class="kw">await</span> acquireResource()
+    <span class="kw">defer</span> { <span class="kw">await</span> releaseResource() }
+    <span class="kw">try await</span> executeJob()
+}</pre>
+              <p class="footline">离开作用域时隐式等待；多个 defer 仍逆序运行。</p>
+            </div>
+            <div class="cols2" style="gap:12px">
+              <div class="panel panel--dim">
+                <div class="panel-h">另开任务清理</div>
+                <div class="seq">
+                  <div class="st">安排清理任务</div>
+                  <div class="st">返回</div>
+                  <div class="st">稍后清理</div>
+                </div>
+                <p>只表达"已安排"。</p>
+              </div>
+              <div class="panel panel--accent">
+                <div class="panel-h">作用域退出等待清理</div>
+                <div class="seq">
+                  <div class="st">退出作用域</div>
+                  <div class="st">等待清理</div>
+                  <div class="st is-key">返回</div>
+                </div>
+                <p>表达"返回前已完成"。</p>
+              </div>
+              <div class="footline" style="grid-column:1 / -1;justify-content:center">两种不同的完成关系，不给时间倍数</div>
+            </div>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0493-defer-async.md" target="_blank" rel="noopener">SE-0493: Support async calls in defer bodies</a>　｜　报告 §4.3</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S05 ============================ -->
+      <section class="slide" id="s05" data-part="main" data-dur="2" data-theme="language" style="--accent:#1246c8">
+        <div class="spine"><span class="spine-no">05</span><span class="spine-rule"></span><span class="spine-theme">主题一 · 语言特性</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S05</span><span class="sep"></span><span>主题一 · 语言特性 · 3/5</span><span class="sep"></span><span>2 分钟</span></div>
+          <h2 class="s-title">先讲成本：只改一个元素，为什么会涉及整个值？</h2>
+        </header>
+        <div class="s-body">
+          <ul class="points">
+            <li data-step="1">一个包装器把<b>大型值</b>暴露给调用方</li>
+            <li data-step="2">"取得值—修改—写回"需要优化器消除<b>潜在复制</b></li>
+            <li data-step="3">更明确的<b>访问契约</b>能减少对优化巧合的依赖</li>
+          </ul>
+          <div class="col" style="margin-top:auto">
+            <div class="panel panel--dim">
+              <div class="panel-h">① 取值 — 修改 — 写回<span class="grow"></span><span style="color:var(--pend)">可能复制</span></div>
+              <div class="row" style="align-items:center;gap:9px">
+                <span class="bx bx--dim">调用方</span><span class="ar">→</span>
+                <span class="bx bx--pend bx--dash">取得一个值</span><span class="ar">→</span>
+                <span class="bx bx--dim">修改</span><span class="ar">→</span>
+                <span class="bx bx--pend">写回</span>
+                <span class="ar">｜</span>
+                <span class="buf"><i class="pd"></i><i class="pd"></i><i class="pd"></i><i class="pd"></i><i class="pd"></i></span>
+              </div>
+              <p>优化器、写时复制与既有访问器<b>可能已经</b>消除了这份成本——本页不是断言 get / set 一定慢。</p>
+            </div>
+            <div class="panel panel--accent">
+              <div class="panel-h">② 受约束访问<span class="grow"></span><span style="color:var(--fact)">原位访问</span></div>
+              <div class="row" style="align-items:center;gap:9px">
+                <span class="bx bx--dim">调用方</span><span class="ar">→</span>
+                <span class="bx bx--fact">borrow / mutate 访问窗口</span><span class="ar">→</span>
+                <span class="buf"><i class="win"></i><i class="win"></i><i class="win"></i><i class="win"></i><i class="win"></i></span>
+              </div>
+              <p>要验证的是：跨模块、泛型、不可复制元素时，成本是否仍然可预测。</p>
+            </div>
+            <div class="footline"><span class="chip chip--pend">语义路径示意 · 非实测复制次数</span></div>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0507-borrow-accessors.md" target="_blank" rel="noopener">SE-0507: Borrow and Mutate Accessors</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0474-yielding-accessors.md" target="_blank" rel="noopener">SE-0474: Yielding Accessors</a>　｜　报告 §5.2</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S06 ============================ -->
+      <section class="slide" id="s06" data-part="main" data-dur="3" data-theme="language" style="--accent:#1246c8">
+        <div class="spine"><span class="spine-no">06</span><span class="spine-rule"></span><span class="spine-theme">主题一 · 语言特性</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S06</span><span class="sep"></span><span>主题一 · 语言特性 · 4/5</span><span class="sep"></span><span>3 分钟</span></div>
+          <h2 class="s-title">borrow / mutate：把访问方式写进接口</h2>
+        </header>
+        <div class="s-body">
+          <div class="grid" style="grid-template-columns:17% 37% 1fr;margin-top:6px">
+            <div class="gh">方式</div><div class="gh">接口表达</div><div class="gh">访问形态</div>
+
+            <div class="k" data-step="1">get</div>
+            <div data-step="1">返回一个值</div>
+            <div class="row" style="align-items:center;gap:10px" data-step="1">
+              <span class="buf"><i class="on"></i><i class="on"></i><i class="on"></i></span>
+              <span class="ar">⇢</span><span class="bx bx--dim">独立值</span>
+              <span class="footline">值被带出存储</span>
+            </div>
+
+            <div class="k" data-step="2">borrow / mutate</div>
+            <div data-step="2">提供读取或独占修改的存储访问</div>
+            <div class="row" style="align-items:center;gap:10px" data-step="2">
+              <span class="bx bx--fact">读取 / 独占修改</span>
+              <span class="ar">⇢</span>
+              <span class="buf"><i class="win"></i><i class="win"></i><i class="win"></i></span>
+              <span class="footline">箭头指向存储本身</span>
+            </div>
+
+            <div class="k" data-step="3">yielding 形式</div>
+            <div data-step="3">访问前后还可以执行处理</div>
+            <div class="row" style="align-items:center;gap:8px" data-step="3">
+              <span class="bx bx--dim">进入</span><span class="ar">→</span>
+              <span class="bx bx--dim">借出</span><span class="ar">→</span>
+              <span class="bx bx--dim">恢复</span>
+              <span class="footline">可做前后处理与独占检查</span>
+            </div>
+          </div>
+          <div class="chip-row" style="margin-top:auto">
+            <span class="chip chip--fact chip--b">6.4 已实现提案：本页的直接借用访问器（borrow / mutate）</span>
+            <span class="chip">yielding 为既有机制 · SE-0474</span>
+          </div>
+          <div class="footline">不要把这一页讲成"新增关键字替换 get / set"：三者有不同的存储与清理要求。</div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0507-borrow-accessors.md" target="_blank" rel="noopener">SE-0507</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0474-yielding-accessors.md" target="_blank" rel="noopener">SE-0474</a>　｜　报告 §5.2</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S07 ============================ -->
+      <section class="slide" id="s07" data-part="main" data-dur="2.5" data-theme="language" style="--accent:#1246c8">
+        <div class="spine"><span class="spine-no">07</span><span class="spine-rule"></span><span class="spine-theme">主题一 · 语言特性</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S07</span><span class="sep"></span><span>主题一 · 语言特性 · 5/5</span><span class="sep"></span><span>2.5 分钟</span></div>
+          <h2 class="s-title">迭代与引用：让借用穿过算法边界</h2>
+        </header>
+        <div class="s-body">
+          <ul class="points">
+            <li data-step="1"><b>Iterable</b>　以批次访问元素，兼顾不可复制值</li>
+            <li data-step="2"><b>Ref / MutableRef</b>　把受约束访问绑定为一个值</li>
+            <li data-step="3"><b>生命周期与既有循环语义</b>决定采用边界</li>
+          </ul>
+          <div class="cols2" style="flex:1;min-height:0">
+            <div class="panel">
+              <div class="panel-h">Iterable：一批元素装进同一个访问窗口</div>
+              <div style="border:1px dashed var(--fact-line);background:var(--fact-bg);padding:10px 12px">
+                <div class="row" style="align-items:center;gap:8px">
+                  <span class="tag" style="color:var(--fact)">SPAN</span>
+                  <span class="buf"><i class="win"></i><i class="win"></i><i class="win"></i><i class="win"></i><i class="win"></i><i class="win"></i></span>
+                </div>
+              </div>
+              <div class="seq">
+                <div class="st">for-in 借用元素（按批）</div>
+                <div class="st">支持不可复制元素与可抛错迭代</div>
+              </div>
+              <p>若类型同时具有 Sequence 能力，现有循环<b>优先保留 Sequence 路径</b>，避免改变既有语义。</p>
+              <div class="chip-row"><span class="chip chip--pend">WWDC 展示 · 提案状态待核实（SE-0516 读取时仍为 Active review）</span></div>
+            </div>
+            <div class="panel">
+              <div class="panel-h">Ref / MutableRef：定位一次，多次使用</div>
+              <div class="seq">
+                <div class="st is-key">定位到嵌套元素</div>
+                <div class="st">在该访问内执行多次操作</div>
+                <div class="st">访问结束，约束解除</div>
+              </div>
+              <div class="grid" style="grid-template-columns:30% 1fr;margin-top:2px">
+                <div class="gh">类型</div><div class="gh">语义</div>
+                <div class="k">Ref</div><div>共享读取，可复制</div>
+                <div class="k">MutableRef</div><div>独占修改，不可复制</div>
+              </div>
+              <p>不是任意延长生命周期的指针，也不是"拥有对象"的替代品。</p>
+              <div class="chip-row"><span class="chip chip--fact">SE-0519 · 6.4 已实现提案</span></div>
+            </div>
+          </div>
+          <div class="footline"><span class="chip chip--pend">机制示意 · 非实测</span>　存储型集合与惰性生成不是同一个问题，借用迭代不自动替代全部旧接口。</div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0516-borrowing-sequence.md" target="_blank" rel="noopener">SE-0516: Iterable</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0519-ref-mutableref-types.md" target="_blank" rel="noopener">SE-0519: Ref / MutableRef</a>　｜　报告 §5.3–5.5</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+<!-- ============================ S08 ============================ -->
+      <section class="slide" id="s08" data-part="main" data-dur="2.5" data-theme="compiler" style="--accent:#1e6f8c">
+        <div class="spine"><span class="spine-no">08</span><span class="spine-rule"></span><span class="spine-theme">主题二 · 编译器</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S08</span><span class="sep"></span><span>主题二 · 编译器 · 1/2</span><span class="sep"></span><span>2.5 分钟</span></div>
+          <h2 class="s-title">优化控制：可预测性需要付出什么代价？</h2>
+        </header>
+        <div class="s-body">
+          <div class="band">
+            <span class="b-k">主题二</span><span class="b-t">编译器</span>
+            <span class="b-q">如何分别改善生成代码的性能与编译记录的效率？</span>
+          </div>
+          <ul class="points">
+            <li data-step="1"><b>内联</b>　把调用边界打开</li>
+            <li data-step="2"><b>特化</b>　为具体类型准备实现</li>
+            <li data-step="3"><b>一起检查</b>　运行时间、代码尺寸与编译成本</li>
+          </ul>
+          <div class="viz" style="margin-top:auto">
+            <div class="viz-h">两条优化控制路径<span class="grow"></span><span class="chip chip--fact chip--b">6.3 已有 · WWDC26 再介绍</span></div>
+            <div class="col" style="gap:13px">
+              <div class="row" style="align-items:center;gap:10px">
+                <span class="tag">内联</span>
+                <span class="bx bx--dim">调用点</span><span class="ar">→</span>
+                <span class="bx bx--fact">展开函数体</span>
+                <span class="footline">调用方与被调方进入同一优化上下文</span>
+              </div>
+              <div class="row" style="align-items:center;gap:10px">
+                <span class="tag">特化</span>
+                <span class="bx bx--dim">通用入口</span><span class="ar">→</span>
+                <span class="bx bx--dim">精确类型检查</span><span class="ar">→</span>
+                <span class="bx bx--fact">预特化实现</span>
+                <span class="ar">/</span>
+                <span class="bx bx--dash">通用路径</span>
+                <span class="footline">不是重新做重载解析</span>
+              </div>
+              <div class="row" style="align-items:center;gap:10px">
+                <span class="tag">代价</span>
+                <span class="bx bx--dim">运行时间</span>
+                <span class="bx bx--dim">代码尺寸</span>
+                <span class="bx bx--dim">编译成本</span>
+                <span class="footline">三者一起测量；优化器升级与 ABI 稳定性都会影响最终收益</span>
+              </div>
+            </div>
+            <span class="viz-cap">机制示意 · 不含实测加速数字</span>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0496-inline-always.md" target="_blank" rel="noopener">SE-0496</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0460-specialized.md" target="_blank" rel="noopener">SE-0460</a> · <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0193-cross-module-inlining-and-specialization.md" target="_blank" rel="noopener">SE-0193</a>　｜　报告 §6.1</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S09 ============================ -->
+      <section class="slide" id="s09" data-part="main" data-dur="2.5" data-theme="compiler" style="--accent:#1e6f8c">
+        <div class="spine"><span class="spine-no">09</span><span class="spine-rule"></span><span class="spine-theme">主题二 · 编译器</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S09</span><span class="sep"></span><span>主题二 · 编译器 · 2/2</span><span class="sep"></span><span>2.5 分钟</span></div>
+          <h2 class="s-title">编译性能：更少搜索，也更少重复工作</h2>
+        </header>
+        <div class="s-body">
+          <ul class="points">
+            <li data-step="1"><b>类型检查</b>　提前排除不可能候选</li>
+            <li data-step="2"><b>依赖扫描</b>　避免重复设置与搜索</li>
+            <li data-step="3"><b>分阶段测量</b>　才能归因改进</li>
+          </ul>
+          <div class="viz" style="margin-top:auto">
+            <div class="viz-h">改进分布在不同阶段<span class="grow"></span><span class="chip chip--pend">不给整条流水线统一百分比</span></div>
+            <div class="flow">
+              <div class="node"><span class="nt">依赖扫描</span><span class="nd">减少重复设置<br>与头文件搜索</span></div>
+              <div class="arw">→</div>
+              <div class="node is-key"><span class="nt">类型求解</span><span class="nd">剪枝：排除不可能候选<br>更精确的绑定域推导</span></div>
+              <div class="arw">→</div>
+              <div class="node"><span class="nt">代码生成</span><span class="nd">本轮不涉及</span></div>
+              <div class="arw">→</div>
+              <div class="node"><span class="nt">链接</span><span class="nd">本轮不涉及</span></div>
+            </div>
+            <div style="height:1px;background:var(--rule-soft);margin:14px 0 12px"></div>
+            <div class="row" style="align-items:center;gap:9px">
+              <span class="tag">候选集</span>
+              <span class="bx bx--dim">候选 A</span>
+              <span class="bx bx--dash" style="color:var(--ink-4);border-color:var(--rule-soft)">候选 B · 不可能</span>
+              <span class="bx bx--fact">候选 C ✓</span>
+              <span class="bx bx--dash" style="color:var(--ink-4);border-color:var(--rule-soft)">候选 D · 不可能</span>
+              <span class="footline">置灰分支不再参与回溯</span>
+            </div>
+            <span class="viz-cap">置灰＝被提前排除的候选，不代表性能实测</span>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://forums.swift.org/t/recent-improvements-to-the-type-checker/87048" target="_blank" rel="noopener">Recent improvements to the type checker</a> · <a href="https://developer.apple.com/documentation/xcode-release-notes/xcode-27-release-notes?changes=latest_minor" target="_blank" rel="noopener">Xcode 27 发布说明</a>　｜　报告 §6.2–6.3</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S10 ============================ -->
+      <section class="slide" id="s10" data-part="main" data-dur="2" data-theme="toolchain" style="--accent:#4b4a86">
+        <div class="spine"><span class="spine-no">10</span><span class="spine-rule"></span><span class="spine-theme">主题三 · 工具链与互操作</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S10</span><span class="sep"></span><span>主题三 · 工具链与互操作 · 1/3</span><span class="sep"></span><span>2 分钟</span></div>
+          <h2 class="s-title">Swift Build：共享构建语义，减少环境分歧</h2>
+        </header>
+        <div class="s-body">
+          <div class="band">
+            <span class="b-k">主题三</span><span class="b-t">工具链与互操作</span>
+            <span class="b-q">如何让同一份代码跨构建入口、语言边界和目标平台持续工作？</span>
+          </div>
+          <ul class="points">
+            <li data-step="1"><b>分层</b>　包模型与构建后端分开理解</li>
+            <li data-step="2"><b>从可选集成走向默认后端</b></li>
+            <li data-step="3"><b>一致性仍依赖</b>工具链、参数和环境</li>
+          </ul>
+          <div class="viz" style="margin-top:auto">
+            <div class="viz-h">共享构建语义<span class="grow"></span><span class="chip chip--pend">概念架构 · 非源码模块图</span></div>
+            <div class="flow">
+              <div class="node" style="flex:0 0 190px"><span class="nt">入口</span><span class="nd">命令行 CLI<br>IDE<br>CI</span></div>
+              <div class="arw">→</div>
+              <div class="node is-key"><span class="nt">公共构建图</span><span class="nd">包描述与依赖解析</span></div>
+              <div class="arw">→</div>
+              <div class="node"><span class="nt">执行后端</span><span class="nd">编译与链接能力</span></div>
+            </div>
+            <div style="height:1px;background:var(--rule-soft);margin:14px 0 12px"></div>
+            <div class="row" style="align-items:center;gap:8px">
+              <span class="tag">输入元组</span>
+              <span class="bx bx--dim">源码</span><span class="ar">＋</span>
+              <span class="bx bx--dim">目标</span><span class="ar">＋</span>
+              <span class="bx bx--dim">依赖</span><span class="ar">＋</span>
+              <span class="bx bx--dim">工具链</span><span class="ar">＋</span>
+              <span class="bx bx--dim">配置</span>
+            </div>
+            <span class="viz-cap">不是"所有缓存天然互通"</span>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://www.swift.org/blog/whats-new-in-swift-march-2026/" target="_blank" rel="noopener">What's new in Swift: March 2026</a> · <a href="https://forums.swift.org/t/swiftpm-development-update-default-build-system-change/85548" target="_blank" rel="noopener">SwiftPM 默认后端说明</a>　｜　报告 §7.1</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S11 ============================ -->
+      <section class="slide" id="s11" data-part="main" data-dur="2.5" data-theme="toolchain" style="--accent:#4b4a86">
+        <div class="spine"><span class="spine-no">11</span><span class="spine-rule"></span><span class="spine-theme">主题三 · 工具链与互操作</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S11</span><span class="sep"></span><span>主题三 · 工具链与互操作 · 2/3</span><span class="sep"></span><span>2.5 分钟</span></div>
+          <h2 class="s-title">互操作：ABI 保持连续，安全契约逐步增强</h2>
+        </header>
+        <div class="s-body">
+          <ul class="points">
+            <li data-step="1"><b>保留 C 接口</b>　渐进替换实现</li>
+            <li data-step="2"><b>边界传递</b>长度、生命周期与访问方式</li>
+            <li data-step="3"><b>安全包装不能证明</b>外部实现正确</li>
+          </ul>
+          <div class="cols2" style="flex:1;min-height:0">
+            <div class="panel">
+              <div class="panel-h">① ABI 连续：换实现，不换接口</div>
+              <div class="row" style="align-items:center;gap:9px;margin-top:2px">
+                <span class="bx bx--dim">C 调用者</span><span class="ar">→</span>
+                <span class="bx bx--fact">稳定 C 接口</span><span class="ar">→</span>
+                <span class="bx bx--dim">Swift 新实现</span>
+              </div>
+              <p>迁移范围从"重写整个子系统"缩小到"保留调用者，替换一个函数实现"。</p>
+              <div class="chip-row"><span class="chip chip--fact">@c 导出 · 6.3 已发布</span><span class="chip">@implementation 匹配既有 C 声明</span></div>
+            </div>
+            <div class="panel panel--accent">
+              <div class="panel-h">② 安全契约：把边界信息交给编译器</div>
+              <div class="row" style="align-items:center;gap:9px;margin-top:2px">
+                <span class="bx bx--dim bx--tall">指针 ＋ 长度<br>生命周期说明</span><span class="ar">→</span>
+                <span class="bx bx--fact">安全视图</span>
+              </div>
+              <div class="grid" style="grid-template-columns:38% 1fr 1fr;margin-top:2px">
+                <div class="gh">映射方向</div><div class="gh">成熟度</div><div class="gh">开关</div>
+                <div class="k">输入参数</div><div><span class="chip chip--fact">无需实验开关</span></div><div class="m">带 __noescape</div>
+                <div class="k">返回值</div><div><span class="chip chip--pend">仍受开关控制</span></div><div class="m">依赖 __lifetimebound</div>
+              </div>
+              <p>新增安全重载不要求删除原始接口；错误标注仍可能构成不可信前提。</p>
+            </div>
+          </div>
+          <div class="footline"><span class="chip chip--pend">成熟度分级 · 不画一条"全部安全"的绿色箭头</span>　ABI 连续性、内存安全与可维护性需要分别验收。</div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://www.swift.org/blog/swift-6.3-released/" target="_blank" rel="noopener">Swift 6.3 Released</a> · <a href="https://www.swift.org/documentation/cxx-interop/safe-interop/" target="_blank" rel="noopener">Safely Mixing Swift and C/C++</a> · <a href="https://developer.apple.com/documentation/xcode-release-notes/xcode-27-release-notes?changes=latest_minor" target="_blank" rel="noopener">Xcode 27 发布说明</a>　｜　报告 §7.2–7.3</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S12 ============================ -->
+      <section class="slide" id="s12" data-part="main" data-dur="1.5" data-theme="toolchain" style="--accent:#4b4a86">
+        <div class="spine"><span class="spine-no">12</span><span class="spine-rule"></span><span class="spine-theme">主题三 · 工具链与互操作</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S12</span><span class="sep"></span><span>主题三 · 工具链与互操作 · 3/3</span><span class="sep"></span><span>1.5 分钟</span></div>
+          <h2 class="s-title">跨平台扩展：目标支持是一组能力</h2>
+        </header>
+        <div class="s-body">
+          <ul class="points">
+            <li data-step="1"><b>Android / Wasm / Embedded</b>　面向不同约束</li>
+            <li data-step="2"><b>五个维度分别核对</b>　不是一行版本号</li>
+            <li data-step="3"><b>"能编译"距离"能长期维护"</b>仍有工作</li>
+          </ul>
+          <div class="cols3" style="margin-top:auto">
+            <div class="panel">
+              <div class="panel-h">Android</div>
+              <div class="chip-row">
+                <span class="chip">语言</span><span class="chip">库</span><span class="chip">运行时</span><span class="chip">调试</span><span class="chip">分发</span>
+              </div>
+              <p>官方 Android SDK 已发布；Swift-Java 是<b>独立演进</b>的包，版本需与语言版本分别记录。</p>
+              <div class="chip-row"><span class="chip chip--fact">Android SDK 属于 6.3 基线</span></div>
+            </div>
+            <div class="panel">
+              <div class="panel-h">Wasm / Web</div>
+              <div class="chip-row">
+                <span class="chip">语言</span><span class="chip">库</span><span class="chip">运行时</span><span class="chip">调试</span><span class="chip">分发</span>
+              </div>
+              <p>JavascriptKit 改进安全桥接：降低共享核心逻辑与 Web 环境交互的成本，<b>不等于</b>整个 Web 应用同比加速。</p>
+            </div>
+            <div class="panel">
+              <div class="panel-h">Embedded</div>
+              <div class="chip-row">
+                <span class="chip">语言</span><span class="chip">库</span><span class="chip">运行时</span><span class="chip">调试</span><span class="chip">分发</span>
+              </div>
+              <p>仍是<b>语言子集</b>；存在类型与非类型化 throws 支持扩展，类型布局写入 DWARF 以改进 core dump 调试。仍须评估运行时与尺寸成本。</p>
+            </div>
+          </div>
+          <div class="footline"><span class="chip chip--pend">只列研究维度 · 不用全绿勾选暗示功能齐全</span></div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://developer.apple.com/videos/play/wwdc2026/262/" target="_blank" rel="noopener">What's new in Swift（Session 262）</a> · <a href="https://www.swift.org/blog/swift-6.3-released/" target="_blank" rel="noopener">Swift 6.3 Released</a> · <a href="https://forums.swift.org/t/swift-java-0-3-0-released/86716" target="_blank" rel="noopener">Swift-Java 0.3.0</a>　｜　报告 §7.4</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+<!-- ============================ S13 ============================ -->
+      <section class="slide" id="s13" data-part="main" data-dur="2" data-theme="xcode" style="--accent:#7a3e9d">
+        <div class="spine"><span class="spine-no">13</span><span class="spine-rule"></span><span class="spine-theme">主题四 · Xcode 与开发验证</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S13</span><span class="sep"></span><span>主题四 · Xcode 与开发验证 · 1/4</span><span class="sep"></span><span>2 分钟</span></div>
+          <h2 class="s-title">Xcode Agent：计划、改动与验证形成连续记录</h2>
+        </header>
+        <div class="s-body">
+          <div class="band">
+            <span class="b-k">主题四</span><span class="b-t">Xcode 与开发验证</span>
+            <span class="b-q">代码产生以后，如何确认它构建正确、测试有效、设备可复现且性能可解释？</span>
+          </div>
+          <ul class="points">
+            <li data-step="1"><b>开发者</b>确定目标、架构与验收</li>
+            <li data-step="2"><b>Agent</b>获得工程上下文和领域工具</li>
+            <li data-step="3"><b>记录可审阅</b>　计划、差异、构建与测试结果</li>
+          </ul>
+          <div class="viz" style="margin-top:auto">
+            <div class="viz-h">开发者在上，工具回路在下<span class="grow"></span><span class="chip">Agent 已于 Xcode 26.3 引入</span></div>
+            <div class="panel panel--dim" style="margin-bottom:12px">
+              <div class="panel-h">开发者 · 介入点</div>
+              <p>确定目标与架构；在<b>计划</b>和<b>产物</b>两处审阅介入。</p>
+            </div>
+            <div class="flow">
+              <div class="node"><span class="nt">意图</span></div>
+              <div class="arw">→</div>
+              <div class="node is-key"><span class="nt">计划</span></div>
+              <div class="arw">→</div>
+              <div class="node"><span class="nt">修改</span></div>
+              <div class="arw">→</div>
+              <div class="node"><span class="nt">构建 / 测试 / 预览</span></div>
+              <div class="arw">→</div>
+              <div class="node"><span class="nt">反馈</span></div>
+            </div>
+            <div class="footline" style="margin-top:12px">生成代码的速度不证明正确性；Agent 自写测试也不等于独立验收。</div>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://developer.apple.com/videos/play/wwdc2026/259/" target="_blank" rel="noopener">Xcode, agents, and you（Session 259）</a>　｜　报告 §8.1–8.2</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S14 ============================ -->
+      <section class="slide" id="s14" data-part="main" data-dur="1.5" data-theme="xcode" style="--accent:#7a3e9d">
+        <div class="spine"><span class="spine-no">14</span><span class="spine-rule"></span><span class="spine-theme">主题四 · Xcode 与开发验证</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S14</span><span class="sep"></span><span>主题四 · Xcode 与开发验证 · 2/4</span><span class="sep"></span><span>1.5 分钟</span></div>
+          <h2 class="s-title">测试迁移：确保失败仍然是失败</h2>
+        </header>
+        <div class="s-body">
+          <ul class="points">
+            <li data-step="1">迁移<b>不只是断言语法替换</b></li>
+            <li data-step="2">跨框架问题的<b>级别与默认配置</b>需要核对</li>
+            <li data-step="3">用<b>负例</b>验证 CI 是否真正发现错误</li>
+          </ul>
+          <div class="cols2" style="flex:1;min-height:0">
+            <div class="col">
+              <div class="panel">
+                <div class="panel-h">① 故意失败的 helper（旧测试代码）</div>
+                <div class="row" style="align-items:center;gap:10px">
+                  <span class="bx bx--pend bx--b">FAIL</span>
+                  <span class="footline">同一个失败信号，分别进入两种运行器</span>
+                </div>
+              </div>
+              <div class="panel panel--accent">
+                <div class="panel-h">② 适配边界 · 问题级别选择器</div>
+                <div class="chip-row">
+                  <span class="chip">limited（旧 test plan）</span>
+                  <span class="chip">complete（新项目默认）</span>
+                  <span class="chip">strict</span>
+                </div>
+                <p>旧计划与新项目的<b>默认模式不同</b>；跨框架问题与 XCTest 来源问题的处理也不完全对称。</p>
+              </div>
+            </div>
+            <div class="col">
+              <div class="panel panel--dim">
+                <div class="panel-h">③ 旧运行器 XCTest</div>
+                <p>失败按旧路径汇总。</p>
+              </div>
+              <div class="panel">
+                <div class="panel-h">③ 新运行器 Swift Testing</div>
+                <p>互操作把"失败如何穿过框架边界"显式化，允许渐进迁移。</p>
+              </div>
+              <div class="footline">迁移动线：全绿也可能是错误被漏报。</div>
+            </div>
+          </div>
+          <div class="footline"><span class="chip chip--pend">默认只展示概念 · 不做未经运行的交互演示</span></div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://developer.apple.com/videos/play/wwdc2026/267/" target="_blank" rel="noopener">Migrate to Swift Testing（Session 267）</a>　｜　报告 §9.2</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S15 ============================ -->
+      <section class="slide" id="s15" data-part="main" data-dur="1" data-theme="xcode" style="--accent:#7a3e9d">
+        <div class="spine"><span class="spine-no">15</span><span class="spine-rule"></span><span class="spine-theme">主题四 · Xcode 与开发验证</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S15</span><span class="sep"></span><span>主题四 · Xcode 与开发验证 · 3/4</span><span class="sep"></span><span>1 分钟</span></div>
+          <h2 class="s-title">Device Hub：把问题现场变成可复现输入</h2>
+        </header>
+        <div class="s-body">
+          <ul class="points">
+            <li data-step="1"><b>统一入口</b>　设备与模拟器的组织与控制</li>
+            <li data-step="2"><b>GUI 与命令行共同服务复现</b></li>
+            <li data-step="3"><b>记录状态</b>　而不仅是截图</li>
+          </ul>
+          <div class="viz" style="margin-top:auto">
+            <div class="viz-h">从现场到输入<span class="grow"></span><span class="chip chip--fact">Device Hub · 统一组织设备与模拟器</span></div>
+            <div class="flow">
+              <div class="node"><span class="nt">设备 / 模拟器状态</span><span class="nd">型号、系统、语言、字体、数据、权限</span></div>
+              <div class="arw">→</div>
+              <div class="node is-key"><span class="nt">复现清单</span><span class="nd">把现场状态写成可执行描述</span></div>
+              <div class="arw">→</div>
+              <div class="node"><span class="nt">重放</span><span class="nd">开发者与自动化执行同一场景</span></div>
+            </div>
+            <div style="height:1px;background:var(--rule-soft);margin:14px 0 12px"></div>
+            <div class="row" style="align-items:center;gap:8px">
+              <span class="tag">复现包字段</span>
+              <span class="bx bx--dim">构建版本</span>
+              <span class="bx bx--dim">系统条件</span>
+              <span class="bx bx--dim">配置</span>
+              <span class="bx bx--dim">数据</span>
+              <span class="bx bx--dim">日志</span>
+            </div>
+            <span class="viz-cap">建议性模型 · 不声称 Apple 提供同名文件格式</span>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://developer.apple.com/videos/play/wwdc2026/260/" target="_blank" rel="noopener">Get the most out of Device Hub（Session 260）</a>　｜　报告 §9.1</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ S16 ============================ -->
+      <section class="slide" id="s16" data-part="main" data-dur="1.5" data-theme="xcode" style="--accent:#7a3e9d">
+        <div class="spine"><span class="spine-no">16</span><span class="spine-rule"></span><span class="spine-theme">主题四 · Xcode 与开发验证</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">S16</span><span class="sep"></span><span>主题四 · Xcode 与开发验证 · 4/4</span><span class="sep"></span><span>1.5 分钟</span></div>
+          <h2 class="s-title">性能诊断：先判断忙、争用还是等待</h2>
+        </header>
+        <div class="s-body">
+          <div class="col" style="align-items:center;gap:10px">
+            <span class="bx bx--dim bx--b" style="font-size:19px;padding:8px 18px" data-step="1">同一个现象：响应变慢</span>
+            <span class="ar" data-step="1">↓　先分类，再优化</span>
+          </div>
+          <div class="col" data-step="2">
+            <div class="tree">
+              <div class="branch">
+                <div class="bt">CPU 忙</div>
+                <div class="bd">需要的证据：热点与调用链</div>
+              </div>
+              <div class="branch">
+                <div class="bt">执行资源争用</div>
+                <div class="bd">需要的证据：任务、actor、executor</div>
+              </div>
+              <div class="branch">
+                <div class="bt">系统阻塞</div>
+                <div class="bd">需要的证据：线程状态与等待原因</div>
+              </div>
+            </div>
+            <div class="converge">三路最终都回到 —— 同条件复测</div>
+          </div>
+          <div class="chip-row" style="margin-top:auto">
+            <span class="chip chip--fact">Instruments · Swift Executors 视图</span>
+            <span class="chip chip--pend">图内没有模拟性能值</span>
+          </div>
+          <div class="footline">把 async 当后台执行、把线程等待归因于编译器，都会找错方向。</div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">来源：<a href="https://developer.apple.com/videos/play/wwdc2026/268/" target="_blank" rel="noopener">Profile, fix, and verify（Session 268）</a>　｜　报告 §9.3</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+      <!-- ============================ Q01 ============================ -->
+
+<!-- ============================ A01 ============================ -->
+
+      <!-- ============================ A02 ============================ -->
+
+      <!-- ============================ A03 ============================ -->
+
+      <!-- ============================ A04 ============================ -->
+
+      <!-- ============================ A05 ============================ -->
+
+      <!-- ============================ A06 ============================ -->
+
+      <!-- ============================ A07 ============================ -->
+
+      <!-- ============================ A08 ============================ -->
+      <section class="slide" id="a08" data-part="appendix" data-dur="0" data-theme="appendix" style="--accent:#6d7480">
+        <div class="spine"><span class="spine-no">A8</span><span class="spine-rule"></span><span class="spine-theme">附录 · 备用材料</span></div>
+        <header class="s-head">
+          <div class="s-eyebrow"><span class="s-id">A08</span><span class="sep"></span><span>附录 · 官方来源与进一步阅读</span><span class="sep"></span><span>完整 37 项</span></div>
+          <h2 class="s-title">官方来源索引（按页可检索）</h2>
+        </header>
+        <div class="s-body">
+          <div class="row" style="align-items:center;gap:10px;flex:none">
+            <input class="src-filter" id="srcFilter" type="search" placeholder="输入关键字筛选，例如 0516 / Testing / 互操作" aria-label="筛选来源">
+            <span class="footline">按页归组：S01–S07 语言与并发 · S08–S12 编译器与工具链 · S13–S16 Xcode 与验证 · Q01 讨论</span>
+          </div>
+          <div class="src-list" id="srcList" style="margin-top:6px">
+            <p class="src"><span class="sid">s1</span><a href="https://developer.apple.com/videos/play/wwdc2026/262/" target="_blank" rel="noopener">What's new in Swift — WWDC26, 262</a></p>
+            <p class="src"><span class="sid">s2</span><a href="https://developer.apple.com/xcode/system-requirements" target="_blank" rel="noopener">Xcode SDK 与系统要求</a></p>
+            <p class="src"><span class="sid">s3</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0390-noncopyable-structs-and-enums.md" target="_blank" rel="noopener">SE-0390 非复制结构体与枚举</a></p>
+            <p class="src"><span class="sid">s4</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0296-async-await.md" target="_blank" rel="noopener">SE-0296 async/await</a></p>
+            <p class="src"><span class="sid">s5</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0244-opaque-result-types.md" target="_blank" rel="noopener">SE-0244 不透明返回类型</a></p>
+            <p class="src"><span class="sid">s6</span><a href="https://developer.apple.com/wwdc26/guides/swift/" target="_blank" rel="noopener">WWDC26 Swift 指南</a></p>
+            <p class="src"><span class="sid">s7</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0522-source-warning-control.md" target="_blank" rel="noopener">SE-0522 源码级警告控制</a></p>
+            <p class="src"><span class="sid">s8</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0493-defer-async.md" target="_blank" rel="noopener">SE-0493 defer 中的异步调用</a></p>
+            <p class="src"><span class="sid">s9</span><a href="https://www.swift.org/blog/swift-6.3-released/" target="_blank" rel="noopener">Swift 6.3 Released</a></p>
+            <p class="src"><span class="sid">s10</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0507-borrow-accessors.md" target="_blank" rel="noopener">SE-0507 borrow / mutate 访问器</a></p>
+            <p class="src"><span class="sid">s11</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0474-yielding-accessors.md" target="_blank" rel="noopener">SE-0474 Yielding 访问器</a></p>
+            <p class="src"><span class="sid">s12</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0516-borrowing-sequence.md" target="_blank" rel="noopener">SE-0516 Iterable</a></p>
+            <p class="src"><span class="sid">s13</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0519-ref-mutableref-types.md" target="_blank" rel="noopener">SE-0519 Ref / MutableRef</a></p>
+            <p class="src"><span class="sid">s14</span><a href="https://forums.swift.org/t/accepted-se-0517-uniquebox/86138" target="_blank" rel="noopener">SE-0517 UniqueBox（已接受）</a></p>
+            <p class="src"><span class="sid">s15</span><a href="https://forums.swift.org/t/accepted-in-principle-se-0527-uniquearray/86943" target="_blank" rel="noopener">SE-0527 UniqueArray（原则接受）</a></p>
+            <p class="src"><span class="sid">s16</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0496-inline-always.md" target="_blank" rel="noopener">SE-0496 @inline(always)</a></p>
+            <p class="src"><span class="sid">s17</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0460-specialized.md" target="_blank" rel="noopener">SE-0460 显式特化</a></p>
+            <p class="src"><span class="sid">s18</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0193-cross-module-inlining-and-specialization.md" target="_blank" rel="noopener">SE-0193 跨模块内联与特化</a></p>
+            <p class="src"><span class="sid">s19</span><a href="https://forums.swift.org/t/recent-improvements-to-the-type-checker/87048" target="_blank" rel="noopener">类型检查器近期改进（2026-06-02）</a></p>
+            <p class="src"><span class="sid">s20</span><a href="https://developer.apple.com/documentation/xcode-release-notes/xcode-27-release-notes?changes=latest_minor" target="_blank" rel="noopener">Xcode 27 Beta 发布说明</a></p>
+            <p class="src"><span class="sid">s21</span><a href="https://forums.swift.org/t/swiftpm-development-update-default-build-system-change/85548" target="_blank" rel="noopener">SwiftPM 默认构建系统变更</a></p>
+            <p class="src"><span class="sid">s22</span><a href="https://www.swift.org/blog/whats-new-in-swift-march-2026/" target="_blank" rel="noopener">What's new in Swift: March 2026</a></p>
+            <p class="src"><span class="sid">s23</span><a href="https://www.swift.org/documentation/cxx-interop/safe-interop/" target="_blank" rel="noopener">安全混用 Swift 与 C/C++</a></p>
+            <p class="src"><span class="sid">s24</span><a href="https://forums.swift.org/t/swift-java-0-3-0-released/86716" target="_blank" rel="noopener">Swift-Java 0.3.0</a></p>
+            <p class="src"><span class="sid">s25</span><a href="https://developer.apple.com/videos/play/wwdc2026/259/" target="_blank" rel="noopener">Xcode, agents, and you（259）</a></p>
+            <p class="src"><span class="sid">s26</span><a href="https://developer.apple.com/videos/play/wwdc2026/258/" target="_blank" rel="noopener">What's new in Xcode 27（258）</a></p>
+            <p class="src"><span class="sid">s27</span><a href="https://developer.apple.com/wwdc26/guides/xcode/" target="_blank" rel="noopener">WWDC26 Xcode 指南</a></p>
+            <p class="src"><span class="sid">s28</span><a href="https://developer.apple.com/videos/play/wwdc2026/260/" target="_blank" rel="noopener">Get the most out of Device Hub（260）</a></p>
+            <p class="src"><span class="sid">s29</span><a href="https://developer.apple.com/videos/play/wwdc2026/267/" target="_blank" rel="noopener">Migrate to Swift Testing（267）</a></p>
+            <p class="src"><span class="sid">s30</span><a href="https://developer.apple.com/videos/play/wwdc2026/268/" target="_blank" rel="noopener">Instruments：响应性诊断（268）</a></p>
+            <p class="src"><span class="sid">s31</span><a href="https://developer.apple.com/videos/play/wwdc2026/261/" target="_blank" rel="noopener">Xcode Cloud（261）</a></p>
+            <p class="src"><span class="sid">s32</span><a href="https://developer.apple.com/videos/play/wwdc2026/269/" target="_blank" rel="noopener">What's new in SwiftUI（269）</a></p>
+            <p class="src"><span class="sid">s33</span><a href="https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-27-release-notes" target="_blank" rel="noopener">iOS / iPadOS 27 Beta 发布说明</a></p>
+            <p class="src"><span class="sid">s34</span><a href="https://developer.apple.com/documentation/foundation/progressmanager" target="_blank" rel="noopener">ProgressManager — Foundation</a></p>
+            <p class="src"><span class="sid">s35</span><a href="https://forums.swift.org/t/pitch-subprocess-1-0/85589" target="_blank" rel="noopener">Subprocess 1.0（Pitch）</a></p>
+            <p class="src"><span class="sid">s36</span><a href="https://forums.swift.org/t/swifts-new-documentation-site/89192" target="_blank" rel="noopener">Swift 新文档站（2026-08-26）</a></p>
+            <p class="src"><span class="sid">s37</span><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0504-task-cancellation-shields.md" target="_blank" rel="noopener">SE-0504 任务取消屏蔽</a></p>
+          </div>
+        </div>
+        <footer class="s-foot">
+          <div class="s-src">均于 2026-09-12 检索；完整题名、日期与章节见report.spec.md §13 官方来源。打印版输出完整索引，不把 37 个长链接挤到投影正文</div>
+          <div class="s-meta"><span class="s-cum"></span><span class="s-page"></span></div>
+        </footer>
+      </section>
+
+    </div>
+  </div>
+
+  <aside class="presenter" id="presenter" aria-label="讲者视图">
+    <div class="p-inner">
+      <div class="p-head">
+        <div class="p-id" id="pId">S01</div>
+        <div class="p-title" id="pTitle">—</div>
+        <div class="p-stats">
+          <span class="p-stat">本页 <b id="pDur">—</b></span>
+          <span class="p-stat">累计 <b id="pCum">—</b></span>
+          <span class="p-stat" id="pClockWrap">计时 <b id="pClock">00:00</b></span>
+          <span class="p-stat" id="pDeltaWrap">偏差 <b id="pDelta">—</b></span>
+        </div>
+        <div class="p-next" id="pNext">下一张 —</div>
+      </div>
+      <div class="p-body" id="pBody">
+        <div class="p-empty">按 <b>S</b> 打开讲者视图后，这里会显示当前页的讲稿、转场、仓颉思考与完整来源。</div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="hud" id="hud">
+  <button id="btnPrev" title="上一页（← / PageUp）">◀</button>
+  <span class="hud-pos"><b id="hudNo">01</b> / <span id="hudTotal">25</span></span>
+  <button id="btnNext" title="下一页（→ / PageDown / 空格）">▶</button>
+  <span class="hud-sep"></span>
+  <button id="btnBack" class="back" hidden>↩ 返回</button>
+  <button id="btnToc" title="目录（O）">目录</button>
+  <button id="btnPresenter" title="讲者视图（S）">讲者</button>
+  <button id="btnAll" title="一键显示全部渐显内容（A）">显示全部</button>
+  <button id="btnAnim" title="减少动态效果（M）">减少动效</button>
+  <button id="btnFull" title="全屏（F）">全屏</button>
+  <button id="btnPrint" title="打印 / 导出 PDF（Ctrl+P）">打印</button>
+  <button id="btnHelp" title="快捷键（?）">?</button>
+</div>
+
+<div class="overlay" id="ovToc" role="dialog" aria-label="目录">
+  <div class="ov-head">
+    <span class="ov-k">目录 / CONTENTS</span>
+    <h3>四个主题 · 25 页</h3>
+    <button class="hud ov-close" id="tocClose" style="position:static;box-shadow:none">关闭 (Esc)</button>
+  </div>
+  <div class="ov-body" id="tocBody"></div>
+</div>
+
+<div class="overlay" id="ovHelp" role="dialog" aria-label="快捷键与使用说明">
+  <div class="ov-head">
+    <span class="ov-k">使用说明</span>
+    <h3>键盘与视图</h3>
+    <button class="hud ov-close" id="helpClose" style="position:static;box-shadow:none">关闭 (Esc)</button>
+  </div>
+  <div class="ov-body">
+    <div class="keys">
+      <div class="keyrow"><span class="kb">→ / ↓ / 空格</span><span class="kd">下一步（先渐显，后翻页）</span></div>
+      <div class="keyrow"><span class="kb">← / ↑</span><span class="kd">上一步 / 上一页</span></div>
+      <div class="keyrow"><span class="kb">PageDown / PageUp</span><span class="kd">翻页</span></div>
+      <div class="keyrow"><span class="kb">Home / End</span><span class="kd">首页 / 末页</span></div>
+      <div class="keyrow"><span class="kb">O</span><span class="kd">目录（四主题一级、各页二级）</span></div>
+      <div class="keyrow"><span class="kb">S</span><span class="kd">讲者视图：时长、讲稿、来源、转场</span></div>
+      <div class="keyrow"><span class="kb">A</span><span class="kd">一键显示全部渐显内容（讲稿完整态）</span></div>
+      <div class="keyrow"><span class="kb">M</span><span class="kd">减少动态效果</span></div>
+      <div class="keyrow"><span class="kb">F</span><span class="kd">全屏</span></div>
+      <div class="keyrow"><span class="kb">R</span><span class="kd">重置计时器</span></div>
+      <div class="keyrow"><span class="kb">Backspace</span><span class="kd">从附录 / 讨论返回原页</span></div>
+      <div class="keyrow"><span class="kb">Ctrl / ⌘ + P</span><span class="kd">打印：取消动画、逐页完整输出</span></div>
+    </div>
+    <div class="note-strip">
+      标记约定：蓝色＝官方已支持事实；琥珀色＝WWDC 展示或状态待核实；灰色＝历史基础；绿色＝本报告分析建议与仓颉思考。<br>
+      颜色始终伴随文字标签。所有代码为语义示意，未在 Xcode 27 / Swift 6.4 上运行；所有机制图为示意，不含实测性能数字。<br>
+      页面地址可直接带页码，例如 <b>wwdc2026-language-compiler-toolchain-slides.html#s06</b>。<br>
+      证据截点 2026-09-12。事实与限定条件见同目录 report.spec.md。
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var stage    = document.getElementById('stage');
+  var viewport = document.getElementById('viewport');
+  var slides   = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var total    = slides.length;
+  var cur = 0, step = 0, revealAll = false, animOff = false;
+  var jumpStack = [], timerStart = null, timerAcc = 0, timerOn = false;
+  var MAIN_TOTAL = 30;
+
+  /* 主题分组（目录一级） */
+  var THEMES = [
+    {id:'intro',    name:'导入 · 范围与版本',                 accent:'#8a8f98'},
+    {id:'language', name:'主题一 · 语言特性',                 accent:'#1246c8'},
+    {id:'compiler', name:'主题二 · 编译器',                   accent:'#1e6f8c'},
+    {id:'toolchain',name:'主题三 · 工具链与互操作',           accent:'#4b4a86'},
+    {id:'xcode',    name:'主题四 · Xcode 与开发验证',         accent:'#7a3e9d'},
+    {id:'discuss',  name:'Q01 · 专家讨论',                    accent:'#8f5e07'},
+    {id:'appendix', name:'官方来源索引',                      accent:'#6d7480'}
+  ];
+
+  /* ---------- 预计算：页码、累计时长、主题归属 ---------- */
+  var cumMain = 0;
+  slides.forEach(function(s, i){
+    var dur  = parseFloat(s.getAttribute('data-dur') || '0');
+    var part = s.getAttribute('data-part') || 'main';
+    s.dataset.index = i;
+    if (part === 'main'){ cumMain += dur; s.dataset.cum = cumMain.toFixed(1); }
+    else { s.dataset.cum = ''; }
+
+    var page = s.querySelector('.s-page');
+    if (page) page.textContent = (i + 1 < 10 ? '0' : '') + (i + 1) + ' / ' + total;
+
+    var cumEl = s.querySelector('.s-cum');
+    if (cumEl){
+      if (part === 'main') cumEl.textContent = '主讲累计 ' + cumMain.toFixed(1) + ' / ' + MAIN_TOTAL + ' 分钟';
+      else if (part === 'discuss') cumEl.textContent = '讨论 10 分钟 · 不计入主讲';
+      else cumEl.textContent = '附录 · 不计入主讲';
+    }
+    var notes = s.querySelector('.notes');
+    s._notes = notes ? notes.innerHTML : '';
+    s._title = (s.querySelector('.s-title') || {}).textContent || '';
+  });
+  document.getElementById('hudTotal').textContent = total;
+
+  /* ---------- 顶部进度轨 ---------- */
+  var rail = document.getElementById('rail');
+  THEMES.forEach(function(t){
+    var n = slides.filter(function(s){ return s.getAttribute('data-theme') === t.id; }).length;
+    if (!n) return;
+    var seg = document.createElement('i');
+    seg.style.flexGrow = String(n);
+    seg.title = t.name + '（' + n + ' 页）';
+    seg.dataset.theme = t.id;
+    rail.appendChild(seg);
+  });
+  var segs = Array.prototype.slice.call(rail.children);
+
+  /* ---------- 渲染 ---------- */
+  function maxStep(slide){
+    var m = 0;
+    slide.querySelectorAll('[data-step]').forEach(function(el){
+      m = Math.max(m, parseInt(el.getAttribute('data-step'), 10) || 0);
+    });
+    return m;
+  }
+
+  function render(){
+    slides.forEach(function(s, i){
+      s.classList.toggle('active', i === cur);
+      var ms = maxStep(s);
+      s.querySelectorAll('[data-step]').forEach(function(el){
+        var need = parseInt(el.getAttribute('data-step'), 10) || 0;
+        var hide = (i === cur) && !revealAll && need > step;
+        el.classList.toggle('staged', hide);
+      });
+      if (i === cur) s.dataset.active = '1'; else delete s.dataset.active;
+    });
+
+    var s = slides[cur];
+    document.getElementById('hudNo').textContent = (cur + 1 < 10 ? '0' : '') + (cur + 1);
+    var theme = s.getAttribute('data-theme');
+    segs.forEach(function(g, i){
+      var gi = THEMES.findIndex(function(t){ return t.id === g.dataset.theme; });
+      var ci = THEMES.findIndex(function(t){ return t.id === theme; });
+      g.classList.toggle('seg-done', gi < ci);
+      g.classList.toggle('seg-active', gi === ci);
+    });
+
+    updatePresenter();
+    document.getElementById('btnBack').hidden = jumpStack.length === 0;
+    if (history.replaceState) history.replaceState(null, '', '#' + s.id);
+    else location.hash = s.id;
+  }
+
+  function go(i, opts){
+    opts = opts || {};
+    i = Math.max(0, Math.min(total - 1, i));
+    if (i === cur && !opts.force) { step = opts.step != null ? opts.step : step; render(); return; }
+    cur = i;
+    step = opts.step != null ? opts.step : 0;
+    if (!timerOn) startTimer();
+    render();
+  }
+  function next(){
+    var ms = maxStep(slides[cur]);
+    if (!revealAll && step < ms){ step++; render(); }
+    else go(cur + 1, {step:0});
+  }
+  function prev(){
+    if (!revealAll && step > 0){ step--; render(); }
+    else go(cur - 1, {step: 9999});
+  }
+
+  function jumpTo(id, keepOrigin){
+    var idx = slides.findIndex(function(s){ return s.id === id; });
+    if (idx < 0) return;
+    if (keepOrigin !== false && Math.abs(idx - cur) > 2) jumpStack.push(cur);
+    go(idx, {step:0});
+  }
+  function back(){
+    if (!jumpStack.length) return;
+    go(jumpStack.pop(), {step:9999});
+  }
+
+  /* ---------- 讲者视图 ---------- */
+  var presenter = document.getElementById('presenter');
+  function updatePresenter(){
+    var s = slides[cur];
+    document.getElementById('pId').textContent = (s.querySelector('.s-id') || {}).textContent || s.id.toUpperCase();
+    document.getElementById('pTitle').textContent = s._title;
+    var part = s.getAttribute('data-part');
+    document.getElementById('pDur').textContent = (s.getAttribute('data-dur') || '0') + ' 分钟';
+    document.getElementById('pCum').textContent = part === 'main'
+      ? (s.dataset.cum + ' / ' + MAIN_TOTAL + ' 分钟')
+      : (part === 'discuss' ? '不计入主讲（10 分钟）' : '附录 · 不计入主讲');
+    document.getElementById('pNext').textContent = cur + 1 < total
+      ? '下一张　' + slides[cur + 1].id.toUpperCase() + '　' + slides[cur + 1]._title
+      : '已是最后一页';
+    var body = document.getElementById('pBody');
+    body.innerHTML = s._notes || '<div class="p-empty">本页未提供讲者备注。</div>';
+    updateClock();
+  }
+  function startTimer(){ if (!timerStart){ timerStart = Date.now(); timerOn = true; } }
+  function elapsedMin(){
+    if (!timerStart) return 0;
+    return (timerAcc + (Date.now() - timerStart)) / 60000;
+  }
+  function fmt(m){
+    var t = Math.max(0, Math.round(m * 60));
+    return (t / 60 | 0).toString().padStart(2,'0') + ':' + (t % 60).toString().padStart(2,'0');
+  }
+  function updateClock(){
+    document.getElementById('pClock').textContent = fmt(elapsedMin());
+    var s = slides[cur];
+    var wrap = document.getElementById('pDeltaWrap'), dEl = document.getElementById('pDelta');
+    if (s.getAttribute('data-part') !== 'main'){
+      wrap.className = 'p-stat'; dEl.textContent = '不适用';
+    } else {
+      var plan = parseFloat(s.dataset.cum || '0');
+      var d = elapsedMin() - plan;
+      wrap.className = 'p-stat ' + (d > 1 ? 'warn' : (d < -1 ? 'ok' : ''));
+      dEl.textContent = (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(1) + ' 分';
+    }
+  }
+  setInterval(function(){ if (presenter.offsetWidth > 0) updateClock(); }, 1000);
+
+  function togglePresenter(force){
+    var open = force != null ? force : !document.body.classList.contains('presenter-open');
+    document.body.classList.toggle('presenter-open', open);
+    document.getElementById('btnPresenter').classList.toggle('is-on', open);
+    setTimeout(fit, 280);
+  }
+
+  /* ---------- 缩放适配 ---------- */
+  function fit(){
+    var pad = 36;
+    var w = viewport.clientWidth - pad, h = viewport.clientHeight - pad;
+    var k = Math.min(w / 1280, h / 720);
+    stage.style.setProperty('--k', String(Math.max(0.2, k)));
+  }
+  window.addEventListener('resize', fit);
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(viewport);
+
+  /* ---------- 目录 ---------- */
+  var tocBody = document.getElementById('tocBody');
+  function buildToc(){
+    tocBody.innerHTML = '';
+    THEMES.forEach(function(t){
+      var group = slides.filter(function(s){ return s.getAttribute('data-theme') === t.id; });
+      if (!group.length) return;
+      var g = document.createElement('div');
+      g.className = 'ov-group';
+      var totalDur = group.reduce(function(a, s){ return a + parseFloat(s.getAttribute('data-dur') || 0); }, 0);
+      g.innerHTML = '<h4>' + t.name + ' · ' + group.length + ' 页 · ' +
+        (t.id === 'appendix' || t.id === 'discuss' ? '不计入主讲' : totalDur.toFixed(1) + ' 分钟') +
+        '<span class="g-rule"></span></h4>';
+      var cards = document.createElement('div');
+      cards.className = 'ov-cards';
+      group.forEach(function(s){
+        var b = document.createElement('button');
+        b.className = 'ov-card';
+        b.style.setProperty('--accent', t.accent);
+        b.innerHTML = '<span class="c-id">' + s.id.toUpperCase() + '　' + (s.getAttribute('data-dur')) + ' min</span>' +
+                      '<span class="c-t">' + s._title + '</span>' +
+                      '<span class="c-m">' + (s.getAttribute('data-part') === 'main' ? '主讲' : (s.getAttribute('data-part') === 'discuss' ? '讨论' : '附录')) + '</span>';
+        b.addEventListener('click', function(){
+          closeOverlays();
+          if (Math.abs(s.dataset.index - cur) > 2) jumpStack.push(cur);
+          go(parseInt(s.dataset.index, 10), {step:0});
+        });
+        cards.appendChild(b);
+      });
+      g.appendChild(cards);
+      tocBody.appendChild(g);
+    });
+    markToc();
+  }
+  function markToc(){
+    var curId = slides[cur].id;
+    Array.prototype.forEach.call(tocBody.querySelectorAll('.ov-card'), function(c){
+      c.classList.toggle('is-cur', c.querySelector('.c-id').textContent.trim().indexOf(curId.toUpperCase()) === 0);
+    });
+  }
+  function openOverlay(el){ closeOverlays(); el.classList.add('open'); }
+  function closeOverlays(){
+    document.getElementById('ovToc').classList.remove('open');
+    document.getElementById('ovHelp').classList.remove('open');
+  }
+  function anyOverlay(){ return !!document.querySelector('.overlay.open'); }
+
+  /* ---------- 快捷键 ---------- */
+  document.addEventListener('keydown', function(e){
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')){
+      if (e.key === 'Escape') e.target.blur();
+      return;
+    }
+    var k = e.key;
+    if (anyOverlay()){
+      if (k === 'Escape' || k === 'o' || k === 'O' || k === '?' ){ closeOverlays(); e.preventDefault(); }
+      return;
+    }
+    switch (k){
+      case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': case 'j': case 'Enter':
+        next(); e.preventDefault(); break;
+      case 'ArrowLeft': case 'ArrowUp': case 'PageUp': case 'k':
+        prev(); e.preventDefault(); break;
+      case 'Home': go(0, {step:0}); e.preventDefault(); break;
+      case 'End': go(total - 1, {step:9999}); e.preventDefault(); break;
+      case 'o': case 'O': buildToc(); openOverlay(document.getElementById('ovToc')); e.preventDefault(); break;
+      case 's': case 'S': togglePresenter(); e.preventDefault(); break;
+      case 'a': case 'A': toggleAll(); e.preventDefault(); break;
+      case 'm': case 'M': toggleAnim(); e.preventDefault(); break;
+      case 'f': case 'F': toggleFull(); e.preventDefault(); break;
+      case 'r': case 'R': timerAcc = 0; timerStart = Date.now(); updateClock(); break;
+      case 'Backspace': back(); e.preventDefault(); break;
+      case '?': case 'h': case 'H': openOverlay(document.getElementById('ovHelp')); e.preventDefault(); break;
+      case 'Escape': togglePresenter(false); break;
+    }
+  });
+
+  function toggleAll(){
+    revealAll = !revealAll;
+    document.body.classList.toggle('reveal-all', revealAll);
+    document.getElementById('btnAll').classList.toggle('is-on', revealAll);
+    document.getElementById('btnAll').textContent = revealAll ? '恢复渐显' : '显示全部';
+    render();
+  }
+  function toggleAnim(){
+    animOff = !animOff;
+    document.body.classList.toggle('no-anim', animOff);
+    document.getElementById('btnAnim').classList.toggle('is-on', animOff);
+  }
+  function toggleFull(){
+    if (!document.fullscreenElement) { (document.documentElement.requestFullscreen || function(){}).call(document.documentElement); }
+    else if (document.exitFullscreen) document.exitFullscreen();
+  }
+
+  /* ---------- 内部链接（附录跳转） ---------- */
+  document.addEventListener('click', function(e){
+    var a = e.target.closest ? e.target.closest('a[href^="#"]') : null;
+    if (!a) return;
+    var id = a.getAttribute('href').slice(1);
+    if (!id || !document.getElementById(id)) return;
+    e.preventDefault();
+    jumpTo(id, true);
+  });
+
+  /* ---------- HUD ---------- */
+  document.getElementById('btnPrev').addEventListener('click', prev);
+  document.getElementById('btnNext').addEventListener('click', next);
+  document.getElementById('btnBack').addEventListener('click', back);
+  document.getElementById('btnToc').addEventListener('click', function(){ buildToc(); openOverlay(document.getElementById('ovToc')); });
+  document.getElementById('btnPresenter').addEventListener('click', function(){ togglePresenter(); });
+  document.getElementById('btnAll').addEventListener('click', toggleAll);
+  document.getElementById('btnAnim').addEventListener('click', toggleAnim);
+  document.getElementById('btnFull').addEventListener('click', toggleFull);
+  document.getElementById('btnPrint').addEventListener('click', function(){ window.print(); });
+  document.getElementById('btnHelp').addEventListener('click', function(){ openOverlay(document.getElementById('ovHelp')); });
+  document.getElementById('tocClose').addEventListener('click', closeOverlays);
+  document.getElementById('helpClose').addEventListener('click', closeOverlays);
+  document.getElementById('ovToc').addEventListener('click', function(e){ if (e.target === this) closeOverlays(); });
+  document.getElementById('ovHelp').addEventListener('click', function(e){ if (e.target === this) closeOverlays(); });
+
+  /* HUD 闲置隐藏 */
+  var idle;
+  function wake(){
+    document.body.classList.remove('hud-idle');
+    clearTimeout(idle);
+    idle = setTimeout(function(){ document.body.classList.add('hud-idle'); }, 3200);
+  }
+  ['mousemove','keydown','click'].forEach(function(t){ document.addEventListener(t, wake, {passive:true}); });
+  wake();
+
+  /* ---------- 初始定位 ---------- */
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) toggleAnim();
+  var m = /^#?([saq]\d{2})$/i.exec(location.hash);
+  if (m){ var idx = slides.findIndex(function(s){ return s.id === m[1].toLowerCase(); }); if (idx >= 0) cur = idx; }
+  /* ---------- A08 来源筛选 ---------- */
+  var srcFilter = document.getElementById('srcFilter');
+  if (srcFilter) srcFilter.addEventListener('input', function(){
+    var q = this.value.trim().toLowerCase();
+    Array.prototype.forEach.call(document.querySelectorAll('#srcList .src'), function(el){
+      el.hidden = !!q && el.textContent.toLowerCase().indexOf(q) < 0;
+    });
+  });
+
+  fit();
+  render();
+
+  /* ---------- 版式自检：在地址后加 ?check=1 启用，不影响正常放映 ---------- */
+  if (/[?&]check/.test(location.search)) setTimeout(function(){
+    var rep = [], bad = 0;
+    slides.forEach(function(s){
+      var sr = s.getBoundingClientRect(), issues = [];
+      if (s.scrollHeight > s.clientHeight + 1) issues.push('SCROLL-H ' + s.scrollHeight + '>' + s.clientHeight);
+      if (s.scrollWidth  > s.clientWidth  + 1) issues.push('SCROLL-W ' + s.scrollWidth  + '>' + s.clientWidth);
+      s.querySelectorAll('.s-body *, .s-foot *').forEach(function(el){
+        var r = el.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        var nm = (el.tagName.toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.split(' ')[0] : ''));
+        if (r.bottom > sr.bottom - 2) issues.push('OVER-BOTTOM ' + nm + ' +' + Math.round(r.bottom - sr.bottom));
+        if (r.right  > sr.right  - 2) issues.push('OVER-RIGHT '  + nm + ' +' + Math.round(r.right  - sr.right));
+        if (r.left   < sr.left) issues.push('OVER-LEFT '  + nm);
+        if (r.top    < sr.top)  issues.push('OVER-TOP '   + nm);
+      });
+      if (issues.length) bad++;
+      rep.push(s.id + (issues.length ? '  [X]  ' + issues.slice(0, 8).join(' | ') : '  [ok]'));
+    });
+    var pre = document.createElement('pre');
+    pre.id = '__check';
+    pre.textContent = 'CHECK-RESULT ' + bad + ' problems / ' + slides.length + ' slides\n' + rep.join('\n');
+    pre.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;background:#fff;color:#000;font:11px monospace;margin:0;padding:4px;white-space:pre-wrap';
+    document.body.appendChild(pre);
+    document.title = 'CHECK ' + bad + ' problems';
+  }, 400);
+
+  window.addEventListener('hashchange', function(){
+    var mm = /^#?([saq]\d{2})$/i.exec(location.hash);
+    if (!mm) return;
+    var i = slides.findIndex(function(s){ return s.id === mm[1].toLowerCase(); });
+    if (i >= 0 && i !== cur) go(i, {step:0});
+  });
+})();
+</script>
+</body>
+</html>
