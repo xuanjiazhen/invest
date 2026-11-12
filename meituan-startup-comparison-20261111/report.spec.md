@@ -812,3 +812,32 @@ H01–H20 按采集顺序，单位 ms。
 按连续阶段核算，M2.2 兼容桥到 TPC 完成、M2.4 业务入口加载、M2.5 返回到业务包初始化完成，三段平均 **474.120 ms**（A02 **450.227 ms**）。它们覆盖上表的部分加载、等待与初始化。中间的 M2.3 单列为 ArkTS 求值及原生依赖阶段，平均 **564.726 ms**。
 
 **业务 entry 闭包是最大的装载项。** 平均 **385.632 ms**，占主线程专用库显式加载约 **95.2%**，其中重定位 **203.167 ms**。从逐库可见的构造看，业务仓颉 ELF **43.503 ms**、OHOS API **16.033 ms**、系统仓颉原生 FFI **6.488 ms**是前三类。兼容桥的整次调用平均 **0.869 ms**，95 个差分库的单库构造合计 **1.356 ms**。差分库的查找、映射和重定位仍包含在各自闭包内，衡量移除与复用的净收益需用同机 A/B 和逐库加载器埋点核实。 逐轮加载与初始化（`meituan-cangjie-startup-20261103/startup-samples.csv`） · 主线程与 worker 等待取证（`meituan-cangjie-startup-20261103/cj-init-sync-audit.csv`）
+
+### 重复 dlopen 与 DT_NEEDED 直间接重叠
+
+**真机上的显式重复打开。** 仍用上述 11 轮、同一首帧终点。每轮按 `linking: entry so` 的实际路径归组，以该路径的首个可见 `dlopen` 为基准。29 次调用覆盖 8 个路径，其中 3 个路径每轮有重复打开。
+
+| SO 路径归属 | 每轮总调用 | 每轮重复调用 | 11 轮重复耗时均值 (ms) | A02 重复耗时 (ms) |
+|---|---:|---:|---:|---:|
+| 包内 `libcangjie-runtime.so` | 5 | 4 | 0.933 | 0.878 |
+| 系统 `libark_interop.z.so` | 11 | 10 | 1.940 | 1.857 |
+| 系统 `libcj_environment.z.so` | 8 | 7 | 0.905 | 0.750 |
+| **合计** | **24** | **21** | **3.778** | **3.485** |
+
+其余 5 个路径每轮各打开一次。21 次重复调用中，主线程 19 次平均 **2.994 ms**，工作线程的 2 次 runtime 调用平均 **0.784 ms**。这批重复调用共 **231 次**，调用内均无 `calling constructors` 子切片。三个库每轮均在首个请求中看到构造。通用 `libc.so` 另有每轮 3 次嵌套请求，均解析到已有的 `/lib/ld-musl-aarch64.so.1`，平均 **0.402 ms** 已含在首次 runtime 或 entry 父调用中。 逐轮 SO 事件（`startup-so-events.csv`） · A02 runtime 首次构造（`meituan-cangjie-startup-20261103/raw/A02.ftrace#L33913`） · A02 runtime 再打开（`meituan-cangjie-startup-20261103/raw/A02.ftrace#L38396`）
+
+**当前包的 ELF 依赖图。** 对设备采集的 **453 个包内 ELF 路径**读取 `DT_NEEDED`，以包内唯一的文件名或 `DT_SONAME` 解析目标。对每个入口，从其他直接依赖继续遍历包内边，排除回到入口自身的循环。若仍能到达某个已列为直接依赖的库，该直接项记一次重叠。含 `.cjmetadata` 的库计为仓颉编译产物。系统依赖计入入口 `DT_NEEDED` 总数，替代路径与仅间接可达数以可核对的包内子图为准。
+
+| 入口 ELF | `DT_NEEDED` 条目 | 其中包内直接目标 | 也可经其他直接项到达 | 重叠中为仓颉编译产物 | 仅间接可达包内库（其中仓颉编译产物） |
+|---|---:|---:|---:|---:|---:|
+| `libohos_app_cangjie_entry.so` | 222 | 212 | **156** | **154** | 144（4） |
+| `libohos_app_cangjie_cangjie_tpc_init.so` | 7 | 6 | 4 | 2 | 15（11） |
+| `libohos_app_cangjie_entry_reportwaybill.so` | 32 | 31 | 27 | 25 | 38（8） |
+
+193 个仓颉编译 ELF 的动态表内，同一 ELF 中同名 `DT_NEEDED` 的重复条目为 **0**。业务 entry 的 156 个重叠项都能找到两跳路径，其中包含 120 个 OHOS API、20 个标准库、14 个 stdx 库及 runtime 和 `libboundscheck.so`。例如 `entry → libcangjie-std-core.so` 与 `entry → libohos.hilog.so → libcangjie-std-core.so` 同时存在。A02 只在 TPC 加载时看到 `std-core` 一次构造，耗时 **0.581 ms**。
+
+业务 entry 的 188 个包内直接仓颉编译依赖覆盖了绝大部分可达仓颉库。`libcangjie-std-console.so`、`libcangjie-std-crypto.cipher.so`、`libcangjie-std-crypto.digest.so` 和 `libcangjie-std-ref.so` 在该入口下仍只经间接路径到达。例如 `entry → libstdx.net.http.so → libcangjie-std-console.so`，A02 在 entry 加载内观察到了 `std-console` 构造。当前包存在大量直间接路径重叠，也保留了只经间接路径到达的仓颉库。 包内 ELF 路径清单（`meituan-cangjie-startup-20261103/elf-closure/app-root-census-manifest.tsv`） · 业务 entry 动态表（`meituan-cangjie-startup-20261103/elf/app-entry.so.readelf.txt`） · A02 std-core 构造（`meituan-cangjie-startup-20261103/raw/A02.ftrace#L37659`） · A02 std-console 构造（`meituan-cangjie-startup-20261103/raw/A02.ftrace#L110377`）
+
+**编译与加载器口径。** 本地仓颉编译器源码中的 `GenerateLinkOptionsOfBuiltinLibsForDyLink` 会将间接内建动态库也交给链接器，并在支持的平台为其启用 `--as-needed`，用于覆盖泛型等机制产生的跨库符号引用。业务 entry 的 `CJ_MCC_C2NStub` 是强未定义符号，runtime 动态符号表提供同名定义。依赖图的重叠只能筛选候选，判断可否删除还需核对符号提供者、初始化顺序和 namespace。当前包缺原始链接命令、link map 及同源码的历史对照 ELF，具体哪些边由当时的编译或链接策略引入仍待验证。 仓颉编译器链接选项（`cangjie_compiler/src/Driver/Toolchains/ToolChain.cpp#L128`）
+
+加载器遍历 `DT_NEEDED` 时会为依赖边发起内部查找。命中当前 namespace 或允许共享的已有 DSO 后，复用该对象，并按状态跳过已完成的重定位及构造。短 `loading`、`linking` 切片仍可能出现，`dlopen` 切片也从加载器取锁之后开始。**21 次是显式重复请求，156 条是业务入口静态依赖边的重叠量。** 若缩减直接边后库仍经其他路径到达，首帧闭包里的库依旧存在，待测收益主要来自依赖任务与查找的变化。要量出收益，应以相同业务和设备做重新链接的 A/B，并记录实际路径、namespace、DSO 复用和映射结果。 按 namespace 查找（`dynlink.c#L2848`） · 依赖任务复用（`dynlink.c#L8387`） · 重定位状态判断（`dynlink.c#L5884`） · dlopen 埋点位置（`dynlink.c#L5697`）
